@@ -34,7 +34,7 @@ export default function Home() {
     }
   }, [output, loading])
 
-  const handleGenerate = async () => {
+const handleGenerate = async () => {
     if (!what.trim()) return
 
     setLoading(true)
@@ -66,45 +66,15 @@ Structure the entry with: a compelling opening, the insight, the idea & executio
         }),
       })
 
-      if (!res.ok || !res.body) {
+      if (!res.ok) {
         const errText = await res.text()
         setOutput(`Error: ${res.status} — ${errText}`)
         setLoading(false)
         return
       }
 
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let fullText = ''
-      let buffer = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() ?? ''
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          const data = line.slice(6).trim()
-          if (!data || data === '[DONE]') continue
-          try {
-            const parsed = JSON.parse(data)
-            if (
-              parsed.type === 'content_block_delta' &&
-              parsed.delta?.type === 'text_delta' &&
-              parsed.delta?.text
-            ) {
-              fullText += parsed.delta.text
-              setOutput(fullText)
-            }
-          } catch {
-            // skip malformed chunks
-          }
-        }
-      }
+      const data = await res.json()
+      setOutput(data.text || 'No response received.')
     } catch (err) {
       setOutput('Something went wrong. Please check your connection and try again.')
     }
