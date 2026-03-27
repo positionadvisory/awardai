@@ -532,4 +532,26 @@ export default function ProjectPage() {
                               <div key={field.id} className="px-5 py-4">
                                 <div className="flex items-center justify-between mb-2">
                                   <p className="text-xs font-medium text-gray-300">{field.field_label}</p>
-                                  {
+                                  {field.word_limit && (
+                                    <span className="text-xs text-gray-600">{field.word_limit}w</span>
+                                  )}
+                                </div>
+                                <p className="text-sm text-gray-400 leading-relaxed line-clamp-3">
+                                  {activeText || <span className="italic text-gray-600">Not yet generated</span>}
+                                </p>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
+              </div>
+            )}
+          </div>
+        )}
+
+      </main>
+    </div>
+  )
+}
