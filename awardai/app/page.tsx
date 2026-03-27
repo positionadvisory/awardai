@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -17,6 +19,8 @@ const AWARD_SHOWS = [
 ]
 
 export default function Home() {
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
   const [campaignName, setCampaignName] = useState('')
   const [what, setWhat] = useState('')
   const [insight, setInsight] = useState('')
@@ -27,14 +31,25 @@ export default function Home() {
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
   const outputRef = useRef<HTMLDivElement>(null)
+  const router = useRouter()
 
   useEffect(() => {
-    if (outputRef.current && loading) {
-      outputRef.current.scrollTop = outputRef.current.scrollHeight
-    }
-  }, [output, loading])
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        router.push('/login')
+      } else {
+        setUserEmail(session.user.email ?? null)
+        setAuthLoading(false)
+      }
+    })
+  }, [router])
 
-const handleGenerate = async () => {
+  const handleSignOut = async () => {
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
+
+  const handleGenerate = async () => {
     if (!what.trim()) return
 
     setLoading(true)
@@ -88,6 +103,14 @@ Structure the entry with: a compelling opening, the insight, the idea & executio
     setTimeout(() => setCopied(false), 2000)
   }
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-sm text-gray-400">Loading…</p>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
@@ -95,6 +118,17 @@ Structure the entry with: a compelling opening, the insight, the idea & executio
         <div>
           <h1 className="text-lg font-semibold tracking-tight">AwardAI</h1>
           <p className="text-xs text-gray-500 mt-0.5">Powered by 684 award-winning campaigns</p>
+        </div>
+        <div className="flex items-center gap-4">
+          {userEmail && (
+            <span className="text-xs text-gray-400 hidden sm:block">{userEmail}</span>
+          )}
+          <button
+            onClick={handleSignOut}
+            className="text-sm text-gray-500 hover:text-gray-900 transition-colors"
+          >
+            Sign out
+          </button>
         </div>
       </header>
 
@@ -106,9 +140,7 @@ Structure the entry with: a compelling opening, the insight, the idea & executio
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Your Campaign</h2>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Campaign name
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Campaign name</label>
             <input
               type="text"
               value={campaignName}
@@ -210,17 +242,10 @@ Structure the entry with: a compelling opening, the insight, the idea & executio
             className="flex-1 min-h-96 bg-white border border-gray-200 rounded-lg p-5 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed overflow-y-auto"
           >
             {output ? (
-              <>
-                {output}
-                {loading && (
-                  <span className="inline-block w-0.5 h-4 bg-gray-800 animate-pulse ml-0.5 align-text-bottom" />
-                )}
-              </>
+              output
             ) : (
               <span className="text-gray-400 text-sm">
-                {loading
-                  ? 'Writing your entry…'
-                  : 'Fill in your campaign details and click Generate Entry.'}
+                {loading ? 'Writing your entry…' : 'Fill in your campaign details and click Generate Entry.'}
               </span>
             )}
           </div>
