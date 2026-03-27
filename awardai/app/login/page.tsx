@@ -1,7 +1,5 @@
 'use client'
-
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
 export default function Login() {
@@ -9,7 +7,6 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
-  const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -19,12 +16,10 @@ export default function Login() {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
       setMessage(error.message)
+      setLoading(false)
     } else {
-      router.push('/')
-      router.refresh()
+      window.location.href = '/projects'
     }
-
-    setLoading(false)
   }
 
   return (
@@ -34,7 +29,6 @@ export default function Login() {
           <h1 className="text-lg font-semibold">AwardAI</h1>
           <p className="text-sm text-gray-500 mt-0.5">Sign in to your account</p>
         </div>
-
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
@@ -47,7 +41,6 @@ export default function Login() {
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
             />
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
             <input
@@ -59,11 +52,9 @@ export default function Login() {
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
             />
           </div>
-
           {message && (
             <p className="text-sm text-red-600">{message}</p>
           )}
-
           <button
             type="submit"
             disabled={loading}
@@ -72,7 +63,6 @@ export default function Login() {
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
-
         <p className="text-sm text-gray-400 mt-5 text-center">
           Access by invitation only.
         </p>
