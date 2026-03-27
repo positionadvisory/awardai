@@ -61,7 +61,7 @@ if (!orgId) {
         client_name: form.client_name.trim() || null,
         combined_text: form.brief.trim() || null,
         target_shows: form.target_shows,
-        org_id: org_id,
+        org_id: orgId,
         user_id: user?.id,
         status: 'draft',
       })
