@@ -41,17 +41,18 @@ export default function NewProjectPage() {
     setSaving(true)
     setError('')
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('org_id')
-      .eq('id', user?.id)
-      .single()
-
-    if (!profile?.org_id) {
-      setError('Could not find your organisation. Please contact support.')
-      setSaving(false)
-      return
-    }
+    const { data: { session } } = await supabase.auth.getSession()
+if (!session) {
+  setError('Not authenticated. Please sign in again.')
+  setSaving(false)
+  return
+}
+const { data: orgId } = await supabase.rpc('get_my_org_id')
+if (!orgId) {
+  setError('Could not find your organisation. Please contact support.')
+  setSaving(false)
+  return
+}
 
     const { data, error: insertError } = await supabase
       .from('projects')
@@ -60,7 +61,7 @@ export default function NewProjectPage() {
         client_name: form.client_name.trim() || null,
         combined_text: form.brief.trim() || null,
         target_shows: form.target_shows,
-        org_id: profile.org_id,
+        org_id: org_id,
         user_id: user?.id,
         status: 'draft',
       })
