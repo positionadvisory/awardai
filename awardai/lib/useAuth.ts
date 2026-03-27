@@ -13,18 +13,18 @@ export function useAuth() {
     let mounted = true
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (!mounted) return
-        if (session?.user) {
-          setUser(session.user)
-          setLoading(false)
-        } else if (event === 'SIGNED_OUT') {
-          setUser(null)
-          setLoading(false)
-          router.replace('/login')
-        }
-      }
-    )
+  (event, session) => {
+    if (!mounted) return
+    if (session?.user) {
+      setUser(session.user)
+      setLoading(false)
+    } else {
+      setUser(null)
+      setLoading(false)
+      router.replace('/login')
+    }
+  }
+)
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!mounted) return
