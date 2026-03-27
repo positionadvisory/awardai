@@ -10,15 +10,39 @@ export function useAuth() {
   const router = useRouter()
 
   useEffect(() => {
+    let mounted = true
+
+    // Check existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return
+      setLoading(false)
       if (!session) {
-        router.push('/login')
+        router.replace('/login')
       } else {
         setUser(session.user)
-        setLoading(false)
       }
     })
-  }, [router])
+
+    // Listen for auth changes (login/logout)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (!mounted) return
+        if (!session) {
+          setUser(null)
+          setLoading(false)
+          router.replace('/login')
+        } else {
+          setUser(session.user)
+          setLoading(false)
+        }
+      }
+    )
+
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return { user, loading }
 }
