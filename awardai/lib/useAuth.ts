@@ -12,31 +12,30 @@ export function useAuth() {
   useEffect(() => {
     let mounted = true
 
-    // Check existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!mounted) return
-      setLoading(false)
-      if (!session) {
-        router.replace('/login')
-      } else {
-        setUser(session.user)
-      }
-    })
-
-    // Listen for auth changes (login/logout)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
         if (!mounted) return
-        if (!session) {
+        if (session?.user) {
+          setUser(session.user)
+          setLoading(false)
+        } else if (event === 'SIGNED_OUT') {
           setUser(null)
           setLoading(false)
           router.replace('/login')
-        } else {
-          setUser(session.user)
-          setLoading(false)
         }
       }
     )
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return
+      if (session?.user) {
+        setUser(session.user)
+        setLoading(false)
+      } else {
+        setLoading(false)
+        router.replace('/login')
+      }
+    })
 
     return () => {
       mounted = false
