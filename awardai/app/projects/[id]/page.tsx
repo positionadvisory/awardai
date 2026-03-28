@@ -134,6 +134,15 @@ export default function ProjectPage() {
   const [evaluateError, setEvaluateError] = useState('')
   const [evaluatingForDirectionId, setEvaluatingForDirectionId] = useState<number | null>(null)
 
+  // Quick evaluate from uploaded material
+  const [orgId, setOrgId] = useState<number | null>(null)
+  const [showQuickEvalModal, setShowQuickEvalModal] = useState(false)
+  const [quickEvalMaterialIdx, setQuickEvalMaterialIdx] = useState<number | null>(null)
+  const [quickEvalShow, setQuickEvalShow] = useState('')
+  const [quickEvalCategory, setQuickEvalCategory] = useState('')
+  const [quickEvaluating, setQuickEvaluating] = useState(false)
+  const [quickEvalError, setQuickEvalError] = useState('')
+
   useEffect(() => {
     if (!user || !projectId) return
 
@@ -163,6 +172,9 @@ export default function ProjectPage() {
 
       setFetching(false)
     })
+
+    // Fetch org_id for quick-evaluate flow
+    supabase.rpc('get_my_org_id').then(({ data }) => { if (data) setOrgId(data) })
   }, [user, projectId])
 
   const saveBrief = async () => {
@@ -384,6 +396,116 @@ export default function ProjectPage() {
     } finally { setEvaluating(false); setEvaluatingForDirectionId(null) }
   }
 
+  const evaluateUploadedEntry = async () => {
+    if (!project || quickEvalMaterialIdx === null || !user) return
+    const material = project.materials[quickEvalMaterialIdx]
+    if (!material.extracted_text) return
+    if (!quickEvalShow.trim() || !quickEvalCategory.trim()) {
+      setQuickEvalError('Please enter both an award show and category.')
+      return
+    }
+
+    setQuickEvaluating(true)
+    setQuickEvalError('')
+
+    try {
+      const accessToken = await getToken()
+      if (!accessToken) return
+
+      // Resolve org_id
+      let currentOrgId = orgId
+      if (!currentOrgId) {
+        const { data } = await supabase.rpc('get_my_org_id')
+        currentOrgId = data
+        if (currentOrgId) setOrgId(currentOrgId)
+      }
+
+      // 1. Create a direction row for this show/category
+      const { data: dir, error: dirErr } = await supabase
+        .from('directions')
+        .insert({
+          project_id: project.id,
+          org_id: currentOrgId,
+          created_by: user.id,
+          name: `${quickEvalShow.trim()} — ${quickEvalCategory.trim()}`,
+          best_show: quickEvalShow.trim(),
+          best_category: quickEvalCategory.trim(),
+          angle: 'Uploaded entry — direct evaluation',
+          sort_order: directions.length,
+        })
+        .select()
+        .single()
+
+      if (dirErr || !dir) {
+        setQuickEvalError(dirErr?.message || 'Failed to create direction record.')
+        return
+      }
+
+      // 2. Create an entry_draft from the uploaded material text
+      const { data: draft, error: draftErr } = await supabase
+        .from('entry_drafts')
+        .insert({
+          project_id: project.id,
+          direction_id: dir.id,
+          org_id: currentOrgId,
+          created_by: user.id,
+          field_key: 'entry',
+          field_label: 'Entry',
+          version_a: material.extracted_text.slice(0, 10000),
+          selected: 'a',
+          award_show: quickEvalShow.trim(),
+          category: quickEvalCategory.trim(),
+          sort_order: 0,
+        })
+        .select()
+        .single()
+
+      if (draftErr || !draft) {
+        await supabase.from('directions').delete().eq('id', dir.id)
+        setQuickEvalError(draftErr?.message || 'Failed to create entry draft.')
+        return
+      }
+
+      // Update local state so Entries tab renders immediately
+      setDirections(prev => [...prev, dir])
+      setEntries(prev => [...prev, draft])
+
+      // 3. Call evaluate-entry Edge Function
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/evaluate-entry`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          },
+          body: JSON.stringify({ project_id: project.id, direction_id: dir.id }),
+        }
+      )
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        setQuickEvalError(data.error || `Evaluation error: ${res.status}`)
+        return
+      }
+      if (data.evaluation) {
+        setEvaluations(prev => ({ ...prev, [dir.id]: data.evaluation }))
+      }
+
+      // Close modal and show results in Entries tab
+      setShowQuickEvalModal(false)
+      setQuickEvalShow('')
+      setQuickEvalCategory('')
+      setQuickEvalMaterialIdx(null)
+      setTab('entries')
+
+    } catch (err) {
+      setQuickEvalError(err instanceof Error ? err.message : 'Network error.')
+    } finally {
+      setQuickEvaluating(false)
+    }
+  }
+
   const countWords = (text: string) => text.trim().split(/\s+/).filter(Boolean).length
   const formatBytes = (bytes: number) => bytes < 1024 * 1024
     ? `${(bytes / 1024).toFixed(1)} KB`
@@ -526,19 +648,37 @@ export default function ProjectPage() {
             {(project.materials || []).length > 0 && (
               <div className="mt-4 space-y-2">
                 {project.materials.map((m, i) => (
-                  <div key={i} className="flex items-center gap-3 bg-gray-900 border border-gray-800 rounded-lg px-4 py-3">
-                    <div className="w-9 h-9 bg-gray-800 rounded-md flex items-center justify-center text-xs text-gray-400 uppercase font-bold flex-shrink-0">{m.type}</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-white truncate">{m.name}</p>
-                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                        <p className="text-xs text-gray-500">{formatBytes(m.size)} · {new Date(m.uploaded_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
-                        {m.extracted_text ? <span className="text-xs text-green-500">✓ text extracted</span> : m.type === 'pdf' ? <span className="text-xs text-gray-600">image-only PDF</span> : null}
-                        {m.chart_image_paths && m.chart_image_paths.length > 0 && (
-                          <span className="text-xs text-indigo-400">+ {m.chart_image_paths.length} chart{m.chart_image_paths.length > 1 ? 's' : ''}</span>
+                  <div key={i} className="bg-gray-900 border border-gray-800 rounded-lg px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 bg-gray-800 rounded-md flex items-center justify-center text-xs text-gray-400 uppercase font-bold flex-shrink-0">{m.type}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-white truncate">{m.name}</p>
+                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                          <p className="text-xs text-gray-500">{formatBytes(m.size)} · {new Date(m.uploaded_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                          {m.extracted_text ? <span className="text-xs text-green-500">✓ text extracted</span> : m.type === 'pdf' ? <span className="text-xs text-gray-600">image-only PDF</span> : null}
+                          {m.chart_image_paths && m.chart_image_paths.length > 0 && (
+                            <span className="text-xs text-indigo-400">+ {m.chart_image_paths.length} chart{m.chart_image_paths.length > 1 ? 's' : ''}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {m.extracted_text && (
+                          <button
+                            onClick={() => {
+                              setQuickEvalMaterialIdx(i)
+                              setQuickEvalShow(project.target_shows?.[0] || '')
+                              setQuickEvalCategory('')
+                              setQuickEvalError('')
+                              setShowQuickEvalModal(true)
+                            }}
+                            className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+                          >
+                            Evaluate as Entry
+                          </button>
                         )}
+                        <button onClick={() => deleteFile(i)} className="text-gray-600 hover:text-red-400 transition-colors text-xs">Remove</button>
                       </div>
                     </div>
-                    <button onClick={() => deleteFile(i)} className="text-gray-600 hover:text-red-400 transition-colors text-xs flex-shrink-0">Remove</button>
                   </div>
                 ))}
               </div>
@@ -809,6 +949,74 @@ export default function ProjectPage() {
         )}
 
       </main>
+
+      {/* ── QUICK EVALUATE MODAL ── */}
+      {showQuickEvalModal && quickEvalMaterialIdx !== null && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <h2 className="text-base font-semibold text-white mb-1">Evaluate Existing Entry</h2>
+            <p className="text-xs text-gray-400 mb-5">
+              Which award show and category is this entry targeting?
+              <span className="block mt-1 text-gray-500 truncate">
+                {project.materials[quickEvalMaterialIdx]?.name}
+              </span>
+            </p>
+
+            <div className="space-y-3 mb-5">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Award Show</label>
+                <input
+                  type="text"
+                  value={quickEvalShow}
+                  onChange={e => setQuickEvalShow(e.target.value)}
+                  placeholder="e.g. Cannes Lions, Effies, WARC…"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Category</label>
+                <input
+                  type="text"
+                  value={quickEvalCategory}
+                  onChange={e => setQuickEvalCategory(e.target.value)}
+                  placeholder="e.g. Grand Prix, Silver, Creative Effectiveness…"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                />
+              </div>
+            </div>
+
+            {quickEvalError && (
+              <div className="mb-4 bg-red-900/20 border border-red-800 rounded-lg px-3 py-2">
+                <p className="text-red-400 text-xs">{quickEvalError}</p>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={evaluateUploadedEntry}
+                disabled={quickEvaluating}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                {quickEvaluating ? (
+                  <><svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Evaluating…</>
+                ) : 'Evaluate Entry'}
+              </button>
+              <button
+                onClick={() => { setShowQuickEvalModal(false); setQuickEvalError('') }}
+                disabled={quickEvaluating}
+                className="px-4 py-2.5 text-sm text-gray-400 hover:text-white disabled:opacity-40 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+
+            {quickEvaluating && (
+              <p className="text-xs text-gray-500 text-center mt-3">Claude Opus 4.6 is reviewing your entry — this takes about 30–60 seconds.</p>
+            )}
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
