@@ -451,7 +451,7 @@ export default function ProjectPage() {
           created_by: user.id,
           field_key: 'entry',
           field_label: 'Entry',
-          version_a: material.extracted_text.slice(0, 10000),
+          version_a: material.extracted_text.slice(0, 50000),
           selected: 'a',
           award_show: quickEvalShow.trim(),
           category: quickEvalCategory.trim(),
