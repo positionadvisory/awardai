@@ -376,7 +376,7 @@ export default function ProjectPage() {
     </div>
   )
 
-  const uniqueDirectionsWithEntries = [...new Set(entries.map(e => e.direction_id))]
+  const uniqueDirectionsWithEntries = Array.from(new Set(entries.map(e => e.direction_id)))
 
   const TABS: { key: Tab; label: string; count?: number }[] = [
     { key: 'brief', label: 'Brief' },
