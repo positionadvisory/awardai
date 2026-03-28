@@ -10,6 +10,8 @@ type Material = {
   type: string
   size: number
   uploaded_at: string
+  extracted_text?: string
+  chart_image_paths?: string[]
 }
 
 type Project = {
@@ -64,15 +66,24 @@ export default function ProjectPage() {
   const [tab, setTab] = useState<Tab>('brief')
   const [fetching, setFetching] = useState(true)
 
+  // Brief state
   const [briefEdit, setBriefEdit] = useState(false)
   const [briefText, setBriefText] = useState('')
   const [savingBrief, setSavingBrief] = useState(false)
 
+  // Materials state
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
+  const [uploadProgress, setUploadProgress] = useState('')
 
+  // Directions state
   const [generating, setGenerating] = useState(false)
   const [generateError, setGenerateError] = useState('')
+
+  // Draft generation state
+  const [generatingDraft, setGeneratingDraft] = useState(false)
+  const [generateDraftError, setGenerateDraftError] = useState('')
+  const [generatingForDirectionId, setGeneratingForDirectionId] = useState<number | null>(null)
 
   useEffect(() => {
     if (!user || !projectId) return
@@ -106,92 +117,247 @@ export default function ProjectPage() {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file || !project) return
-    setUploading(true)
-    setUploadError('')
+
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError('File size must be under 10MB.')
+      return
+    }
+
     const ext = file.name.split('.').pop()?.toLowerCase()
     if (!['pdf', 'docx', 'txt'].includes(ext || '')) {
       setUploadError('Only PDF, DOCX, and TXT files are supported.')
-      setUploading(false)
       return
     }
+
+    if ((project.materials || []).length >= 5) {
+      setUploadError('Maximum 5 files per project.')
+      return
+    }
+
+    setUploading(true)
+    setUploadError('')
+    setUploadProgress('Uploading file…')
+
     const path = `${project.id}/${Date.now()}-${file.name}`
     const { error: uploadErr } = await supabase.storage
       .from('project-materials')
       .upload(path, file)
+
     if (uploadErr) {
       setUploadError(uploadErr.message)
       setUploading(false)
+      setUploadProgress('')
+      e.target.value = ''
       return
     }
+
+    // Text extraction
+    const arrayBuffer = await file.arrayBuffer()
+    let extractedText = ''
+    const chartImagePaths: string[] = []
+
+    if (ext === 'txt') {
+      extractedText = new TextDecoder().decode(arrayBuffer).slice(0, 50000)
+
+    } else if (ext === 'docx') {
+      try {
+        setUploadProgress('Extracting text from document…')
+        const mammoth = (await import('mammoth')).default
+        const result = await mammoth.extractRawText({ arrayBuffer })
+        extractedText = result.value.slice(0, 50000)
+      } catch (err) {
+        console.warn('DOCX extraction failed:', err)
+      }
+
+    } else if (ext === 'pdf') {
+      try {
+        setUploadProgress('Reading PDF…')
+        const pdfjsLib = await import('pdfjs-dist')
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+          `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`
+
+        const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise
+        const textParts: string[] = []
+        const chartPageNums: number[] = []
+
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          const page = await pdf.getPage(pageNum)
+          const textContent = await page.getTextContent()
+          const pageText = (textContent.items as Array<{ str?: string }>)
+            .filter(item => typeof item.str === 'string')
+            .map(item => item.str as string)
+            .join(' ')
+            .trim()
+
+          if (pageText.length > 80) {
+            textParts.push(pageText)
+          } else {
+            // Low text density — likely a chart or visual page
+            chartPageNums.push(pageNum)
+          }
+        }
+
+        extractedText = textParts.join('\n\n').slice(0, 50000)
+
+        // Render chart pages to JPEG and upload (max 8)
+        if (chartPageNums.length > 0) {
+          setUploadProgress(`Processing ${Math.min(chartPageNums.length, 8)} chart pages…`)
+          for (const pageNum of chartPageNums.slice(0, 8)) {
+            try {
+              const page = await pdf.getPage(pageNum)
+              const viewport = page.getViewport({ scale: 1.5 })
+              const canvas = document.createElement('canvas')
+              canvas.width = viewport.width
+              canvas.height = viewport.height
+              const ctx = canvas.getContext('2d')
+              if (!ctx) continue
+
+              await page.render({ canvasContext: ctx, viewport }).promise
+
+              const blob = await new Promise<Blob | null>(resolve =>
+                canvas.toBlob(resolve, 'image/jpeg', 0.8)
+              )
+
+              if (blob) {
+                const chartPath = `${project.id}/charts/${Date.now()}-page-${pageNum}.jpg`
+                const { error: chartErr } = await supabase.storage
+                  .from('project-materials')
+                  .upload(chartPath, blob, { contentType: 'image/jpeg' })
+                if (!chartErr) chartImagePaths.push(chartPath)
+              }
+            } catch (err) {
+              console.warn(`Chart render failed for page ${pageNum}:`, err)
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('PDF processing failed:', err)
+      }
+    }
+
+    setUploadProgress('Saving…')
+
     const newMaterial: Material = {
       name: file.name,
       path,
       type: ext || '',
       size: file.size,
       uploaded_at: new Date().toISOString(),
+      ...(extractedText ? { extracted_text: extractedText } : {}),
+      ...(chartImagePaths.length > 0 ? { chart_image_paths: chartImagePaths } : {}),
     }
+
     const updatedMaterials = [...(project.materials || []), newMaterial]
     await supabase
       .from('projects')
       .update({ materials: updatedMaterials, updated_at: new Date().toISOString() })
       .eq('id', projectId)
+
     setProject(p => p ? { ...p, materials: updatedMaterials } : p)
     setUploading(false)
+    setUploadProgress('')
     e.target.value = ''
   }
 
+  const deleteFile = async (index: number) => {
+    if (!project) return
+    const material = project.materials[index]
+
+    await supabase.storage.from('project-materials').remove([material.path])
+    if (material.chart_image_paths?.length) {
+      await supabase.storage.from('project-materials').remove(material.chart_image_paths)
+    }
+
+    const updatedMaterials = project.materials.filter((_, i) => i !== index)
+    await supabase
+      .from('projects')
+      .update({ materials: updatedMaterials, updated_at: new Date().toISOString() })
+      .eq('id', projectId)
+    setProject(p => p ? { ...p, materials: updatedMaterials } : p)
+  }
+
   const generateDirections = async () => {
-  if (!project) return
-  setGenerating(true)
-  setGenerateError('')
-
-  try {
-    // Attempt to refresh — use the returned session directly, don't call getSession() again
-    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession()
-
-    let accessToken: string | null = null
-
-    if (!refreshError && refreshData?.session?.access_token) {
-      accessToken = refreshData.session.access_token
-    } else {
-      // Refresh failed — fall back to existing session
-      const { data: { session: existingSession } } = await supabase.auth.getSession()
-      if (!existingSession?.access_token) {
-        // No valid session at all — force re-login
-        window.location.href = '/login'
+    if (!project) return
+    setGenerating(true)
+    setGenerateError('')
+    try {
+      const { data: refreshData } = await supabase.auth.refreshSession()
+      let accessToken = refreshData?.session?.access_token
+      if (!accessToken) {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.access_token) { window.location.href = '/login'; return }
+        accessToken = session.access_token
+      }
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-directions`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          },
+          body: JSON.stringify({ project_id: project.id }),
+        }
+      )
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        setGenerateError(data.error || data.message || `Error ${res.status}: Please try again.`)
         return
       }
-      accessToken = existingSession.access_token
-    }
-
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-directions`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-          'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        },
-        body: JSON.stringify({ project_id: project.id }),
-      }
-    )
-
-    const data = await res.json()
-
-    if (!res.ok || data.error) {
-      setGenerateError(data.error || data.message || `Error ${res.status}: Please try again.`)
+      setDirections(data.directions || [])
+    } catch (err) {
+      setGenerateError(err instanceof Error ? err.message : 'Network error. Please try again.')
+    } finally {
       setGenerating(false)
-      return
     }
-
-    setDirections(data.directions || [])
-  } catch (err) {
-    setGenerateError(err instanceof Error ? err.message : 'Network error. Please try again.')
-  } finally {
-    setGenerating(false)
   }
-}
+
+  const generateDraft = async (directionId: number) => {
+    if (!project) return
+    setGeneratingDraft(true)
+    setGenerateDraftError('')
+    setGeneratingForDirectionId(directionId)
+    try {
+      const { data: refreshData } = await supabase.auth.refreshSession()
+      let accessToken = refreshData?.session?.access_token
+      if (!accessToken) {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.access_token) { window.location.href = '/login'; return }
+        accessToken = session.access_token
+      }
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-draft`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          },
+          body: JSON.stringify({ project_id: project.id, direction_id: directionId }),
+        }
+      )
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        setGenerateDraftError(data.error || `Error ${res.status}: Please try again.`)
+        return
+      }
+      setEntries(prev => [
+        ...prev.filter(e => e.direction_id !== directionId),
+        ...(data.entry_drafts || []),
+      ])
+      setTab('entries')
+    } catch (err) {
+      setGenerateDraftError(err instanceof Error ? err.message : 'Network error. Please try again.')
+    } finally {
+      setGeneratingDraft(false)
+      setGeneratingForDirectionId(null)
+    }
+  }
+
+  const countWords = (text: string) =>
+    text.trim().split(/\s+/).filter(Boolean).length
 
   const formatBytes = (bytes: number) => {
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
@@ -210,15 +376,19 @@ export default function ProjectPage() {
     </div>
   )
 
+  const uniqueDirectionsWithEntries = [...new Set(entries.map(e => e.direction_id))]
+
   const TABS: { key: Tab; label: string; count?: number }[] = [
     { key: 'brief', label: 'Brief' },
     { key: 'materials', label: 'Materials', count: project.materials?.length || 0 },
     { key: 'directions', label: 'Directions', count: directions.length },
-    { key: 'entries', label: 'Entries', count: entries.length },
+    { key: 'entries', label: 'Entries', count: uniqueDirectionsWithEntries.length },
   ]
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
+
+      {/* Header */}
       <header className="border-b border-gray-800 px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -237,17 +407,16 @@ export default function ProjectPage() {
             </div>
           </div>
           <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-            project.status === 'active'
-              ? 'bg-green-900/50 text-green-400'
-              : project.status === 'final'
-              ? 'bg-indigo-900/50 text-indigo-400'
-              : 'bg-gray-800 text-gray-400'
+            project.status === 'active' ? 'bg-green-900/50 text-green-400' :
+            project.status === 'final' ? 'bg-indigo-900/50 text-indigo-400' :
+            'bg-gray-800 text-gray-400'
           }`}>
             {project.status}
           </span>
         </div>
       </header>
 
+      {/* Tab nav */}
       <div className="border-b border-gray-800">
         <div className="max-w-5xl mx-auto px-6 flex">
           {TABS.map(t => (
@@ -344,31 +513,49 @@ export default function ProjectPage() {
         {tab === 'materials' && (
           <div className="max-w-2xl">
             <p className="text-sm text-gray-400 mb-5">
-              Upload supporting files — case studies, results decks, research. Their contents will be used as context when generating entries.
+              Upload supporting files — case studies, results decks, campaign documents. Text and chart data will be extracted and used when generating entry drafts.
             </p>
-            <label className={`block w-full border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
-              uploading ? 'border-gray-700 opacity-50' : 'border-gray-700 hover:border-indigo-500'
-            }`}>
-              <input
-                type="file"
-                accept=".pdf,.docx,.txt"
-                onChange={handleFileUpload}
-                className="hidden"
-                disabled={uploading}
-              />
-              <div className="text-gray-400 text-sm">
-                {uploading ? (
-                  <span className="text-indigo-400">Uploading…</span>
-                ) : (
-                  <>
-                    <span className="text-indigo-400 font-medium">Click to upload</span>
-                    <span className="text-gray-500"> — PDF, DOCX, or TXT</span>
-                  </>
-                )}
+
+            {(project.materials || []).length < 5 ? (
+              <label className={`block w-full border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
+                uploading
+                  ? 'border-gray-700 opacity-60 cursor-not-allowed'
+                  : 'border-gray-700 hover:border-indigo-500 cursor-pointer'
+              }`}>
+                <input
+                  type="file"
+                  accept=".pdf,.docx,.txt"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  disabled={uploading}
+                />
+                <div className="text-sm">
+                  {uploading ? (
+                    <div>
+                      <div className="text-indigo-400 font-medium mb-1">
+                        {uploadProgress || 'Processing…'}
+                      </div>
+                      <div className="text-gray-500 text-xs">
+                        PDFs with charts may take a moment
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="text-indigo-400 font-medium">Click to upload</span>
+                      <span className="text-gray-500"> — PDF, DOCX, or TXT · max 10MB</span>
+                    </>
+                  )}
+                </div>
+              </label>
+            ) : (
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center text-sm text-gray-500">
+                Maximum of 5 files per project reached.
               </div>
-            </label>
+            )}
+
             {uploadError && <p className="text-red-400 text-sm mt-2">{uploadError}</p>}
-            {project.materials?.length > 0 ? (
+
+            {(project.materials || []).length > 0 ? (
               <div className="mt-4 space-y-2">
                 {project.materials.map((m, i) => (
                   <div key={i} className="flex items-center gap-3 bg-gray-900 border border-gray-800 rounded-lg px-4 py-3">
@@ -377,17 +564,37 @@ export default function ProjectPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-white truncate">{m.name}</p>
-                      <p className="text-xs text-gray-500">
-                        {formatBytes(m.size)} · {new Date(m.uploaded_at).toLocaleDateString('en-GB', {
-                          day: 'numeric', month: 'short', year: 'numeric'
-                        })}
-                      </p>
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        <p className="text-xs text-gray-500">
+                          {formatBytes(m.size)} · {new Date(m.uploaded_at).toLocaleDateString('en-GB', {
+                            day: 'numeric', month: 'short', year: 'numeric'
+                          })}
+                        </p>
+                        {m.extracted_text ? (
+                          <span className="text-xs text-green-500">✓ text extracted</span>
+                        ) : m.type === 'pdf' ? (
+                          <span className="text-xs text-gray-600">image-only PDF</span>
+                        ) : null}
+                        {m.chart_image_paths && m.chart_image_paths.length > 0 && (
+                          <span className="text-xs text-indigo-400">
+                            + {m.chart_image_paths.length} chart{m.chart_image_paths.length > 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </div>
                     </div>
+                    <button
+                      onClick={() => deleteFile(i)}
+                      className="text-gray-600 hover:text-red-400 transition-colors text-xs flex-shrink-0"
+                    >
+                      Remove
+                    </button>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-gray-600 text-sm mt-4 text-center">No files uploaded yet.</p>
+              !uploading && (
+                <p className="text-gray-600 text-sm mt-4 text-center">No files uploaded yet.</p>
+              )
             )}
           </div>
         )}
@@ -399,7 +606,7 @@ export default function ProjectPage() {
               <div>
                 <h2 className="text-sm font-medium text-gray-300">Award Directions</h2>
                 <p className="text-gray-500 text-xs mt-0.5">
-                  AI-recommended show and category combinations based on your brief and knowledge base
+                  AI-recommended show and category combinations. Click Generate Draft on any direction to create an entry.
                 </p>
               </div>
               <button
@@ -416,13 +623,19 @@ export default function ProjectPage() {
                     </svg>
                     Generating…
                   </>
-                ) : directions.length > 0 ? 'Regenerate' : 'Generate Directions'}
+                ) : directions.length > 0 ? 'Regenerate Directions' : 'Generate Directions'}
               </button>
             </div>
 
             {generateError && (
               <div className="mb-4 bg-red-900/20 border border-red-800 rounded-lg px-4 py-3">
                 <p className="text-red-400 text-sm">{generateError}</p>
+              </div>
+            )}
+
+            {generateDraftError && (
+              <div className="mb-4 bg-red-900/20 border border-red-800 rounded-lg px-4 py-3">
+                <p className="text-red-400 text-sm">{generateDraftError}</p>
               </div>
             )}
 
@@ -437,74 +650,110 @@ export default function ProjectPage() {
             {directions.length === 0 && !generating ? (
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-10 text-center max-w-lg">
                 <p className="text-gray-500 text-sm">
-                  No directions yet.{' '}
                   {project.combined_text
                     ? 'Click Generate Directions to get started.'
                     : 'Add a brief first, then generate directions.'}
                 </p>
               </div>
             ) : (
-              <div className="grid gap-3">
-                {directions.map(d => (
-                  <div
-                    key={d.id}
-                    className={`bg-gray-900 border rounded-xl p-5 ${
-                      d.chosen ? 'border-indigo-600' : 'border-gray-800'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-medium text-white">{d.name}</h3>
-                          {d.chosen && (
-                            <span className="text-xs bg-indigo-900/50 text-indigo-400 px-2 py-0.5 rounded-full">
-                              Selected
-                            </span>
+              <div className="grid gap-4">
+                {directions.map(d => {
+                  const hasEntries = entries.some(e => e.direction_id === d.id)
+                  const isGeneratingThis = generatingForDirectionId === d.id
+                  return (
+                    <div
+                      key={d.id}
+                      className={`bg-gray-900 border rounded-xl p-5 ${
+                        d.chosen ? 'border-indigo-600' : 'border-gray-800'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-medium text-white">{d.name}</h3>
+                            {d.chosen && (
+                              <span className="text-xs bg-indigo-900/50 text-indigo-400 px-2 py-0.5 rounded-full">
+                                Selected
+                              </span>
+                            )}
+                            {hasEntries && (
+                              <span className="text-xs bg-green-900/40 text-green-400 px-2 py-0.5 rounded-full">
+                                Draft ready
+                              </span>
+                            )}
+                          </div>
+                          {d.best_show && (
+                            <p className="text-indigo-400 text-sm mt-0.5">
+                              {d.best_show} · <span className="text-gray-400">{d.best_category}</span>
+                            </p>
                           )}
+                          {d.hook && (
+                            <p className="text-gray-200 text-sm mt-2 italic">"{d.hook}"</p>
+                          )}
+                          {d.angle && (
+                            <p className="text-gray-400 text-sm mt-2">{d.angle}</p>
+                          )}
+                          {d.likelihood_rationale && (
+                            <p className="text-gray-500 text-xs mt-2">{d.likelihood_rationale}</p>
+                          )}
+                          <div className="flex gap-4 mt-3">
+                            {d.strengths && (
+                              <div className="flex-1">
+                                <p className="text-xs text-green-400 font-medium mb-1">Strengths</p>
+                                <p className="text-xs text-gray-400 leading-relaxed">{d.strengths}</p>
+                              </div>
+                            )}
+                            {d.risks && (
+                              <div className="flex-1">
+                                <p className="text-xs text-amber-400 font-medium mb-1">Risks</p>
+                                <p className="text-xs text-gray-400 leading-relaxed">{d.risks}</p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Generate Draft row */}
+                          <div className="mt-4 pt-4 border-t border-gray-800 flex items-center gap-3">
+                            <button
+                              onClick={() => generateDraft(d.id)}
+                              disabled={generatingDraft}
+                              className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                            >
+                              {isGeneratingThis ? (
+                                <>
+                                  <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                                  </svg>
+                                  Writing draft…
+                                </>
+                              ) : hasEntries ? 'Regenerate Draft' : 'Generate Draft'}
+                            </button>
+                            {hasEntries && !isGeneratingThis && (
+                              <button
+                                onClick={() => setTab('entries')}
+                                className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                              >
+                                View entry →
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        {d.best_show && (
-                          <p className="text-indigo-400 text-sm mt-0.5">
-                            {d.best_show} · <span className="text-gray-400">{d.best_category}</span>
-                          </p>
+
+                        {d.win_likelihood !== null && (
+                          <div className="text-right flex-shrink-0">
+                            <p className={`text-2xl font-bold tabular-nums ${
+                              d.win_likelihood >= 65 ? 'text-green-400' :
+                              d.win_likelihood >= 45 ? 'text-amber-400' : 'text-red-400'
+                            }`}>
+                              {d.win_likelihood}%
+                            </p>
+                            <p className="text-gray-600 text-xs">win likelihood</p>
+                          </div>
                         )}
-                        {d.hook && (
-                          <p className="text-gray-200 text-sm mt-2 italic">"{d.hook}"</p>
-                        )}
-                        {d.angle && (
-                          <p className="text-gray-400 text-sm mt-2">{d.angle}</p>
-                        )}
-                        {d.likelihood_rationale && (
-                          <p className="text-gray-500 text-xs mt-2">{d.likelihood_rationale}</p>
-                        )}
-                        <div className="flex gap-4 mt-3">
-                          {d.strengths && (
-                            <div className="flex-1">
-                              <p className="text-xs text-green-400 font-medium mb-1">Strengths</p>
-                              <p className="text-xs text-gray-400 leading-relaxed">{d.strengths}</p>
-                            </div>
-                          )}
-                          {d.risks && (
-                            <div className="flex-1">
-                              <p className="text-xs text-amber-400 font-medium mb-1">Risks</p>
-                              <p className="text-xs text-gray-400 leading-relaxed">{d.risks}</p>
-                            </div>
-                          )}
-                        </div>
                       </div>
-                      {d.win_likelihood !== null && (
-                        <div className="text-right flex-shrink-0">
-                          <p className={`text-2xl font-bold tabular-nums ${
-                            d.win_likelihood >= 65 ? 'text-green-400' :
-                            d.win_likelihood >= 45 ? 'text-amber-400' : 'text-red-400'
-                          }`}>
-                            {d.win_likelihood}%
-                          </p>
-                          <p className="text-gray-600 text-xs">win likelihood</p>
-                        </div>
-                      )}
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
@@ -515,55 +764,97 @@ export default function ProjectPage() {
           <div>
             {entries.length === 0 ? (
               <div className="max-w-lg">
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+                <div className="bg-gray-900 border border-gray-800 rounded-xl p-10 text-center">
                   <div className="w-10 h-10 bg-indigo-900/40 rounded-full flex items-center justify-center mx-auto mb-4">
                     <span className="text-indigo-400 text-lg">✦</span>
                   </div>
-                  <h3 className="text-sm font-medium text-white mb-2">No entries yet</h3>
+                  <h3 className="text-sm font-medium text-white mb-2">No entry drafts yet</h3>
                   <p className="text-gray-500 text-sm mb-6">
-                    Generate award entries from your chosen direction. Each entry is written field-by-field with three version options to choose from.
+                    {directions.length === 0
+                      ? 'Generate directions first, then click Generate Draft on the direction you want to enter.'
+                      : 'Go to Directions and click Generate Draft on the direction you want to enter.'}
                   </p>
                   <button
-                    disabled
-                    className="bg-indigo-600 opacity-40 cursor-not-allowed text-white text-sm font-medium px-5 py-2.5 rounded-lg"
+                    onClick={() => setTab('directions')}
+                    className="text-indigo-400 hover:text-indigo-300 text-sm transition-colors"
                   >
-                    Generate Entry
+                    Go to Directions →
                   </button>
-                  <p className="text-gray-600 text-xs mt-3">Available in next release</p>
                 </div>
               </div>
             ) : (
-              <div className="space-y-6">
+              <div className="space-y-8">
                 {directions
                   .filter(d => entries.some(e => e.direction_id === d.id))
                   .map(d => {
-                    const fields = entries.filter(e => e.direction_id === d.id)
+                    const fields = entries
+                      .filter(e => e.direction_id === d.id)
+                      .sort((a, b) => 0) // already ordered by sort_order from DB
                     return (
                       <div key={d.id} className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                        {/* Entry header */}
                         <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
                           <div>
                             <h3 className="font-medium text-white">{d.name}</h3>
                             {d.best_show && (
-                              <p className="text-gray-400 text-xs mt-0.5">{d.best_show} · {d.best_category}</p>
+                              <p className="text-indigo-400 text-xs mt-0.5">
+                                {d.best_show} · <span className="text-gray-400">{d.best_category}</span>
+                              </p>
                             )}
                           </div>
-                          <span className="text-xs text-gray-500">{fields.length} fields</span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs text-gray-500">{fields.length} fields</span>
+                            <button
+                              onClick={() => generateDraft(d.id)}
+                              disabled={generatingDraft}
+                              className="text-xs text-indigo-400 hover:text-indigo-300 disabled:opacity-40 transition-colors flex items-center gap-1"
+                            >
+                              {generatingForDirectionId === d.id ? (
+                                <>
+                                  <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                                  </svg>
+                                  Regenerating…
+                                </>
+                              ) : 'Regenerate'}
+                            </button>
+                          </div>
                         </div>
+
+                        {/* Entry fields */}
                         <div className="divide-y divide-gray-800">
                           {fields.map(field => {
-                            const activeText = field.selected
-                              ? (field[`version_${field.selected}` as keyof EntryDraft] as string)
+                            const content = field.selected
+                              ? (field[`version_${field.selected}` as keyof EntryDraft] as string) ?? field.version_a
                               : field.version_a
+                            const wordCount = content ? countWords(content) : 0
+                            const overLimit = field.word_limit && wordCount > field.word_limit
+
                             return (
-                              <div key={field.id} className="px-5 py-4">
-                                <div className="flex items-center justify-between mb-2">
-                                  <p className="text-xs font-medium text-gray-300">{field.field_label}</p>
-                                  {field.word_limit && (
-                                    <span className="text-xs text-gray-600">{field.word_limit}w</span>
-                                  )}
+                              <div key={field.id} className="px-5 py-5">
+                                <div className="flex items-center justify-between mb-3">
+                                  <p className="text-xs font-semibold text-gray-200 uppercase tracking-wide">
+                                    {field.field_label}
+                                  </p>
+                                  <div className="flex items-center gap-3">
+                                    {field.word_limit && (
+                                      <span className={`text-xs tabular-nums ${overLimit ? 'text-red-400' : 'text-gray-500'}`}>
+                                        {wordCount} / {field.word_limit}w
+                                      </span>
+                                    )}
+                                    <button
+                                      onClick={() => content && navigator.clipboard.writeText(content)}
+                                      className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                                    >
+                                      Copy
+                                    </button>
+                                  </div>
                                 </div>
-                                <p className="text-sm text-gray-400 leading-relaxed line-clamp-3">
-                                  {activeText || <span className="italic text-gray-600">Not yet generated</span>}
+                                <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">
+                                  {content || (
+                                    <span className="italic text-gray-600">Not yet generated</span>
+                                  )}
                                 </p>
                               </div>
                             )
