@@ -141,48 +141,57 @@ export default function ProjectPage() {
   }
 
   const generateDirections = async () => {
-    if (!project) return
-    setGenerating(true)
-    setGenerateError('')
+  if (!project) return
+  setGenerating(true)
+  setGenerateError('')
 
-    try {
-      // Force refresh the session to ensure we have a valid non-expired token
-      await supabase.auth.refreshSession()
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        setGenerateError('Session expired. Please sign out and sign back in.')
-        setGenerating(false)
+  try {
+    // Attempt to refresh — use the returned session directly, don't call getSession() again
+    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession()
+
+    let accessToken: string | null = null
+
+    if (!refreshError && refreshData?.session?.access_token) {
+      accessToken = refreshData.session.access_token
+    } else {
+      // Refresh failed — fall back to existing session
+      const { data: { session: existingSession } } = await supabase.auth.getSession()
+      if (!existingSession?.access_token) {
+        // No valid session at all — force re-login
+        window.location.href = '/login'
         return
       }
-
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-directions`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-          },
-          body: JSON.stringify({ project_id: project.id }),
-        }
-      )
-
-      const data = await res.json()
-
-      if (!res.ok || data.error) {
-        setGenerateError(data.error || data.message || `Error ${res.status}: Please try again.`)
-        setGenerating(false)
-        return
-      }
-
-      setDirections(data.directions || [])
-    } catch (err) {
-      setGenerateError(err instanceof Error ? err.message : 'Network error. Please try again.')
-    } finally {
-      setGenerating(false)
+      accessToken = existingSession.access_token
     }
+
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-directions`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+          'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        },
+        body: JSON.stringify({ project_id: project.id }),
+      }
+    )
+
+    const data = await res.json()
+
+    if (!res.ok || data.error) {
+      setGenerateError(data.error || data.message || `Error ${res.status}: Please try again.`)
+      setGenerating(false)
+      return
+    }
+
+    setDirections(data.directions || [])
+  } catch (err) {
+    setGenerateError(err instanceof Error ? err.message : 'Network error. Please try again.')
+  } finally {
+    setGenerating(false)
   }
+}
 
   const formatBytes = (bytes: number) => {
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
