@@ -134,6 +134,9 @@ export default function ProjectPage() {
   const [evaluateError, setEvaluateError] = useState('')
   const [evaluatingForDirectionId, setEvaluatingForDirectionId] = useState<number | null>(null)
 
+  // Uploaded entry text expand/collapse in Entries tab
+  const [expandedEntryFields, setExpandedEntryFields] = useState<Record<number, boolean>>({})
+
   // Quick evaluate from uploaded material
   const [orgId, setOrgId] = useState<number | null>(null)
   const [showQuickEvalModal, setShowQuickEvalModal] = useState(false)
@@ -420,25 +423,48 @@ export default function ProjectPage() {
         if (currentOrgId) setOrgId(currentOrgId)
       }
 
-      // 1. Create a direction row for this show/category
-      const { data: dir, error: dirErr } = await supabase
+      // 1. Find or create direction for this show/category (prevent duplicates)
+      let dir: Direction
+      const { data: existingDirs } = await supabase
         .from('directions')
-        .insert({
-          project_id: project.id,
-          org_id: currentOrgId,
-          created_by: user.id,
-          name: `${quickEvalShow.trim()} — ${quickEvalCategory.trim()}`,
-          best_show: quickEvalShow.trim(),
-          best_category: quickEvalCategory.trim(),
-          angle: 'Uploaded entry — direct evaluation',
-          sort_order: directions.length,
-        })
-        .select()
-        .single()
+        .select('*')
+        .eq('project_id', project.id)
+        .eq('best_show', quickEvalShow.trim())
+        .eq('best_category', quickEvalCategory.trim())
+        .limit(1)
 
-      if (dirErr || !dir) {
-        setQuickEvalError(dirErr?.message || 'Failed to create direction record.')
-        return
+      if (existingDirs && existingDirs.length > 0) {
+        dir = existingDirs[0] as Direction
+        // Clean up old entry_drafts + evaluations so we start fresh
+        const { data: oldDrafts } = await supabase
+          .from('entry_drafts').select('id').eq('direction_id', dir.id)
+        if (oldDrafts && oldDrafts.length > 0) {
+          await supabase.from('evaluations').delete().in('entry_draft_id', oldDrafts.map((d: { id: number }) => d.id))
+          await supabase.from('entry_drafts').delete().eq('direction_id', dir.id)
+        }
+        setEntries(prev => prev.filter(e => e.direction_id !== dir.id))
+        setEvaluations(prev => { const next = { ...prev }; delete next[dir.id]; return next })
+      } else {
+        const { data: newDir, error: dirErr } = await supabase
+          .from('directions')
+          .insert({
+            project_id: project.id,
+            org_id: currentOrgId,
+            created_by: user.id,
+            name: `${quickEvalShow.trim()} — ${quickEvalCategory.trim()}`,
+            best_show: quickEvalShow.trim(),
+            best_category: quickEvalCategory.trim(),
+            angle: 'Uploaded entry — direct evaluation',
+            sort_order: directions.length,
+          })
+          .select()
+          .single()
+        if (dirErr || !newDir) {
+          setQuickEvalError(dirErr?.message || 'Failed to create direction record.')
+          return
+        }
+        dir = newDir as Direction
+        setDirections(prev => [...prev, dir])
       }
 
       // 2. Create an entry_draft from the uploaded material text
@@ -466,8 +492,7 @@ export default function ProjectPage() {
         return
       }
 
-      // Update local state so Entries tab renders immediately
-      setDirections(prev => [...prev, dir])
+      // Update local entries state so Entries tab renders immediately
       setEntries(prev => [...prev, draft])
 
       // 3. Call evaluate-entry Edge Function
@@ -917,6 +942,38 @@ export default function ProjectPage() {
                               : field.version_a
                             const wordCount = content ? countWords(content) : 0
                             const overLimit = !!(field.word_limit && wordCount > field.word_limit)
+                            const isUploadedDoc = field.field_key === 'entry'
+                            const isExpanded = expandedEntryFields[field.id] ?? false
+
+                            if (isUploadedDoc) {
+                              // Uploaded document — collapsed by default, evaluation is the focus
+                              return (
+                                <div key={field.id} className="px-5 py-4">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Uploaded Entry</p>
+                                      <span className="text-xs text-gray-600">{wordCount.toLocaleString()} words</span>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                      <button onClick={() => content && navigator.clipboard.writeText(content)}
+                                        className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Copy</button>
+                                      <button
+                                        onClick={() => setExpandedEntryFields(prev => ({ ...prev, [field.id]: !isExpanded }))}
+                                        className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+                                        {isExpanded ? 'Collapse ↑' : 'View full entry ↓'}
+                                      </button>
+                                    </div>
+                                  </div>
+                                  {isExpanded && (
+                                    <div className="mt-3 max-h-96 overflow-y-auto pr-1">
+                                      <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">{content}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            }
+
+                            // AI-generated structured field
                             return (
                               <div key={field.id} className="px-5 py-5">
                                 <div className="flex items-center justify-between mb-3">
