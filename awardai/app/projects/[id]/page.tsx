@@ -144,30 +144,44 @@ export default function ProjectPage() {
     if (!project) return
     setGenerating(true)
     setGenerateError('')
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
-      setGenerateError('Not authenticated.')
+
+    try {
+      // Force refresh the session to ensure we have a valid non-expired token
+      await supabase.auth.refreshSession()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        setGenerateError('Session expired. Please sign out and sign back in.')
+        setGenerating(false)
+        return
+      }
+
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-directions`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          },
+          body: JSON.stringify({ project_id: project.id }),
+        }
+      )
+
+      const data = await res.json()
+
+      if (!res.ok || data.error) {
+        setGenerateError(data.error || data.message || `Error ${res.status}: Please try again.`)
+        setGenerating(false)
+        return
+      }
+
+      setDirections(data.directions || [])
+    } catch (err) {
+      setGenerateError(err instanceof Error ? err.message : 'Network error. Please try again.')
+    } finally {
       setGenerating(false)
-      return
     }
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-    const res = await fetch(`${supabaseUrl}/functions/v1/generate-directions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
-        'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      },
-      body: JSON.stringify({ project_id: project.id }),
-    })
-    const data = await res.json()
-    if (!res.ok || data.error) {
-      setGenerateError(data.error || 'Something went wrong. Please try again.')
-      setGenerating(false)
-      return
-    }
-    setDirections(data.directions || [])
-    setGenerating(false)
   }
 
   const formatBytes = (bytes: number) => {
@@ -396,11 +410,13 @@ export default function ProjectPage() {
                 ) : directions.length > 0 ? 'Regenerate' : 'Generate Directions'}
               </button>
             </div>
+
             {generateError && (
               <div className="mb-4 bg-red-900/20 border border-red-800 rounded-lg px-4 py-3">
                 <p className="text-red-400 text-sm">{generateError}</p>
               </div>
             )}
+
             {!project.combined_text && directions.length === 0 && (
               <div className="bg-amber-900/20 border border-amber-800/50 rounded-xl p-4 mb-4">
                 <p className="text-amber-400 text-sm">
@@ -408,6 +424,7 @@ export default function ProjectPage() {
                 </p>
               </div>
             )}
+
             {directions.length === 0 && !generating ? (
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-10 text-center max-w-lg">
                 <p className="text-gray-500 text-sm">
