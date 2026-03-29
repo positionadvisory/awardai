@@ -865,8 +865,8 @@ export default function ProjectPage() {
                 <h2 className="text-sm font-medium text-gray-300">Award Directions</h2>
                 <p className="text-gray-500 text-xs mt-0.5">AI-recommended show and category combinations. Generate a draft from any direction, then evaluate it.</p>
               </div>
-              <button onClick={generateDirections} disabled={generating || !project.combined_text}
-                title={!project.combined_text ? 'Add a brief first' : ''}
+              <button onClick={generateDirections} disabled={generating || (!project.combined_text && !(project.materials || []).some(m => m.extracted_text))}
+                title={(!project.combined_text && !(project.materials || []).some(m => m.extracted_text)) ? 'Add a brief or upload materials first' : ''}
                 className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
                 {generating ? (
                   <><svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Generating…</>
@@ -877,15 +877,19 @@ export default function ProjectPage() {
             {generateError && <div className="mb-4 bg-red-900/20 border border-red-800 rounded-lg px-4 py-3"><p className="text-red-400 text-sm">{generateError}</p></div>}
             {generateDraftError && <div className="mb-4 bg-red-900/20 border border-red-800 rounded-lg px-4 py-3"><p className="text-red-400 text-sm">{generateDraftError}</p></div>}
 
-            {!project.combined_text && directions.length === 0 && (
+            {!project.combined_text && !(project.materials || []).some(m => m.extracted_text) && directions.length === 0 && (
               <div className="bg-amber-900/20 border border-amber-800/50 rounded-xl p-4 mb-4">
-                <p className="text-amber-400 text-sm">Add a campaign brief on the Brief tab before generating directions.</p>
+                <p className="text-amber-400 text-sm">Add a campaign brief on the Brief tab, or upload campaign materials, before generating directions.</p>
               </div>
             )}
 
             {directions.length === 0 && !generating ? (
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-10 text-center max-w-lg">
-                <p className="text-gray-500 text-sm">{project.combined_text ? 'Click Generate Directions to get started.' : 'Add a brief first, then generate directions.'}</p>
+                <p className="text-gray-500 text-sm">
+                  {(project.combined_text || (project.materials || []).some(m => m.extracted_text))
+                    ? 'Click Generate Directions to get started.'
+                    : 'Add a brief or upload materials first, then generate directions.'}
+                </p>
               </div>
             ) : (
               <div className="grid gap-4">
@@ -966,31 +970,35 @@ export default function ProjectPage() {
               </div>
             ) : (
               <div className="space-y-8">
-                {directions
-                  .filter(d => entries.some(e => e.direction_id === d.id))
-                  .map(d => {
-                    const fields = entries.filter(e => e.direction_id === d.id)
-                    const evaluation = evaluations[d.id]
-                    const isEvaluatingThis = evaluatingForDirectionId === d.id
-                    const isGeneratingThis = generatingForDirectionId === d.id
+                {Array.from(new Set(entries.map(e => e.direction_id))).map(dirId => {
+                    // Look up direction in state — may not be present if quick-eval direction wasn't fetched
+                    const d = directions.find(dir => dir.id === dirId)
+                    const fields = entries.filter(e => e.direction_id === dirId)
+                    // Fall back to entry field data for show/category if direction not in state
+                    const dirName = d?.name || `${fields[0]?.award_show || ''} — ${fields[0]?.category || ''}`.replace(/^ — $/, 'Entry')
+                    const dirShow = d?.best_show || fields[0]?.award_show || null
+                    const dirCategory = d?.best_category || fields[0]?.category || null
+                    const evaluation = evaluations[dirId]
+                    const isEvaluatingThis = evaluatingForDirectionId === dirId
+                    const isGeneratingThis = generatingForDirectionId === dirId
 
                     return (
-                      <div key={d.id} className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                      <div key={dirId} className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
 
                         {/* Direction header */}
                         <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between gap-4">
                           <div>
-                            <h3 className="font-medium text-white">{d.name}</h3>
-                            {d.best_show && (
+                            <h3 className="font-medium text-white">{dirName}</h3>
+                            {dirShow && (
                               <p className="text-indigo-400 text-xs mt-0.5">
-                                {d.best_show} · <span className="text-gray-400">{d.best_category}</span>
+                                {dirShow} · <span className="text-gray-400">{dirCategory}</span>
                               </p>
                             )}
                           </div>
                           <div className="flex items-center gap-3 flex-shrink-0 flex-wrap justify-end">
                             {/* Evaluate Entry — primary action */}
                             <button
-                              onClick={() => evaluateEntry(d.id)}
+                              onClick={() => evaluateEntry(dirId)}
                               disabled={evaluating || generatingDraft}
                               className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
                             >
@@ -999,7 +1007,7 @@ export default function ProjectPage() {
                               ) : evaluation ? 'Re-evaluate' : 'Evaluate Entry'}
                             </button>
                             {/* Download evaluation */}
-                            {evaluation && (
+                            {evaluation && d && (
                               <button
                                 onClick={() => downloadEvaluation(d, evaluation)}
                                 className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-2 rounded-lg transition-colors"
@@ -1019,7 +1027,7 @@ export default function ProjectPage() {
                             </button>
                             {/* Regenerate — secondary */}
                             <button
-                              onClick={() => generateDraft(d.id)}
+                              onClick={() => generateDraft(dirId)}
                               disabled={generatingDraft || evaluating}
                               className="text-xs text-gray-500 hover:text-gray-300 disabled:opacity-40 transition-colors flex items-center gap-1"
                             >
