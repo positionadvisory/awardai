@@ -204,6 +204,45 @@ const SHOW_CATEGORIES: Record<string, string[]> = {
   ],
 }
 
+// Base win rates (% chance of shortlist/metal) per show — used in Directions tab Win Likelihood calculation.
+// Sources: published show statistics and industry estimates. Default cap: 30%.
+const BASE_WIN_RATES: Record<string, number> = {
+  'Cannes Lions': 5,            // ~3–7% for shortlist/metal across most Lions
+  'D&AD': 4,                    // Pencils are extremely scarce; ~2–6%
+  'One Show': 10,               // Pencil win rate ~8–12%
+  'Clio Awards': 12,
+  'Effies': 18,                 // Effectiveness shows tend to have broader recognition
+  'WARC Awards': 15,
+  'WARC Effectiveness Awards': 15,
+  'Spikes Asia': 10,
+  'Dubai Lynx': 15,
+  'Eurobest': 10,
+  'New York Festivals': 15,
+  'London International Awards': 12,
+  'Campaign Big Awards': 15,
+  'Creative Circle': 14,
+  'Epica Awards': 18,
+  'AdFest': 12,
+  'Webby Awards': 20,
+  'Shorty Awards': 20,
+  'MMA Smarties': 20,
+  'Asian Marketing Effectiveness Awards': 18,
+  'Asia Pacific Effie Awards': 18,
+  'Global Effie Awards': 12,
+  'Australian Effies': 18,
+}
+
+// Calculate realistic win likelihood: base rate × quality adjustment from eval score
+// Score 10 → 1.5×, score 5 → 1.0×, score 0 → 0.5×. Hard cap at 45%.
+function calculateWinLikelihood(show: string | null, evalScore?: number): number {
+  const base = Math.min(BASE_WIN_RATES[show ?? ''] ?? 20, 30)
+  if (evalScore !== undefined) {
+    const multiplier = 0.5 + (evalScore / 10)
+    return Math.round(Math.min(base * multiplier, 45))
+  }
+  return base
+}
+
 type Material = {
   name: string
   path: string
@@ -434,6 +473,14 @@ export default function ProjectPage() {
   const [uploadedScriptName, setUploadedScriptName] = useState('')
   const [scriptFileUploading, setScriptFileUploading] = useState(false)
   const [scriptFileError, setScriptFileError] = useState('')
+  // Track last reviewed show/category so button reactivates when user changes them
+  const [lastReviewedParams, setLastReviewedParams] = useState<{ show: string; category: string } | null>(null)
+  // Generate mode: source selector ('all' = all project context, 'material' = specific material, 'entry' = entry draft)
+  const [scriptSourceType, setScriptSourceType] = useState<'all' | 'material' | 'entry'>('all')
+  const [scriptSourceMaterialIdx, setScriptSourceMaterialIdx] = useState<number>(-1)
+  const [scriptSourceEntryDirectionId, setScriptSourceEntryDirectionId] = useState<number>(-1)
+  // KB awards count for Script Analysis subheadline
+  const [kbCount, setKbCount] = useState<number>(0)
 
   // Quick evaluate from uploaded material
   const [orgId, setOrgId] = useState<number | null>(null)
@@ -446,6 +493,10 @@ export default function ProjectPage() {
 
   useEffect(() => {
     if (!user || !projectId) return
+
+    // Fetch total KB campaign count for the Script Analysis subheadline
+    supabase.from('campaigns').select('*', { count: 'exact', head: true })
+      .then(({ count }) => { if (count !== null) setKbCount(count) })
 
     supabase.from('campaigns').select('show_raw').not('show_raw', 'is', null)
       .then(({ data }) => {
@@ -1051,6 +1102,19 @@ export default function ProjectPage() {
     }
   }
 
+  // Helper: build concatenated entry content for a given direction
+  const getEntryDraftContent = (directionId: number): string => {
+    const dirEntries = entries
+      .filter(e => e.direction_id === directionId)
+      .sort((a, b) => (a as { sort_order?: number }).sort_order ?? 0 - ((b as { sort_order?: number }).sort_order ?? 0))
+    return dirEntries.map(e => {
+      const content = e.custom_text ||
+        (e.selected === 'c' ? e.version_c : e.selected === 'b' ? e.version_b : e.version_a) ||
+        e.version_a || ''
+      return content.trim() ? `${e.field_label}:\n${content.trim()}` : ''
+    }).filter(Boolean).join('\n\n')
+  }
+
   // Call generate-video-script Edge Function (generate or review mode)
   const generateScript = async () => {
     if (!project) return
@@ -1070,12 +1134,24 @@ export default function ProjectPage() {
         ? scriptCategory
         : customScriptCategory.trim() || undefined
 
+      // Resolve source override (generate mode only)
+      let contextOverride: string | undefined
+      if (scriptMode === 'generate' && scriptSourceType !== 'all') {
+        if (scriptSourceType === 'material') {
+          const mats = (project.materials || []).filter(m => m.extracted_text)
+          contextOverride = mats[scriptSourceMaterialIdx]?.extracted_text || undefined
+        } else if (scriptSourceType === 'entry' && scriptSourceEntryDirectionId > -1) {
+          contextOverride = getEntryDraftContent(scriptSourceEntryDirectionId) || undefined
+        }
+      }
+
       const body: Record<string, unknown> = {
         project_id: project.id,
         mode: scriptMode,
         ...(effectiveShow ? { show: effectiveShow } : {}),
         ...(effectiveCategory ? { category: effectiveCategory } : {}),
         ...(scriptMode === 'review' ? { uploaded_script_text: uploadedScriptText } : {}),
+        ...(contextOverride ? { context_override: contextOverride } : {}),
       }
 
       const res = await fetch(
@@ -1096,7 +1172,13 @@ export default function ProjectPage() {
         return
       }
       if (data.script) setScriptText(data.script)
-      if (data.analysis) setScriptAnalysis(data.analysis)
+      if (data.analysis) {
+        setScriptAnalysis(data.analysis)
+        // Track which show/category was used so button reactivates when user changes them
+        if (scriptMode === 'review') {
+          setLastReviewedParams({ show: scriptShow, category: scriptCategory })
+        }
+      }
       setProject(p => p ? {
         ...p,
         script_text: data.script || p.script_text,
@@ -1133,9 +1215,9 @@ export default function ProjectPage() {
   const TABS: { key: Tab; label: string; count?: number }[] = [
     { key: 'brief', label: 'Brief' },
     { key: 'materials', label: 'Materials', count: project.materials?.length || 0 },
+    { key: 'directions', label: 'Directions', count: directions.length },
     { key: 'entries', label: 'Entries', count: uniqueDirectionsWithEntries.length },
     { key: 'script', label: 'Video Script' },
-    { key: 'directions', label: 'Directions', count: directions.length },
   ]
 
   // Effective script category label for display
@@ -1471,9 +1553,25 @@ export default function ProjectPage() {
                           </div>
                         </div>
                         {d.win_likelihood !== null && (
-                          <div className="text-right flex-shrink-0">
-                            <p className={`text-2xl font-bold tabular-nums ${d.win_likelihood >= 65 ? 'text-green-700' : d.win_likelihood >= 45 ? 'text-amber-700' : 'text-red-600'}`}>{d.win_likelihood}%</p>
-                            <p className="text-gray-400 text-xs">win likelihood</p>
+                          <div className="text-right flex-shrink-0 space-y-3">
+                            {/* Category Fit — stored in win_likelihood column */}
+                            <div>
+                              <p className={`text-2xl font-bold tabular-nums ${d.win_likelihood >= 70 ? 'text-green-700' : d.win_likelihood >= 45 ? 'text-amber-700' : 'text-red-600'}`}>{d.win_likelihood}%</p>
+                              <p className="text-gray-400 text-xs">category fit</p>
+                            </div>
+                            {/* Win Likelihood — calculated from base show rate + eval score */}
+                            <div>
+                              {(() => {
+                                const evalScore = evaluations[d.id]?.overall_score
+                                const winPct = calculateWinLikelihood(d.best_show, evalScore)
+                                return (
+                                  <>
+                                    <p className={`text-base font-semibold tabular-nums ${winPct >= 20 ? 'text-green-700' : winPct >= 10 ? 'text-amber-700' : 'text-red-600'}`}>~{winPct}%</p>
+                                    <p className="text-gray-400 text-xs">win likelihood{!evalScore ? '*' : ''}</p>
+                                  </>
+                                )
+                              })()}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -1481,6 +1579,9 @@ export default function ProjectPage() {
                   )
                 })}
               </div>
+            )}
+            {directions.some(d => d.win_likelihood !== null && !evaluations[d.id]) && (
+              <p className="text-xs text-gray-400 mt-4">* Win likelihood based on show base rate only — evaluate an entry to factor in content quality.</p>
             )}
           </div>
         )}
@@ -1792,7 +1893,7 @@ export default function ProjectPage() {
                       : 'text-gray-500 hover:text-gray-900'
                   }`}
                 >
-                  {m === 'generate' ? 'Generate from Brief' : 'Review my Script'}
+                  {m === 'generate' ? 'Generate Script' : 'Review my Script'}
                 </button>
               ))}
             </div>
@@ -1800,9 +1901,59 @@ export default function ProjectPage() {
             {/* Mode description */}
             <p className="text-sm text-gray-500 mb-5">
               {scriptMode === 'generate'
-                ? 'Generate a 2-minute award case study film script using your campaign brief and uploaded materials. The script follows the Hook → Challenge → Idea → Execution → Results → Close structure used at Cannes, D&AD, and Effies.'
+                ? 'Generate a 2-minute award case study film script from your uploaded materials or a completed entry draft. The script follows the Hook → Challenge → Idea → Execution → Results → Close structure used at Cannes, D&AD, and Effies.'
                 : 'Upload your existing video script and get an optimised version with detailed reasoning on every change — written by a simulated 20-year award jury veteran.'}
             </p>
+
+            {/* Source selector — generate mode only */}
+            {scriptMode === 'generate' && (() => {
+              const materialsWithText = (project.materials || []).filter(m => m.extracted_text)
+              const entryDirectionIds = Array.from(new Set(entries.map(e => e.direction_id)))
+              if (materialsWithText.length === 0 && entryDirectionIds.length === 0) return null
+              return (
+                <div className="bg-white border border-gray-200 rounded-xl p-5 mb-5">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Script Source</p>
+                  <div className="space-y-2.5">
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input type="radio" name="scriptSource" checked={scriptSourceType === 'all'}
+                        onChange={() => setScriptSourceType('all')}
+                        className="mt-0.5 accent-green-700" />
+                      <div>
+                        <p className="text-sm text-gray-900">All project context</p>
+                        <p className="text-xs text-gray-400">Brief description + all uploaded materials</p>
+                      </div>
+                    </label>
+                    {materialsWithText.map((m, i) => (
+                      <label key={i} className="flex items-start gap-3 cursor-pointer">
+                        <input type="radio" name="scriptSource"
+                          checked={scriptSourceType === 'material' && scriptSourceMaterialIdx === i}
+                          onChange={() => { setScriptSourceType('material'); setScriptSourceMaterialIdx(i) }}
+                          className="mt-0.5 accent-green-700" />
+                        <div>
+                          <p className="text-sm text-gray-900">{m.name}</p>
+                          <p className="text-xs text-gray-400">Uploaded material · {(m.extracted_text || '').trim().split(/\s+/).filter(Boolean).length.toLocaleString()} words</p>
+                        </div>
+                      </label>
+                    ))}
+                    {entryDirectionIds.map(dirId => {
+                      const dir = directions.find(d => d.id === dirId)
+                      return (
+                        <label key={dirId} className="flex items-start gap-3 cursor-pointer">
+                          <input type="radio" name="scriptSource"
+                            checked={scriptSourceType === 'entry' && scriptSourceEntryDirectionId === dirId}
+                            onChange={() => { setScriptSourceType('entry'); setScriptSourceEntryDirectionId(dirId) }}
+                            className="mt-0.5 accent-green-700" />
+                          <div>
+                            <p className="text-sm text-gray-900">Entry Draft{dir?.name ? ` — ${dir.name}` : ''}</p>
+                            <p className="text-xs text-gray-400">{dir?.best_show || 'Generated entry'}{dir?.best_category ? ` · ${dir.best_category}` : ''}</p>
+                          </div>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* Award Show + Category selectors — shared across both modes */}
             <div className="bg-white border border-gray-200 rounded-xl p-5 mb-5 space-y-4">
@@ -1986,11 +2137,15 @@ export default function ProjectPage() {
                 <><svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
                 {scriptMode === 'generate' ? 'Writing script…' : 'Reviewing script…'}</>
               ) : scriptText && scriptMode === 'generate' ? 'Regenerate Script'
-                : scriptMode === 'review' ? (scriptAnalysis ? 'Re-review Script' : 'Review & Optimise Script')
+                : scriptMode === 'review' ? (scriptAnalysis ? 'Review Script Again' : 'Review & Optimise Script')
                 : 'Generate Script'}
             </button>
             {scriptCategory === 'suggest' && (
               <p className="text-xs text-amber-700 -mt-6 mb-8">Select a category from the suggestions above before generating.</p>
+            )}
+            {scriptMode === 'review' && scriptAnalysis && lastReviewedParams &&
+              (scriptShow !== lastReviewedParams.show || scriptCategory !== lastReviewedParams.category) && (
+              <p className="text-xs text-green-700 -mt-6 mb-8">Show or category changed — click to re-review with new settings.</p>
             )}
 
             {/* Script output */}
@@ -2003,7 +2158,7 @@ export default function ProjectPage() {
                     <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
                       <div>
                         <h3 className="text-sm font-semibold text-gray-900">Script Analysis</h3>
-                        <p className="text-xs text-gray-400 mt-0.5">Claude Opus 4.6 · based on 20 years of award jury experience</p>
+                        <p className="text-xs text-gray-400 mt-0.5">Based on 20 years of award jury experience and {kbCount > 0 ? kbCount.toLocaleString() : '…'} awards won.</p>
                       </div>
                       <div className="flex items-center gap-2">
                         <button
