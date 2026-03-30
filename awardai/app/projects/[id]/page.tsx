@@ -66,6 +66,20 @@ type Material = {
   chart_image_paths?: string[]
 }
 
+type ScriptChange = {
+  section: string
+  original: string
+  reason: string
+}
+
+type ScriptAnalysis = {
+  mode: 'review'
+  original_script: string
+  summary: string
+  key_improvements: string[]
+  changes: ScriptChange[]
+}
+
 type Project = {
   id: number
   campaign_name: string
@@ -74,6 +88,8 @@ type Project = {
   target_shows: string[]
   materials: Material[]
   status: string
+  script_text: string | null
+  script_analysis: ScriptAnalysis | null
 }
 
 type Direction = {
@@ -133,7 +149,7 @@ type Evaluation = {
   created_at: string
 }
 
-type Tab = 'brief' | 'materials' | 'directions' | 'entries'
+type Tab = 'brief' | 'materials' | 'entries' | 'script' | 'directions'
 
 const SCORE_DIMENSIONS: { key: keyof EvaluationScores; label: string }[] = [
   { key: 'strategic_clarity', label: 'Strategic Clarity' },
@@ -207,6 +223,20 @@ export default function ProjectPage() {
   const [refiningFieldId, setRefiningFieldId] = useState<number | null>(null)
   const [refineErrors, setRefineErrors] = useState<Record<number, string>>({})
 
+  // Phase 3 — Video Script
+  type ScriptMode = 'generate' | 'review'
+  const [scriptMode, setScriptMode] = useState<ScriptMode>('generate')
+  const [scriptText, setScriptText] = useState<string>('')
+  const [scriptAnalysis, setScriptAnalysis] = useState<ScriptAnalysis | null>(null)
+  const [generatingScript, setGeneratingScript] = useState(false)
+  const [scriptError, setScriptError] = useState('')
+  const [selectedDirectionForScript, setSelectedDirectionForScript] = useState<number | ''>('')
+  // Review mode — file upload
+  const [uploadedScriptText, setUploadedScriptText] = useState('')
+  const [uploadedScriptName, setUploadedScriptName] = useState('')
+  const [scriptFileUploading, setScriptFileUploading] = useState(false)
+  const [scriptFileError, setScriptFileError] = useState('')
+
   // Quick evaluate from uploaded material
   const [orgId, setOrgId] = useState<number | null>(null)
   const [showQuickEvalModal, setShowQuickEvalModal] = useState(false)
@@ -252,7 +282,13 @@ export default function ProjectPage() {
       supabase.from('entry_drafts').select('*').eq('project_id', projectId).order('sort_order'),
       supabase.from('evaluations').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
     ]).then(([{ data: proj }, { data: dirs }, { data: drafts }, { data: evals }]) => {
-      if (proj) { setProject(proj); setBriefText(proj.combined_text || ''); setTargetShows(proj.target_shows || []) }
+      if (proj) {
+        setProject(proj)
+        setBriefText(proj.combined_text || '')
+        setTargetShows(proj.target_shows || [])
+        if (proj.script_text) setScriptText(proj.script_text)
+        if (proj.script_analysis) setScriptAnalysis(proj.script_analysis)
+      }
       if (dirs) setDirections(dirs)
 
       const draftsList = drafts || []
@@ -739,6 +775,113 @@ export default function ProjectPage() {
     }
   }
 
+  // Upload a PDF or DOCX file for review mode — extract text client-side
+  const handleScriptFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const ext = file.name.split('.').pop()?.toLowerCase()
+    if (!['pdf', 'docx', 'txt'].includes(ext || '')) {
+      setScriptFileError('Only PDF, DOCX, and TXT files are supported.')
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setScriptFileError('File size must be under 10MB.')
+      return
+    }
+    setScriptFileUploading(true)
+    setScriptFileError('')
+    setUploadedScriptText('')
+    setUploadedScriptName(file.name)
+
+    try {
+      const arrayBuffer = await file.arrayBuffer()
+      let text = ''
+      if (ext === 'txt') {
+        text = new TextDecoder().decode(arrayBuffer).slice(0, 50000)
+      } else if (ext === 'docx') {
+        const mammoth = (await import('mammoth')).default
+        const result = await mammoth.extractRawText({ arrayBuffer })
+        text = result.value.slice(0, 50000)
+      } else if (ext === 'pdf') {
+        const pdfjsLib = await import('pdfjs-dist')
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+          `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`
+        const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise
+        const textParts: string[] = []
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          const page = await pdf.getPage(pageNum)
+          const textContent = await page.getTextContent()
+          const pageText = (textContent.items as Array<{ str?: string }>)
+            .filter(item => typeof item.str === 'string')
+            .map(item => item.str as string)
+            .join(' ').trim()
+          if (pageText.length > 10) textParts.push(pageText)
+        }
+        text = textParts.join('\n\n').slice(0, 50000)
+      }
+      if (!text.trim()) {
+        setScriptFileError('Could not extract text from this file. Try a different format.')
+      } else {
+        setUploadedScriptText(text)
+      }
+    } catch (err) {
+      setScriptFileError(err instanceof Error ? err.message : 'Failed to read file.')
+    } finally {
+      setScriptFileUploading(false)
+      e.target.value = ''
+    }
+  }
+
+  // Call generate-video-script Edge Function
+  const generateScript = async () => {
+    if (!project) return
+    if (scriptMode === 'review' && !uploadedScriptText.trim()) {
+      setScriptError('Please upload a script file first.')
+      return
+    }
+    setGeneratingScript(true)
+    setScriptError('')
+    try {
+      const accessToken = await getToken()
+      if (!accessToken) return
+      const body: Record<string, unknown> = {
+        project_id: project.id,
+        mode: scriptMode,
+      }
+      if (selectedDirectionForScript) body.direction_id = selectedDirectionForScript
+      if (scriptMode === 'review') body.uploaded_script_text = uploadedScriptText
+
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-video-script`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          },
+          body: JSON.stringify(body),
+        }
+      )
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        setScriptError(data.error || `Error ${res.status}`)
+        return
+      }
+      if (data.script) setScriptText(data.script)
+      if (data.analysis) setScriptAnalysis(data.analysis)
+      setProject(p => p ? {
+        ...p,
+        script_text: data.script || p.script_text,
+        script_analysis: data.analysis || p.script_analysis,
+      } : p)
+    } catch (err) {
+      setScriptError(err instanceof Error ? err.message : 'Network error.')
+    } finally {
+      setGeneratingScript(false)
+    }
+  }
+
   const countWords = (text: string) => text.trim().split(/\s+/).filter(Boolean).length
   const formatBytes = (bytes: number) => bytes < 1024 * 1024
     ? `${(bytes / 1024).toFixed(1)} KB`
@@ -761,6 +904,7 @@ export default function ProjectPage() {
     { key: 'brief', label: 'Brief' },
     { key: 'materials', label: 'Materials', count: project.materials?.length || 0 },
     { key: 'entries', label: 'Entries', count: uniqueDirectionsWithEntries.length },
+    { key: 'script', label: 'Video Script' },
     { key: 'directions', label: 'Directions', count: directions.length },
   ]
 
@@ -1414,6 +1558,258 @@ export default function ProjectPage() {
                   })}
               </div>
             )}
+          </div>
+        )}
+
+        {/* ── VIDEO SCRIPT ── */}
+        {tab === 'script' && (
+          <div className="max-w-3xl">
+
+            {/* Mode toggle */}
+            <div className="flex items-center gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 w-fit mb-6">
+              {(['generate', 'review'] as const).map(m => (
+                <button
+                  key={m}
+                  onClick={() => { setScriptMode(m); setScriptError('') }}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    scriptMode === m
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  {m === 'generate' ? 'Generate from Brief' : 'Review my Script'}
+                </button>
+              ))}
+            </div>
+
+            {/* Mode description */}
+            <p className="text-sm text-gray-400 mb-5">
+              {scriptMode === 'generate'
+                ? 'Generate a 2-minute award case study film script using your campaign brief and uploaded materials. The script follows the Hook → Challenge → Idea → Execution → Results → Close structure used at Cannes, D&AD, and Effies.'
+                : 'Upload your existing video script and get an optimised version with detailed reasoning on every change — written by a simulated 20-year award jury veteran.'}
+            </p>
+
+            {/* Generate mode controls */}
+            {scriptMode === 'generate' && (
+              <div className="space-y-4 mb-6">
+                {/* Optional direction selector */}
+                {directions.length > 0 && (
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1.5">
+                      Target direction <span className="text-gray-600">(optional — narrows the script to a specific show and category)</span>
+                    </label>
+                    <select
+                      value={selectedDirectionForScript}
+                      onChange={e => setSelectedDirectionForScript(e.target.value === '' ? '' : Number(e.target.value))}
+                      className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors w-full max-w-sm"
+                    >
+                      <option value="">No specific direction</option>
+                      {directions.map(d => (
+                        <option key={d.id} value={d.id}>
+                          {d.best_show ? `${d.best_show} — ${d.best_category}` : d.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Guard: needs brief or materials */}
+                {!project.combined_text && !(project.materials || []).some(m => m.extracted_text) && (
+                  <div className="bg-amber-900/20 border border-amber-800/50 rounded-xl p-4">
+                    <p className="text-amber-400 text-sm">Add a campaign brief on the Brief tab, or upload materials, before generating a script.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Review mode controls — file upload */}
+            {scriptMode === 'review' && (
+              <div className="mb-6 space-y-3">
+                <div>
+                  <label className="block text-xs text-gray-400 mb-2">Upload your script (PDF, DOCX, or TXT)</label>
+                  <label className={`block w-full border-2 border-dashed rounded-xl p-6 text-center transition-colors ${
+                    scriptFileUploading ? 'border-gray-700 opacity-60 cursor-not-allowed' : 'border-gray-700 hover:border-indigo-500 cursor-pointer'
+                  }`}>
+                    <input
+                      type="file"
+                      accept=".pdf,.docx,.txt"
+                      onChange={handleScriptFileUpload}
+                      className="hidden"
+                      disabled={scriptFileUploading}
+                    />
+                    {scriptFileUploading ? (
+                      <p className="text-indigo-400 text-sm font-medium">Extracting text…</p>
+                    ) : uploadedScriptText ? (
+                      <div>
+                        <p className="text-green-400 text-sm font-medium">✓ {uploadedScriptName}</p>
+                        <p className="text-gray-500 text-xs mt-1">{uploadedScriptText.trim().split(/\s+/).length.toLocaleString()} words extracted · click to replace</p>
+                      </div>
+                    ) : (
+                      <><span className="text-indigo-400 font-medium text-sm">Click to upload your script</span><span className="text-gray-500 text-sm"> — PDF, DOCX, or TXT · max 10MB</span></>
+                    )}
+                  </label>
+                  {scriptFileError && <p className="text-red-400 text-xs mt-1.5">{scriptFileError}</p>}
+                </div>
+
+                {/* Optional: show/category context for review */}
+                {directions.length > 0 && (
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1.5">
+                      Optimise for show/category <span className="text-gray-600">(optional)</span>
+                    </label>
+                    <select
+                      value={selectedDirectionForScript}
+                      onChange={e => setSelectedDirectionForScript(e.target.value === '' ? '' : Number(e.target.value))}
+                      className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors w-full max-w-sm"
+                    >
+                      <option value="">No specific direction</option>
+                      {directions.map(d => (
+                        <option key={d.id} value={d.id}>
+                          {d.best_show ? `${d.best_show} — ${d.best_category}` : d.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Error */}
+            {scriptError && (
+              <div className="mb-5 bg-red-900/20 border border-red-800 rounded-xl px-4 py-3">
+                <p className="text-red-400 text-sm">{scriptError}</p>
+              </div>
+            )}
+
+            {/* Generate / Review CTA */}
+            <button
+              onClick={generateScript}
+              disabled={
+                generatingScript ||
+                (scriptMode === 'generate' && !project.combined_text && !(project.materials || []).some(m => m.extracted_text)) ||
+                (scriptMode === 'review' && !uploadedScriptText.trim())
+              }
+              className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors flex items-center gap-2 mb-8"
+            >
+              {generatingScript ? (
+                <><svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
+                {scriptMode === 'generate' ? 'Writing script…' : 'Reviewing script…'}</>
+              ) : scriptText && scriptMode === 'generate' ? 'Regenerate Script'
+                : scriptMode === 'review' ? (scriptAnalysis ? 'Re-review Script' : 'Review & Optimise Script')
+                : 'Generate Script'}
+            </button>
+
+            {/* Script output */}
+            {scriptText && (
+              <div className="space-y-6">
+
+                {/* Review mode: reasoning panel first */}
+                {scriptMode === 'review' && scriptAnalysis && (
+                  <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                    <div className="px-5 py-4 border-b border-gray-800">
+                      <h3 className="text-sm font-semibold text-white">Script Analysis</h3>
+                      <p className="text-xs text-gray-500 mt-0.5">Claude Opus 4.6 · based on 20 years of award jury experience</p>
+                    </div>
+                    <div className="px-5 py-5 space-y-5">
+                      {/* Summary */}
+                      <div>
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Overall Assessment</p>
+                        <p className="text-sm text-gray-300 leading-relaxed">{scriptAnalysis.summary}</p>
+                      </div>
+
+                      {/* Key improvements */}
+                      {scriptAnalysis.key_improvements.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-indigo-400 uppercase tracking-wide mb-2">Key Improvements</p>
+                          <ul className="space-y-2">
+                            {scriptAnalysis.key_improvements.map((item, i) => (
+                              <li key={i} className="text-sm text-gray-300 flex gap-2">
+                                <span className="text-indigo-500 flex-shrink-0 mt-0.5">✦</span>
+                                <span>{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Change-by-change breakdown */}
+                      {scriptAnalysis.changes.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-amber-400 uppercase tracking-wide mb-3">Scene-by-Scene Changes</p>
+                          <div className="space-y-3">
+                            {scriptAnalysis.changes.map((change, i) => (
+                              <div key={i} className="bg-gray-950/60 border border-gray-800 rounded-lg px-4 py-3">
+                                <p className="text-xs font-medium text-amber-300 mb-1">{change.section}</p>
+                                {change.original && (
+                                  <p className="text-xs text-gray-600 italic mb-1.5">Original: "{change.original}"</p>
+                                )}
+                                <p className="text-sm text-gray-300">{change.reason}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Script text */}
+                <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                  <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-semibold text-white">
+                        {scriptMode === 'review' ? 'Optimised Script' : 'Generated Script'}
+                      </h3>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {scriptMode === 'generate' ? 'Claude Sonnet 4.6' : 'Claude Opus 4.6'} · 2-minute case study film
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => navigator.clipboard.writeText(scriptText)}
+                        className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition-colors"
+                      >
+                        Copy script
+                      </button>
+                      <button
+                        onClick={() => {
+                          const blob = new Blob([scriptText], { type: 'text/plain' })
+                          const url = URL.createObjectURL(blob)
+                          const a = document.createElement('a')
+                          a.href = url
+                          a.download = `${(project.campaign_name || 'script').replace(/[^a-z0-9]/gi, '-').toLowerCase()}-script.txt`
+                          a.click()
+                          URL.revokeObjectURL(url)
+                        }}
+                        className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition-colors"
+                      >
+                        ↓ Download
+                      </button>
+                    </div>
+                  </div>
+                  <div className="px-5 py-5">
+                    <pre className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap font-mono">{scriptText}</pre>
+                  </div>
+                </div>
+
+              </div>
+            )}
+
+            {/* Empty state */}
+            {!scriptText && !generatingScript && (
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-10 text-center max-w-lg">
+                <div className="w-10 h-10 bg-indigo-900/40 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="text-indigo-400 text-lg">▶</span>
+                </div>
+                <h3 className="text-sm font-medium text-white mb-2">No script yet</h3>
+                <p className="text-gray-500 text-sm">
+                  {scriptMode === 'generate'
+                    ? 'Click Generate Script to create a 2-minute award case study film script from your campaign materials.'
+                    : 'Upload your existing script and click Review & Optimise to get a rewritten version with detailed change notes.'}
+                </p>
+              </div>
+            )}
+
           </div>
         )}
 
