@@ -4,6 +4,58 @@ import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
 
+// Canonical list of award shows — displayed in the Brief tab selector
+const CANONICAL_SHOWS = [
+  'Cannes Lions',
+  'D&AD',
+  'Clio Awards',
+  'One Show',
+  'Effies',
+  'WARC Awards',
+  'WARC Effectiveness Awards',
+  'Spikes Asia',
+  'Dubai Lynx',
+  'Eurobest',
+  'New York Festivals',
+  'London International Awards',
+  'Campaign Big Awards',
+  'Creative Circle',
+  'Epica Awards',
+  'Webby Awards',
+  'Shorty Awards',
+  'The Drum Awards',
+  'Festival of Media',
+  'MMA Smarties',
+  'Anthem Awards',
+  'PR Week Awards',
+  'ADMA Awards',
+  'Mumbrella Awards',
+  'B&T Awards',
+  'Campaign Asia Awards',
+  'AdFest',
+  'Asian Marketing Effectiveness Awards',
+  'Asia Pacific Effie Awards',
+  'Global Effie Awards',
+  'Australian Effies',
+  'IAB Mixx Awards',
+  'Caples Awards',
+  'Gerety Awards',
+  'Andy Awards',
+  'Communication Arts Awards',
+  'Transform Awards',
+  'World PR Awards',
+  'PRCA Awards',
+  'SABRE Awards',
+  'Holmes Report SABRE',
+  'PRovoke Awards',
+  'Cannes Lions PR Lions',
+  'INMA Awards',
+  'WAN-IFRA Awards',
+  'Social Media Marketing Awards',
+  'Content Marketing Awards',
+  'Digital Communication Awards',
+]
+
 type Material = {
   name: string
   path: string
@@ -118,6 +170,7 @@ export default function ProjectPage() {
   const [editingShows, setEditingShows] = useState(false)
   const [savingShows, setSavingShows] = useState(false)
   const [kbShows, setKbShows] = useState<string[]>([])
+  const [customShowInput, setCustomShowInput] = useState('')
 
   // Materials
   const [uploading, setUploading] = useState(false)
@@ -153,13 +206,31 @@ export default function ProjectPage() {
   useEffect(() => {
     if (!user || !projectId) return
 
-    // Fetch distinct show names from KB for the Brief tab selector
+    // Build shows list: start from canonical list, supplement with any unique
+    // high-level show names found in the KB (show_raw field, normalized).
     supabase.from('campaigns').select('show_raw').not('show_raw', 'is', null)
       .then(({ data }) => {
+        const extra: string[] = []
         if (data) {
-          const shows = Array.from(new Set(data.map((d: { show_raw: string }) => d.show_raw).filter(Boolean))).sort() as string[]
-          setKbShows(shows)
+          // Normalize KB show names: strip category suffixes, year suffixes, etc.
+          // e.g. "Cannes Lions PR Lions 2023" → "Cannes Lions"
+          // e.g. "D&AD - Graphite Pencil" → "D&AD"
+          const normalise = (raw: string) =>
+            raw
+              .replace(/\s+20\d{2}(\s.*)?$/, '')   // strip trailing year
+              .replace(/\s*[-–—:\/]\s*.*$/, '')     // strip everything after separator
+              .trim()
+          const kbNormalised = Array.from(
+            new Set(data.map((d: { show_raw: string }) => normalise(d.show_raw)).filter(s => s.length > 2))
+          )
+          // Only add KB values not already in the canonical list
+          for (const s of kbNormalised) {
+            if (!CANONICAL_SHOWS.some(c => c.toLowerCase() === s.toLowerCase())) {
+              extra.push(s)
+            }
+          }
         }
+        setKbShows([...CANONICAL_SHOWS, ...extra.sort()])
       })
 
     Promise.all([
@@ -726,7 +797,7 @@ export default function ProjectPage() {
 
               {editingShows ? (
                 <div>
-                  {/* Selected shows */}
+                  {/* Selected shows — chips at top, click to remove */}
                   {targetShows.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-4">
                       {targetShows.map(show => (
@@ -737,33 +808,67 @@ export default function ProjectPage() {
                       ))}
                     </div>
                   )}
-                  {/* KB shows picker */}
-                  {kbShows.length > 0 && (
-                    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-4">
-                      <p className="text-xs text-gray-500 mb-3">Select from shows in our knowledge base:</p>
-                      <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto pr-1">
-                        {kbShows.map(show => {
-                          const selected = targetShows.includes(show)
-                          return (
-                            <button key={show} onClick={() => toggleShow(show)}
-                              className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                                selected
-                                  ? 'bg-indigo-900/50 text-indigo-300 border-indigo-700'
-                                  : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-indigo-600 hover:text-indigo-300'
-                              }`}>
-                              {show}
-                            </button>
-                          )
-                        })}
-                      </div>
+
+                  {/* Full shows list — no height cap, all visible */}
+                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-3">
+                    <p className="text-xs text-gray-500 mb-3">Select from the list:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {kbShows.map(show => {
+                        const selected = targetShows.includes(show)
+                        return (
+                          <button key={show} onClick={() => toggleShow(show)}
+                            className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                              selected
+                                ? 'bg-indigo-900/50 text-indigo-300 border-indigo-700'
+                                : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-indigo-600 hover:text-indigo-300'
+                            }`}>
+                            {show}
+                          </button>
+                        )
+                      })}
                     </div>
-                  )}
+                  </div>
+
+                  {/* Manual entry — add a show not in the list */}
+                  <div className="flex gap-2 mb-4">
+                    <input
+                      type="text"
+                      value={customShowInput}
+                      onChange={e => setCustomShowInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          const val = customShowInput.trim()
+                          if (val && !targetShows.includes(val)) {
+                            setTargetShows(prev => [...prev, val])
+                          }
+                          setCustomShowInput('')
+                        }
+                      }}
+                      placeholder="Add a show not in the list…"
+                      className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                    />
+                    <button
+                      onClick={() => {
+                        const val = customShowInput.trim()
+                        if (val && !targetShows.includes(val)) {
+                          setTargetShows(prev => [...prev, val])
+                        }
+                        setCustomShowInput('')
+                      }}
+                      disabled={!customShowInput.trim()}
+                      className="bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-white text-sm px-4 py-2 rounded-lg border border-gray-700 transition-colors"
+                    >
+                      + Add
+                    </button>
+                  </div>
+
                   <div className="flex gap-3">
                     <button onClick={saveShows} disabled={savingShows}
                       className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
                       {savingShows ? 'Saving…' : 'Save'}
                     </button>
-                    <button onClick={() => { setEditingShows(false); setTargetShows(project.target_shows || []) }}
+                    <button onClick={() => { setEditingShows(false); setTargetShows(project.target_shows || []); setCustomShowInput('') }}
                       className="text-gray-400 hover:text-white text-sm px-4 py-2 transition-colors">Cancel</button>
                   </div>
                 </div>
