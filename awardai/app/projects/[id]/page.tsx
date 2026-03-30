@@ -56,6 +56,154 @@ const CANONICAL_SHOWS = [
   'Digital Communication Awards',
 ]
 
+// Comprehensive category lists per award show — used in Script tab dropdowns
+const SHOW_CATEGORIES: Record<string, string[]> = {
+  'Cannes Lions': [
+    'Film Lions', 'Film Craft Lions', 'Titanium Lions', 'Grand Prix for Good',
+    'Creative Business Transformation Lions', 'Creative Effectiveness Lions',
+    'Creative Commerce Lions', 'Creative Data Lions', 'Creative Strategy Lions',
+    'Creative X Lions', 'Digital Craft Lions', 'Direct Lions',
+    'Entertainment Lions', 'Entertainment Lions for Gaming',
+    'Entertainment Lions for Music', 'Entertainment Lions for Sport',
+    'Health & Wellness Lions', 'Industry Craft Lions', 'Innovation Lions',
+    'Luxury & Lifestyle Lions', 'Media Lions', 'Mobile Lions',
+    'Outdoor Lions', 'PR Lions', 'Print & Publishing Lions',
+    'Radio & Audio Lions', 'Social & Influencer Lions',
+    'Sustainable Development Goals Lions',
+  ],
+  'D&AD': [
+    'Film Advertising', 'Film Advertising Crafts', 'TV & Cinema Advertising',
+    'TV & Cinema Crafts', 'Branding', 'Design', 'Digital Design', 'Direct',
+    'Experiential', 'Gaming', 'Graphic Design', 'Illustration',
+    'Impact / Act / Change', 'Innovation', 'Integrated', 'Music',
+    'Outdoor Advertising', 'Packaging Design', 'Photography', 'PR',
+    'Publishing', 'Radio & Audio Advertising', 'Social Media',
+    'Use of Craft', 'Writing for Design',
+  ],
+  'Clio Awards': [
+    'Branded Entertainment', 'Content & Contact', 'Creative Effectiveness',
+    'Culture & Context', 'Design', 'Direct', 'Event & Experiential', 'Fashion',
+    'Film', 'Film Technique', 'Health & Wellness', 'Innovation', 'Integration',
+    'Out-of-Home', 'PR', 'Print', 'Radio & Audio', 'Social Media',
+    'Sports', 'Student', 'Sustainable Development Goals',
+  ],
+  'One Show': [
+    'Advertising', 'Brand Experience', 'Branded Entertainment', 'Branded Film',
+    'Business Transformation', 'Content & Distribution', 'Craft',
+    'Cultural Impact', 'Design', 'Digital/Mobile', 'Direct', 'Innovation',
+    'Integrated', 'Market Disruption', 'Out of Home', 'PR', 'Promotions',
+    'Radio & Audio', 'Social & Influencer', 'Spatial Design',
+  ],
+  'Effies': [
+    'Best Insights & Strategic Thinking', 'Best Integrated Campaign',
+    'Best Launch', 'Best Long-Term Effects', 'Best New Product/Service',
+    'Best Use of Data', 'Best Use of Digital', 'Best Use of Media', 'B2B',
+    'Challenger Brand', 'Cultural Breakthrough', 'David vs. Goliath',
+    'E-Commerce / Shopper Marketing', 'Engagement & Retention', 'Grand Effie',
+    'Health & Wellness', 'Local Brand', 'Purpose-Driven Marketing',
+    'Sustained Success',
+  ],
+  'WARC Awards': [
+    'Creative Effectiveness', 'Content', 'Effective Channel Integration',
+    'Effective Innovation', 'Grand Prix', 'Media Strategy', 'Social',
+  ],
+  'WARC Effectiveness Awards': [
+    'Best Insight', 'Best Use of Data', 'Grand Prix', 'Long-Term Effectiveness',
+    'New Brand or Product', 'Purpose', 'Short-Term Sales', 'Small Budget',
+  ],
+  'Spikes Asia': [
+    'Brand Experience', 'Creative Commerce', 'Creative Data',
+    'Creative Effectiveness', 'Creative Strategy', 'Design', 'Digital',
+    'Direct', 'Entertainment', 'Film', 'Film Craft', 'Health & Wellness',
+    'Innovation', 'Integrated', 'Media', 'Mobile', 'Outdoor', 'PR',
+    'Print & Publishing', 'Radio & Audio', 'Social & Influencer',
+    'Sustainable Development Goals',
+  ],
+  'Dubai Lynx': [
+    'Brand Experience & Activation', 'Creative Commerce', 'Creative Data',
+    'Creative Strategy', 'Design', 'Digital', 'Direct', 'Entertainment',
+    'Film', 'Film Craft', 'Health & Wellness', 'Innovation', 'Integrated',
+    'Media', 'Mobile', 'Outdoor', 'PR', 'Print & Publishing', 'Radio & Audio',
+    'Social & Influencer', 'Sustainable Development Goals',
+  ],
+  'Eurobest': [
+    'Brand Experience & Activation', 'Creative Commerce', 'Creative Data',
+    'Creative Effectiveness', 'Creative Strategy', 'Design', 'Digital Craft',
+    'Direct', 'Entertainment', 'Film', 'Film Craft', 'Health & Wellness',
+    'Industry Craft', 'Innovation', 'Integrated', 'Media', 'Mobile',
+    'Outdoor', 'PR', 'Print & Publishing', 'Radio & Audio', 'Social & Influencer',
+  ],
+  'New York Festivals': [
+    'Advertising', 'Brand Design', 'Entertainment', 'Gaming',
+    'Health & Wellness', 'Innovation', 'Interactive', 'Out of Home',
+    'Branded Film', 'Radio & Audio', 'TV & Cinema',
+  ],
+  'London International Awards': [
+    'Brand Culture', 'Campaign of the Year', 'Creative Use of Data',
+    'Design', 'Digital', 'Film', 'Health', 'Innovation', 'Integrated',
+    'Non-Traditional', 'Outdoor', 'Print Craft', 'Radio & Audio', 'TV/Cinema',
+  ],
+  'Campaign Big Awards': [
+    'Advertising Effectiveness', 'Best of Show', 'Campaign Film',
+    'Campaign of the Year', 'Creative Effectiveness', 'Direct & Data',
+    'Digital & Social', 'Integrated Campaign', 'PR Campaign', 'Print & Outdoor',
+    'Purpose Campaign', 'Radio & Audio',
+  ],
+  'Creative Circle': [
+    'Best Art Direction', 'Best Campaign', 'Best Copywriting', 'Best Design',
+    'Best Digital', 'Best Film', 'Best Integrated', 'Best Music/Audio',
+    'Best Outdoor', 'Best PR Campaign', 'Gold Award',
+  ],
+  'Epica Awards': [
+    'Advertising', 'Design', 'Digital', 'Entertainment', 'Film',
+    'Green Advertising', 'Integration', 'Outdoor', 'PR', 'Print', 'Radio',
+  ],
+  'Webby Awards': [
+    'Advertising & Media', 'Apps & Software', 'Brands & Marketing',
+    'Games', 'General Website & Apps', 'Humor', 'Podcasts & Digital Audio',
+    'Social', 'Special Achievement', 'Video',
+  ],
+  'Shorty Awards': [
+    'B2B', 'Brand Strategy', 'Community', 'Content Series',
+    'Creative Use of Technology', 'Events & Experiential', 'Gaming',
+    'Integration', 'Live Events', 'Long Form Video', 'Rebranding',
+    'Short Form Video', 'Social Good', 'Social Media', 'Storytelling',
+    'Use of Influencers',
+  ],
+  'MMA Smarties': [
+    'Audience Technology', 'Brand Awareness', 'Brand Innovation',
+    'Commerce & Shopper', 'Cross-Platform', 'Data and Insights',
+    'KPI Achievement', 'Lead Generation', 'New Market Entry', 'Purpose',
+    'Social Impact', 'Sustained Success',
+  ],
+  'AdFest': [
+    'Brand Experience', 'Design', 'Digital', 'Direct', 'Film',
+    'Film Craft', 'Integrated', 'Lotus Innovation', 'Media', 'Mobile',
+    'Outdoor', 'PR', 'Print', 'Radio',
+  ],
+  'Asian Marketing Effectiveness Awards': [
+    'Best Awareness Campaign', 'Best Brand Experience', 'Best Digital Campaign',
+    'Best Effectiveness Campaign', 'Best Integrated Campaign',
+    'Best Mobile Campaign', 'Best PR Campaign', 'Best Use of Data', 'Grand Prix',
+  ],
+  'Asia Pacific Effie Awards': [
+    'Best Use of Data', 'Brand Experience', 'Cultural Breakthrough',
+    'E-Commerce', 'Grand Effie', 'Insight-Driven', 'Integrated Campaign',
+    'Long-Term Effects', 'Media Innovation', 'New Product', 'Purpose',
+    'Sustained Success',
+  ],
+  'Global Effie Awards': [
+    'Best Global Campaign', 'Best Use of Insights', 'Cultural Breakthrough',
+    'Grand Effie', 'Integrated Campaign', 'Long-Term Effects', 'Media Innovation',
+    'New Product/Service', 'Purpose', 'Sustained Success',
+  ],
+  'Australian Effies': [
+    'Best Insight', 'Best Use of Media', 'Brand Experience', 'David vs Goliath',
+    'Effectiveness Grand Prix', 'Integrated Campaign', 'Long-Term Effects',
+    'New Product Launch', 'Purpose', 'Short-Term Sales',
+  ],
+}
+
 type Material = {
   name: string
   path: string
@@ -78,6 +226,11 @@ type ScriptAnalysis = {
   summary: string
   key_improvements: string[]
   changes: ScriptChange[]
+}
+
+type CategorySuggestion = {
+  category: string
+  reasoning: string
 }
 
 type Project = {
@@ -161,15 +314,54 @@ const SCORE_DIMENSIONS: { key: keyof EvaluationScores; label: string }[] = [
 ]
 
 function scoreColor(score: number): string {
-  if (score >= 8) return 'text-green-400'
-  if (score >= 6) return 'text-amber-400'
-  return 'text-red-400'
+  if (score >= 8) return 'text-green-700'
+  if (score >= 6) return 'text-amber-700'
+  return 'text-red-600'
 }
 
 function scoreBg(score: number): string {
-  if (score >= 8) return 'bg-green-900/30 border-green-800/50'
-  if (score >= 6) return 'bg-amber-900/30 border-amber-800/50'
-  return 'bg-red-900/30 border-red-800/50'
+  if (score >= 8) return 'bg-green-50 border-green-200'
+  if (score >= 6) return 'bg-amber-50 border-amber-200'
+  return 'bg-red-50 border-red-200'
+}
+
+function buildAnalysisText(
+  analysis: ScriptAnalysis,
+  campaignName: string,
+  show: string,
+  category: string
+): string {
+  const lines = [
+    'SCRIPT ANALYSIS REPORT',
+    '================================',
+    `Project:  ${campaignName}`,
+    ...(show ? [`Show:     ${show}`] : []),
+    ...(category ? [`Category: ${category}`] : []),
+    `Model:    Claude Opus 4.6`,
+    '',
+    'OVERALL ASSESSMENT',
+    '================================',
+    analysis.summary,
+    '',
+  ]
+  if (analysis.key_improvements.length > 0) {
+    lines.push('KEY IMPROVEMENTS', '================================')
+    analysis.key_improvements.forEach((item, i) => {
+      lines.push(`${i + 1}. ${item}`)
+    })
+    lines.push('')
+  }
+  if (analysis.changes.length > 0) {
+    lines.push('SCENE-BY-SCENE CHANGES', '================================')
+    analysis.changes.forEach((change, i) => {
+      lines.push(`\n[${i + 1}] ${change.section}`)
+      if (change.original) lines.push(`Original: "${change.original}"`)
+      lines.push(`Rationale: ${change.reason}`)
+    })
+    lines.push('')
+  }
+  lines.push('---', 'Generated by AwardAI · awardai-opal.vercel.app')
+  return lines.join('\n')
 }
 
 export default function ProjectPage() {
@@ -181,7 +373,6 @@ export default function ProjectPage() {
   const [project, setProject] = useState<Project | null>(null)
   const [directions, setDirections] = useState<Direction[]>([])
   const [entries, setEntries] = useState<EntryDraft[]>([])
-  // Evaluations keyed by direction_id for O(1) lookup
   const [evaluations, setEvaluations] = useState<Record<number, Evaluation>>({})
   const [tab, setTab] = useState<Tab>('brief')
   const [fetching, setFetching] = useState(true)
@@ -230,7 +421,14 @@ export default function ProjectPage() {
   const [scriptAnalysis, setScriptAnalysis] = useState<ScriptAnalysis | null>(null)
   const [generatingScript, setGeneratingScript] = useState(false)
   const [scriptError, setScriptError] = useState('')
-  const [selectedDirectionForScript, setSelectedDirectionForScript] = useState<number | ''>('')
+  // Award Show + Category dropdowns for script
+  const [scriptShow, setScriptShow] = useState<string>('')
+  const [scriptCategory, setScriptCategory] = useState<string>('')
+  const [customScriptCategory, setCustomScriptCategory] = useState<string>('')
+  // Category suggestions
+  const [suggestingCategories, setSuggestingCategories] = useState(false)
+  const [categorySuggestions, setCategorySuggestions] = useState<CategorySuggestion[]>([])
+  const [suggestCategoryError, setSuggestCategoryError] = useState('')
   // Review mode — file upload
   const [uploadedScriptText, setUploadedScriptText] = useState('')
   const [uploadedScriptName, setUploadedScriptName] = useState('')
@@ -249,24 +447,18 @@ export default function ProjectPage() {
   useEffect(() => {
     if (!user || !projectId) return
 
-    // Build shows list: start from canonical list, supplement with any unique
-    // high-level show names found in the KB (show_raw field, normalized).
     supabase.from('campaigns').select('show_raw').not('show_raw', 'is', null)
       .then(({ data }) => {
         const extra: string[] = []
         if (data) {
-          // Normalize KB show names: strip category suffixes, year suffixes, etc.
-          // e.g. "Cannes Lions PR Lions 2023" → "Cannes Lions"
-          // e.g. "D&AD - Graphite Pencil" → "D&AD"
           const normalise = (raw: string) =>
             raw
-              .replace(/\s+20\d{2}(\s.*)?$/, '')   // strip trailing year
-              .replace(/\s*[-–—:\/]\s*.*$/, '')     // strip everything after separator
+              .replace(/\s+20\d{2}(\s.*)?$/, '')
+              .replace(/\s*[-–—:\/]\s*.*$/, '')
               .trim()
           const kbNormalised = Array.from(
             new Set(data.map((d: { show_raw: string }) => normalise(d.show_raw)).filter(s => s.length > 2))
           )
-          // Only add KB values not already in the canonical list
           for (const s of kbNormalised) {
             if (!CANONICAL_SHOWS.some(c => c.toLowerCase() === s.toLowerCase())) {
               extra.push(s)
@@ -294,7 +486,6 @@ export default function ProjectPage() {
       const draftsList = drafts || []
       if (draftsList.length > 0) setEntries(draftsList)
 
-      // Map evaluations to direction_ids via entry_draft_id lookup
       if (evals && evals.length > 0 && draftsList.length > 0) {
         const evalMap: Record<number, Evaluation> = {}
         for (const ev of evals) {
@@ -309,7 +500,6 @@ export default function ProjectPage() {
       setFetching(false)
     })
 
-    // Fetch org_id for quick-evaluate flow
     supabase.rpc('get_my_org_id').then(({ data }) => { if (data) setOrgId(data) })
   }, [user, projectId])
 
@@ -560,7 +750,6 @@ export default function ProjectPage() {
       const data = await res.json()
       if (!res.ok || data.error) { setGenerateDraftError(data.error || `Error ${res.status}`); return }
       setEntries(prev => [...prev.filter(e => e.direction_id !== directionId), ...(data.entry_drafts || [])])
-      // Clear stale evaluation for this direction since draft changed
       setEvaluations(prev => { const next = { ...prev }; delete next[directionId]; return next })
       setTab('entries')
     } catch (err) {
@@ -610,7 +799,6 @@ export default function ProjectPage() {
       const accessToken = await getToken()
       if (!accessToken) return
 
-      // Resolve org_id
       let currentOrgId = orgId
       if (!currentOrgId) {
         const { data } = await supabase.rpc('get_my_org_id')
@@ -618,7 +806,6 @@ export default function ProjectPage() {
         if (currentOrgId) setOrgId(currentOrgId)
       }
 
-      // 1. Find or create direction for this show/category (prevent duplicates)
       let dir: Direction
       const { data: existingDirs } = await supabase
         .from('directions')
@@ -630,7 +817,6 @@ export default function ProjectPage() {
 
       if (existingDirs && existingDirs.length > 0) {
         dir = existingDirs[0] as Direction
-        // Clean up old entry_drafts + evaluations so we start fresh
         const { data: oldDrafts } = await supabase
           .from('entry_drafts').select('id').eq('direction_id', dir.id)
         if (oldDrafts && oldDrafts.length > 0) {
@@ -662,7 +848,6 @@ export default function ProjectPage() {
         setDirections(prev => [...prev, dir])
       }
 
-      // 2. Create an entry_draft from the uploaded material text
       const { data: draft, error: draftErr } = await supabase
         .from('entry_drafts')
         .insert({
@@ -687,10 +872,8 @@ export default function ProjectPage() {
         return
       }
 
-      // Update local entries state so Entries tab renders immediately
       setEntries(prev => [...prev, draft])
 
-      // 3. Call evaluate-entry Edge Function
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/evaluate-entry`,
         {
@@ -712,7 +895,6 @@ export default function ProjectPage() {
         setEvaluations(prev => ({ ...prev, [dir.id]: data.evaluation }))
       }
 
-      // Close modal and show results in Entries tab
       setShowQuickEvalModal(false)
       setQuickEvalShow('')
       setQuickEvalCategory('')
@@ -726,13 +908,11 @@ export default function ProjectPage() {
     }
   }
 
-  // Switch which version (a/b/c) is displayed for a field — persists to DB
   const switchVersion = async (fieldId: number, version: 'a' | 'b' | 'c') => {
     await supabase.from('entry_drafts').update({ selected: version }).eq('id', fieldId)
     setEntries(prev => prev.map(e => e.id === fieldId ? { ...e, selected: version } : e))
   }
 
-  // Send a refinement instruction for a specific field to the edit-entry Edge Function
   const refineField = async (field: EntryDraft, dirId: number) => {
     const msg = refineMessage[field.id]?.trim()
     if (!msg || !project) return
@@ -775,7 +955,6 @@ export default function ProjectPage() {
     }
   }
 
-  // Upload a PDF or DOCX file for review mode — extract text client-side
   const handleScriptFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -832,7 +1011,47 @@ export default function ProjectPage() {
     }
   }
 
-  // Call generate-video-script Edge Function
+  // Suggest best-fit categories for the chosen award show
+  const suggestCategories = async () => {
+    if (!project || !scriptShow) return
+    setSuggestingCategories(true)
+    setSuggestCategoryError('')
+    setCategorySuggestions([])
+    try {
+      const accessToken = await getToken()
+      if (!accessToken) return
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-video-script`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          },
+          body: JSON.stringify({
+            project_id: project.id,
+            mode: 'suggest_categories',
+            show: scriptShow,
+          }),
+        }
+      )
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        setSuggestCategoryError(data.error || `Error ${res.status}`)
+        return
+      }
+      if (data.suggestions && Array.isArray(data.suggestions)) {
+        setCategorySuggestions(data.suggestions)
+      }
+    } catch (err) {
+      setSuggestCategoryError(err instanceof Error ? err.message : 'Network error.')
+    } finally {
+      setSuggestingCategories(false)
+    }
+  }
+
+  // Call generate-video-script Edge Function (generate or review mode)
   const generateScript = async () => {
     if (!project) return
     if (scriptMode === 'review' && !uploadedScriptText.trim()) {
@@ -844,12 +1063,20 @@ export default function ProjectPage() {
     try {
       const accessToken = await getToken()
       if (!accessToken) return
+
+      // Resolve effective show and category
+      const effectiveShow = scriptShow.trim() || undefined
+      const effectiveCategory = (scriptCategory && scriptCategory !== 'suggest')
+        ? scriptCategory
+        : customScriptCategory.trim() || undefined
+
       const body: Record<string, unknown> = {
         project_id: project.id,
         mode: scriptMode,
+        ...(effectiveShow ? { show: effectiveShow } : {}),
+        ...(effectiveCategory ? { category: effectiveCategory } : {}),
+        ...(scriptMode === 'review' ? { uploaded_script_text: uploadedScriptText } : {}),
       }
-      if (selectedDirectionForScript) body.direction_id = selectedDirectionForScript
-      if (scriptMode === 'review') body.uploaded_script_text = uploadedScriptText
 
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-video-script`,
@@ -887,14 +1114,17 @@ export default function ProjectPage() {
     ? `${(bytes / 1024).toFixed(1)} KB`
     : `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 
+  // Derive the available categories for the chosen script show
+  const availableCategories = scriptShow ? (SHOW_CATEGORIES[scriptShow] || []) : []
+
   if (loading || fetching) return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-      <div className="text-gray-500 text-sm">Loading…</div>
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+      <div className="text-gray-400 text-sm">Loading…</div>
     </div>
   )
   if (!project) return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-      <p className="text-gray-500 text-sm">Project not found.</p>
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+      <p className="text-gray-400 text-sm">Project not found.</p>
     </div>
   )
 
@@ -908,41 +1138,46 @@ export default function ProjectPage() {
     { key: 'directions', label: 'Directions', count: directions.length },
   ]
 
+  // Effective script category label for display
+  const effectiveCategoryLabel = scriptCategory === 'suggest'
+    ? (customScriptCategory || 'Suggest Best Fits')
+    : scriptCategory
+
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
+    <div className="min-h-screen bg-gray-100 text-gray-900">
 
       {/* Header */}
-      <header className="border-b border-gray-800 px-6 py-4">
+      <header className="border-b border-gray-200 bg-white px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <button onClick={() => router.push('/projects')} className="text-gray-400 hover:text-white transition-colors text-sm">
+            <button onClick={() => router.push('/projects')} className="text-gray-500 hover:text-gray-900 transition-colors text-sm">
               ← Projects
             </button>
-            <span className="text-gray-600">|</span>
+            <span className="text-gray-300">|</span>
             <div>
-              <h1 className="font-semibold text-white leading-tight">{project.campaign_name}</h1>
-              {project.client_name && <p className="text-gray-400 text-xs">{project.client_name}</p>}
+              <h1 className="font-semibold text-gray-900 leading-tight">{project.campaign_name}</h1>
+              {project.client_name && <p className="text-gray-500 text-xs">{project.client_name}</p>}
             </div>
           </div>
           <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-            project.status === 'active' ? 'bg-green-900/50 text-green-400' :
-            project.status === 'final' ? 'bg-indigo-900/50 text-indigo-400' :
-            'bg-gray-800 text-gray-400'
+            project.status === 'active' ? 'bg-green-100 text-green-700' :
+            project.status === 'final' ? 'bg-green-100 text-green-800' :
+            'bg-gray-100 text-gray-500'
           }`}>{project.status}</span>
         </div>
       </header>
 
       {/* Tabs */}
-      <div className="border-b border-gray-800">
+      <div className="border-b border-gray-200 bg-white">
         <div className="max-w-5xl mx-auto px-6 flex">
           {TABS.map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
               className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
-                tab === t.key ? 'border-indigo-500 text-white' : 'border-transparent text-gray-500 hover:text-gray-300'
+                tab === t.key ? 'border-green-700 text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-700'
               }`}>
               {t.label}
               {t.count !== undefined && t.count > 0 && (
-                <span className="bg-gray-800 text-gray-400 text-xs px-1.5 py-0.5 rounded-full leading-none">{t.count}</span>
+                <span className="bg-gray-100 text-gray-500 text-xs px-1.5 py-0.5 rounded-full leading-none">{t.count}</span>
               )}
             </button>
           ))}
@@ -959,32 +1194,32 @@ export default function ProjectPage() {
             <div>
               <div className="flex items-start justify-between mb-2">
                 <div>
-                  <h2 className="text-sm font-semibold text-gray-200">Project Description</h2>
-                  <p className="text-xs text-gray-500 mt-0.5">Describe the campaign and what you're hoping to achieve with your entry. The AI uses this to evaluate whether your chosen shows and categories are a strong fit.</p>
+                  <h2 className="text-sm font-semibold text-gray-800">Project Description</h2>
+                  <p className="text-xs text-gray-400 mt-0.5">Describe the campaign and what you're hoping to achieve with your entry. The AI uses this to evaluate whether your chosen shows and categories are a strong fit.</p>
                 </div>
                 {!briefEdit && (
-                  <button onClick={() => setBriefEdit(true)} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors ml-4 flex-shrink-0">Edit</button>
+                  <button onClick={() => setBriefEdit(true)} className="text-xs text-green-700 hover:text-green-600 transition-colors ml-4 flex-shrink-0">Edit</button>
                 )}
               </div>
               {briefEdit ? (
                 <div>
                   <textarea value={briefText} onChange={e => setBriefText(e.target.value)} rows={10}
-                    className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors resize-none text-sm leading-relaxed"
+                    className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors resize-none text-sm leading-relaxed"
                     placeholder={`Example:\n\nCampaign: [Name of campaign]\nClient: [Client name]\nWhat it was: [Short description of what the campaign did]\nResults: [Key metrics — reach, sales, engagement, etc.]\nWhy you're entering: [Which aspects do you think are strongest? What do you want the AI to focus on when evaluating and drafting?]`} />
                   <div className="flex gap-3 mt-3">
                     <button onClick={saveBrief} disabled={savingBrief}
-                      className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+                      className="bg-green-800 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
                       {savingBrief ? 'Saving…' : 'Save'}
                     </button>
                     <button onClick={() => { setBriefEdit(false); setBriefText(project.combined_text || '') }}
-                      className="text-gray-400 hover:text-white text-sm px-4 py-2 transition-colors">Cancel</button>
+                      className="text-gray-500 hover:text-gray-900 text-sm px-4 py-2 transition-colors">Cancel</button>
                   </div>
                 </div>
               ) : (
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 cursor-pointer hover:border-gray-700 transition-colors" onClick={() => setBriefEdit(true)}>
+                <div className="bg-white border border-gray-200 rounded-xl p-5 cursor-pointer hover:border-gray-300 transition-colors" onClick={() => setBriefEdit(true)}>
                   {project.combined_text
-                    ? <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">{project.combined_text}</p>
-                    : <p className="text-gray-500 text-sm italic">Click to describe your campaign and entry intentions — this helps the AI evaluate show and category fit.</p>}
+                    ? <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">{project.combined_text}</p>
+                    : <p className="text-gray-400 text-sm italic">Click to describe your campaign and entry intentions — this helps the AI evaluate show and category fit.</p>}
                 </div>
               )}
             </div>
@@ -993,31 +1228,29 @@ export default function ProjectPage() {
             <div>
               <div className="flex items-start justify-between mb-2">
                 <div>
-                  <h2 className="text-sm font-semibold text-gray-200">Target Award Shows</h2>
-                  <p className="text-xs text-gray-500 mt-0.5">Select the shows you're considering entering. The AI uses these when suggesting directions and evaluating category fit.</p>
+                  <h2 className="text-sm font-semibold text-gray-800">Target Award Shows</h2>
+                  <p className="text-xs text-gray-400 mt-0.5">Select the shows you're considering entering. The AI uses these when suggesting directions and evaluating category fit.</p>
                 </div>
                 {!editingShows && (
-                  <button onClick={() => setEditingShows(true)} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors ml-4 flex-shrink-0">Edit</button>
+                  <button onClick={() => setEditingShows(true)} className="text-xs text-green-700 hover:text-green-600 transition-colors ml-4 flex-shrink-0">Edit</button>
                 )}
               </div>
 
               {editingShows ? (
                 <div>
-                  {/* Selected shows — chips at top, click to remove */}
                   {targetShows.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-4">
                       {targetShows.map(show => (
                         <button key={show} onClick={() => toggleShow(show)}
-                          className="flex items-center gap-1.5 text-xs bg-indigo-900/50 text-indigo-300 border border-indigo-700 px-3 py-1.5 rounded-full hover:bg-red-900/30 hover:text-red-400 hover:border-red-700 transition-colors">
+                          className="flex items-center gap-1.5 text-xs bg-green-100 text-green-800 border border-green-300 px-3 py-1.5 rounded-full hover:bg-red-50 hover:text-red-600 hover:border-red-300 transition-colors">
                           {show} <span>×</span>
                         </button>
                       ))}
                     </div>
                   )}
 
-                  {/* Full shows list — no height cap, all visible */}
-                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-3">
-                    <p className="text-xs text-gray-500 mb-3">Select from the list:</p>
+                  <div className="bg-white border border-gray-200 rounded-xl p-4 mb-3">
+                    <p className="text-xs text-gray-400 mb-3">Select from the list:</p>
                     <div className="flex flex-wrap gap-2">
                       {kbShows.map(show => {
                         const selected = targetShows.includes(show)
@@ -1025,8 +1258,8 @@ export default function ProjectPage() {
                           <button key={show} onClick={() => toggleShow(show)}
                             className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
                               selected
-                                ? 'bg-indigo-900/50 text-indigo-300 border-indigo-700'
-                                : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-indigo-600 hover:text-indigo-300'
+                                ? 'bg-green-100 text-green-800 border-green-300'
+                                : 'bg-gray-100 text-gray-500 border-gray-300 hover:border-green-600 hover:text-green-700'
                             }`}>
                             {show}
                           </button>
@@ -1035,7 +1268,6 @@ export default function ProjectPage() {
                     </div>
                   </div>
 
-                  {/* Manual entry — add a show not in the list */}
                   <div className="flex gap-2 mb-4">
                     <input
                       type="text"
@@ -1052,7 +1284,7 @@ export default function ProjectPage() {
                         }
                       }}
                       placeholder="Add a show not in the list…"
-                      className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                      className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
                     />
                     <button
                       onClick={() => {
@@ -1063,7 +1295,7 @@ export default function ProjectPage() {
                         setCustomShowInput('')
                       }}
                       disabled={!customShowInput.trim()}
-                      className="bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-white text-sm px-4 py-2 rounded-lg border border-gray-700 transition-colors"
+                      className="bg-gray-100 hover:bg-gray-200 disabled:opacity-40 text-gray-700 text-sm px-4 py-2 rounded-lg border border-gray-300 transition-colors"
                     >
                       + Add
                     </button>
@@ -1071,23 +1303,23 @@ export default function ProjectPage() {
 
                   <div className="flex gap-3">
                     <button onClick={saveShows} disabled={savingShows}
-                      className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+                      className="bg-green-800 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
                       {savingShows ? 'Saving…' : 'Save'}
                     </button>
                     <button onClick={() => { setEditingShows(false); setTargetShows(project.target_shows || []); setCustomShowInput('') }}
-                      className="text-gray-400 hover:text-white text-sm px-4 py-2 transition-colors">Cancel</button>
+                      className="text-gray-500 hover:text-gray-900 text-sm px-4 py-2 transition-colors">Cancel</button>
                   </div>
                 </div>
               ) : (
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 cursor-pointer hover:border-gray-700 transition-colors" onClick={() => setEditingShows(true)}>
+                <div className="bg-white border border-gray-200 rounded-xl p-4 cursor-pointer hover:border-gray-300 transition-colors" onClick={() => setEditingShows(true)}>
                   {targetShows.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
                       {targetShows.map(show => (
-                        <span key={show} className="text-xs bg-indigo-900/30 text-indigo-300 border border-indigo-800/50 px-3 py-1 rounded-full">{show}</span>
+                        <span key={show} className="text-xs bg-green-50 text-green-800 border border-green-200 px-3 py-1 rounded-full">{show}</span>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-gray-500 text-sm italic">Click to select target award shows.</p>
+                    <p className="text-gray-400 text-sm italic">Click to select target award shows.</p>
                   )}
                 </div>
               )}
@@ -1099,44 +1331,44 @@ export default function ProjectPage() {
         {/* ── MATERIALS ── */}
         {tab === 'materials' && (
           <div className="max-w-2xl">
-            <p className="text-sm text-gray-400 mb-5">
+            <p className="text-sm text-gray-500 mb-5">
               Upload supporting files — case studies, results decks, campaign documents. Text and chart data will be extracted and used when generating entry drafts.
             </p>
             {(project.materials || []).length < 5 ? (
               <label className={`block w-full border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
-                uploading ? 'border-gray-700 opacity-60 cursor-not-allowed' : 'border-gray-700 hover:border-indigo-500 cursor-pointer'
+                uploading ? 'border-gray-300 opacity-60 cursor-not-allowed' : 'border-gray-300 hover:border-green-600 cursor-pointer'
               }`}>
                 <input type="file" accept=".pdf,.docx,.txt" onChange={handleFileUpload} className="hidden" disabled={uploading} />
                 <div className="text-sm">
                   {uploading ? (
                     <div>
-                      <div className="text-indigo-400 font-medium mb-1">{uploadProgress || 'Processing…'}</div>
-                      <div className="text-gray-500 text-xs">PDFs with charts may take a moment</div>
+                      <div className="text-green-700 font-medium mb-1">{uploadProgress || 'Processing…'}</div>
+                      <div className="text-gray-400 text-xs">PDFs with charts may take a moment</div>
                     </div>
                   ) : (
-                    <><span className="text-indigo-400 font-medium">Click to upload</span><span className="text-gray-500"> — PDF, DOCX, or TXT · max 10MB</span></>
+                    <><span className="text-green-700 font-medium">Click to upload</span><span className="text-gray-400"> — PDF, DOCX, or TXT · max 10MB</span></>
                   )}
                 </div>
               </label>
             ) : (
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center text-sm text-gray-500">
+              <div className="bg-white border border-gray-200 rounded-xl p-4 text-center text-sm text-gray-400">
                 Maximum of 5 files per project reached.
               </div>
             )}
-            {uploadError && <p className="text-red-400 text-sm mt-2">{uploadError}</p>}
+            {uploadError && <p className="text-red-600 text-sm mt-2">{uploadError}</p>}
             {(project.materials || []).length > 0 && (
               <div className="mt-4 space-y-2">
                 {project.materials.map((m, i) => (
-                  <div key={i} className="bg-gray-900 border border-gray-800 rounded-lg px-4 py-3">
+                  <div key={i} className="bg-white border border-gray-200 rounded-lg px-4 py-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 bg-gray-800 rounded-md flex items-center justify-center text-xs text-gray-400 uppercase font-bold flex-shrink-0">{m.type}</div>
+                      <div className="w-9 h-9 bg-gray-100 rounded-md flex items-center justify-center text-xs text-gray-500 uppercase font-bold flex-shrink-0">{m.type}</div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-white truncate">{m.name}</p>
+                        <p className="text-sm text-gray-900 truncate">{m.name}</p>
                         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                          <p className="text-xs text-gray-500">{formatBytes(m.size)} · {new Date(m.uploaded_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
-                          {m.extracted_text ? <span className="text-xs text-green-500">✓ text extracted</span> : m.type === 'pdf' ? <span className="text-xs text-gray-600">image-only PDF</span> : null}
+                          <p className="text-xs text-gray-400">{formatBytes(m.size)} · {new Date(m.uploaded_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                          {m.extracted_text ? <span className="text-xs text-green-700">✓ text extracted</span> : m.type === 'pdf' ? <span className="text-xs text-gray-400">image-only PDF</span> : null}
                           {m.chart_image_paths && m.chart_image_paths.length > 0 && (
-                            <span className="text-xs text-indigo-400">+ {m.chart_image_paths.length} chart{m.chart_image_paths.length > 1 ? 's' : ''}</span>
+                            <span className="text-xs text-green-700">+ {m.chart_image_paths.length} chart{m.chart_image_paths.length > 1 ? 's' : ''}</span>
                           )}
                         </div>
                       </div>
@@ -1150,12 +1382,12 @@ export default function ProjectPage() {
                               setQuickEvalError('')
                               setShowQuickEvalModal(true)
                             }}
-                            className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+                            className="bg-green-800 hover:bg-green-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
                           >
                             Evaluate as Entry
                           </button>
                         )}
-                        <button onClick={() => deleteFile(i)} className="text-gray-600 hover:text-red-400 transition-colors text-xs">Remove</button>
+                        <button onClick={() => deleteFile(i)} className="text-gray-400 hover:text-red-600 transition-colors text-xs">Remove</button>
                       </div>
                     </div>
                   </div>
@@ -1163,7 +1395,7 @@ export default function ProjectPage() {
               </div>
             )}
             {(project.materials || []).length === 0 && !uploading && (
-              <p className="text-gray-600 text-sm mt-4 text-center">No files uploaded yet.</p>
+              <p className="text-gray-400 text-sm mt-4 text-center">No files uploaded yet.</p>
             )}
           </div>
         )}
@@ -1173,30 +1405,30 @@ export default function ProjectPage() {
           <div>
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="text-sm font-medium text-gray-300">Award Directions</h2>
-                <p className="text-gray-500 text-xs mt-0.5">AI-recommended show and category combinations. Generate a draft from any direction, then evaluate it.</p>
+                <h2 className="text-sm font-medium text-gray-700">Award Directions</h2>
+                <p className="text-gray-400 text-xs mt-0.5">AI-recommended show and category combinations. Generate a draft from any direction, then evaluate it.</p>
               </div>
               <button onClick={generateDirections} disabled={generating || (!project.combined_text && !(project.materials || []).some(m => m.extracted_text))}
                 title={(!project.combined_text && !(project.materials || []).some(m => m.extracted_text)) ? 'Add a brief or upload materials first' : ''}
-                className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
+                className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
                 {generating ? (
                   <><svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Generating…</>
                 ) : directions.length > 0 ? 'Regenerate Directions' : 'Generate Directions'}
               </button>
             </div>
 
-            {generateError && <div className="mb-4 bg-red-900/20 border border-red-800 rounded-lg px-4 py-3"><p className="text-red-400 text-sm">{generateError}</p></div>}
-            {generateDraftError && <div className="mb-4 bg-red-900/20 border border-red-800 rounded-lg px-4 py-3"><p className="text-red-400 text-sm">{generateDraftError}</p></div>}
+            {generateError && <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3"><p className="text-red-600 text-sm">{generateError}</p></div>}
+            {generateDraftError && <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3"><p className="text-red-600 text-sm">{generateDraftError}</p></div>}
 
             {!project.combined_text && !(project.materials || []).some(m => m.extracted_text) && directions.length === 0 && (
-              <div className="bg-amber-900/20 border border-amber-800/50 rounded-xl p-4 mb-4">
-                <p className="text-amber-400 text-sm">Add a campaign brief on the Brief tab, or upload campaign materials, before generating directions.</p>
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+                <p className="text-amber-700 text-sm">Add a campaign brief on the Brief tab, or upload campaign materials, before generating directions.</p>
               </div>
             )}
 
             {directions.length === 0 && !generating ? (
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-10 text-center max-w-lg">
-                <p className="text-gray-500 text-sm">
+              <div className="bg-white border border-gray-200 rounded-xl p-10 text-center max-w-lg">
+                <p className="text-gray-400 text-sm">
                   {(project.combined_text || (project.materials || []).some(m => m.extracted_text))
                     ? 'Click Generate Directions to get started.'
                     : 'Add a brief or upload materials first, then generate directions.'}
@@ -1209,30 +1441,30 @@ export default function ProjectPage() {
                   const hasEval = !!evaluations[d.id]
                   const isGeneratingThis = generatingForDirectionId === d.id
                   return (
-                    <div key={d.id} className={`bg-gray-900 border rounded-xl p-5 ${d.chosen ? 'border-indigo-600' : 'border-gray-800'}`}>
+                    <div key={d.id} className={`bg-white border rounded-xl p-5 ${d.chosen ? 'border-green-700' : 'border-gray-200'}`}>
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="font-medium text-white">{d.name}</h3>
-                            {d.chosen && <span className="text-xs bg-indigo-900/50 text-indigo-400 px-2 py-0.5 rounded-full">Selected</span>}
-                            {hasEntries && <span className="text-xs bg-green-900/40 text-green-400 px-2 py-0.5 rounded-full">Draft ready</span>}
-                            {hasEval && <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${scoreBg(evaluations[d.id].overall_score)} ${scoreColor(evaluations[d.id].overall_score)}`}>{evaluations[d.id].overall_score}/10</span>}
+                            <h3 className="font-medium text-gray-900">{d.name}</h3>
+                            {d.chosen && <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">Selected</span>}
+                            {hasEntries && <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full border border-green-200">Draft ready</span>}
+                            {hasEval && <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${scoreBg(evaluations[d.id].overall_score)} ${scoreColor(evaluations[d.id].overall_score)}`}>{evaluations[d.id].overall_score}/10</span>}
                           </div>
-                          {d.best_show && <p className="text-indigo-400 text-sm mt-0.5">{d.best_show} · <span className="text-gray-400">{d.best_category}</span></p>}
-                          {d.hook && <p className="text-gray-200 text-sm mt-2 italic">"{d.hook}"</p>}
-                          {d.angle && <p className="text-gray-400 text-sm mt-2">{d.angle}</p>}
-                          {d.likelihood_rationale && <p className="text-gray-500 text-xs mt-2">{d.likelihood_rationale}</p>}
+                          {d.best_show && <p className="text-green-700 text-sm mt-0.5">{d.best_show} · <span className="text-gray-500">{d.best_category}</span></p>}
+                          {d.hook && <p className="text-gray-700 text-sm mt-2 italic">"{d.hook}"</p>}
+                          {d.angle && <p className="text-gray-500 text-sm mt-2">{d.angle}</p>}
+                          {d.likelihood_rationale && <p className="text-gray-400 text-xs mt-2">{d.likelihood_rationale}</p>}
                           <div className="flex gap-4 mt-3">
-                            {d.strengths && <div className="flex-1"><p className="text-xs text-green-400 font-medium mb-1">Strengths</p><p className="text-xs text-gray-400 leading-relaxed">{d.strengths}</p></div>}
-                            {d.risks && <div className="flex-1"><p className="text-xs text-amber-400 font-medium mb-1">Risks</p><p className="text-xs text-gray-400 leading-relaxed">{d.risks}</p></div>}
+                            {d.strengths && <div className="flex-1"><p className="text-xs text-green-700 font-medium mb-1">Strengths</p><p className="text-xs text-gray-500 leading-relaxed">{d.strengths}</p></div>}
+                            {d.risks && <div className="flex-1"><p className="text-xs text-amber-700 font-medium mb-1">Risks</p><p className="text-xs text-gray-500 leading-relaxed">{d.risks}</p></div>}
                           </div>
-                          <div className="mt-4 pt-4 border-t border-gray-800 flex items-center gap-3 flex-wrap">
+                          <div className="mt-4 pt-4 border-t border-gray-200 flex items-center gap-3 flex-wrap">
                             <button onClick={() => generateDraft(d.id)} disabled={generatingDraft}
-                              className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
+                              className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
                               {isGeneratingThis ? (<><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Writing draft…</>) : hasEntries ? 'Regenerate Draft' : 'Generate Draft'}
                             </button>
                             {hasEntries && !isGeneratingThis && (
-                              <button onClick={() => setTab('entries')} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+                              <button onClick={() => setTab('entries')} className="text-xs text-green-700 hover:text-green-600 transition-colors">
                                 {hasEval ? 'View entry & evaluation →' : 'View entry →'}
                               </button>
                             )}
@@ -1240,8 +1472,8 @@ export default function ProjectPage() {
                         </div>
                         {d.win_likelihood !== null && (
                           <div className="text-right flex-shrink-0">
-                            <p className={`text-2xl font-bold tabular-nums ${d.win_likelihood >= 65 ? 'text-green-400' : d.win_likelihood >= 45 ? 'text-amber-400' : 'text-red-400'}`}>{d.win_likelihood}%</p>
-                            <p className="text-gray-600 text-xs">win likelihood</p>
+                            <p className={`text-2xl font-bold tabular-nums ${d.win_likelihood >= 65 ? 'text-green-700' : d.win_likelihood >= 45 ? 'text-amber-700' : 'text-red-600'}`}>{d.win_likelihood}%</p>
+                            <p className="text-gray-400 text-xs">win likelihood</p>
                           </div>
                         )}
                       </div>
@@ -1257,24 +1489,24 @@ export default function ProjectPage() {
         {tab === 'entries' && (
           <div>
             {evaluateError && (
-              <div className="mb-4 bg-red-900/20 border border-red-800 rounded-lg px-4 py-3">
-                <p className="text-red-400 text-sm">{evaluateError}</p>
+              <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+                <p className="text-red-600 text-sm">{evaluateError}</p>
               </div>
             )}
 
             {entries.length === 0 ? (
               <div className="max-w-lg">
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-10 text-center">
-                  <div className="w-10 h-10 bg-indigo-900/40 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <span className="text-indigo-400 text-lg">✦</span>
+                <div className="bg-white border border-gray-200 rounded-xl p-10 text-center">
+                  <div className="w-10 h-10 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span className="text-green-700 text-lg">✦</span>
                   </div>
-                  <h3 className="text-sm font-medium text-white mb-2">No entry drafts yet</h3>
-                  <p className="text-gray-500 text-sm mb-6">
+                  <h3 className="text-sm font-medium text-gray-900 mb-2">No entry drafts yet</h3>
+                  <p className="text-gray-400 text-sm mb-6">
                     {directions.length === 0
                       ? 'Generate directions first, then click Generate Draft on any direction.'
                       : 'Go to Directions and click Generate Draft on the direction you want to enter.'}
                   </p>
-                  <button onClick={() => setTab('directions')} className="text-indigo-400 hover:text-indigo-300 text-sm transition-colors">
+                  <button onClick={() => setTab('directions')} className="text-green-700 hover:text-green-600 text-sm transition-colors">
                     Go to Directions →
                   </button>
                 </div>
@@ -1282,10 +1514,8 @@ export default function ProjectPage() {
             ) : (
               <div className="space-y-8">
                 {Array.from(new Set(entries.map(e => e.direction_id))).map(dirId => {
-                    // Look up direction in state — may not be present if quick-eval direction wasn't fetched
                     const d = directions.find(dir => dir.id === dirId)
                     const fields = entries.filter(e => e.direction_id === dirId)
-                    // Fall back to entry field data for show/category if direction not in state
                     const dirName = d?.name || `${fields[0]?.award_show || ''} — ${fields[0]?.category || ''}`.replace(/^ — $/, 'Entry')
                     const dirShow = d?.best_show || fields[0]?.award_show || null
                     const dirCategory = d?.best_category || fields[0]?.category || null
@@ -1294,53 +1524,49 @@ export default function ProjectPage() {
                     const isGeneratingThis = generatingForDirectionId === dirId
 
                     return (
-                      <div key={dirId} className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                      <div key={dirId} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
 
                         {/* Direction header */}
-                        <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between gap-4">
+                        <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between gap-4">
                           <div>
-                            <h3 className="font-medium text-white">{dirName}</h3>
+                            <h3 className="font-medium text-gray-900">{dirName}</h3>
                             {dirShow && (
-                              <p className="text-indigo-400 text-xs mt-0.5">
+                              <p className="text-green-700 text-xs mt-0.5">
                                 {dirShow} · <span className="text-gray-400">{dirCategory}</span>
                               </p>
                             )}
                           </div>
                           <div className="flex items-center gap-3 flex-shrink-0 flex-wrap justify-end">
-                            {/* Evaluate Entry — primary action */}
                             <button
                               onClick={() => evaluateEntry(dirId)}
                               disabled={evaluating || generatingDraft}
-                              className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                              className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
                             >
                               {isEvaluatingThis ? (
                                 <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Evaluating…</>
                               ) : evaluation ? 'Re-evaluate' : 'Evaluate Entry'}
                             </button>
-                            {/* Download evaluation */}
                             {evaluation && d && (
                               <button
                                 onClick={() => downloadEvaluation(d, evaluation)}
-                                className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-2 rounded-lg transition-colors"
+                                className="text-xs text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-3 py-2 rounded-lg transition-colors"
                                 title="Download evaluation as text file"
                               >
                                 ↓ Download
                               </button>
                             )}
-                            {/* Suggest Directions — next step CTA */}
                             <button
                               onClick={() => setTab('directions')}
-                              className="text-xs text-indigo-400 hover:text-indigo-300 border border-indigo-800/60 hover:border-indigo-600 px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5"
+                              className="text-xs text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5"
                               title="Explore AI-recommended show and category directions"
                             >
                               <span>Suggest Directions</span>
                               <span>→</span>
                             </button>
-                            {/* Regenerate — secondary */}
                             <button
                               onClick={() => generateDraft(dirId)}
                               disabled={generatingDraft || evaluating}
-                              className="text-xs text-gray-500 hover:text-gray-300 disabled:opacity-40 transition-colors flex items-center gap-1"
+                              className="text-xs text-gray-400 hover:text-gray-700 disabled:opacity-40 transition-colors flex items-center gap-1"
                             >
                               {isGeneratingThis ? (
                                 <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Regenerating…</>
@@ -1349,57 +1575,54 @@ export default function ProjectPage() {
                           </div>
                         </div>
 
-                        {/* Evaluation panel — shown above fields when evaluation exists */}
+                        {/* Evaluation panel */}
                         {evaluation && (
-                          <div className="px-5 py-5 border-b border-gray-800 bg-gray-950/60">
-                            {/* Overall score + timestamp */}
+                          <div className="px-5 py-5 border-b border-gray-200 bg-gray-50">
                             <div className="flex items-start justify-between mb-4">
                               <div>
                                 <div className="flex items-baseline gap-1">
                                   <span className={`text-4xl font-bold tabular-nums ${scoreColor(evaluation.overall_score)}`}>
                                     {evaluation.overall_score.toFixed(1)}
                                   </span>
-                                  <span className="text-gray-500 text-lg">/10</span>
+                                  <span className="text-gray-400 text-lg">/10</span>
                                 </div>
-                                <p className="text-xs text-gray-500 mt-0.5">Overall quality · Claude Opus 4.6</p>
+                                <p className="text-xs text-gray-400 mt-0.5">Overall quality · Claude Opus 4.6</p>
                               </div>
-                              <p className="text-xs text-gray-600">
+                              <p className="text-xs text-gray-400">
                                 {new Date(evaluation.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                               </p>
                             </div>
 
-                            {/* Dimension scores — 3 × 2 grid */}
                             <div className="grid grid-cols-3 gap-2 mb-5">
                               {SCORE_DIMENSIONS.map(dim => {
                                 const score = evaluation.scores[dim.key] ?? 0
                                 return (
                                   <div key={dim.key} className={`border rounded-lg px-3 py-2.5 ${scoreBg(score)}`}>
-                                    <p className="text-xs text-gray-400 mb-1">{dim.label}</p>
+                                    <p className="text-xs text-gray-500 mb-1">{dim.label}</p>
                                     <p className={`text-xl font-bold tabular-nums ${scoreColor(score)}`}>{score}</p>
                                   </div>
                                 )
                               })}
                             </div>
 
-                            {/* Strengths & Gaps */}
                             <div className="grid grid-cols-2 gap-5 mb-5">
                               <div>
-                                <p className="text-xs font-semibold text-green-400 uppercase tracking-wide mb-3">Strengths</p>
+                                <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-3">Strengths</p>
                                 <ul className="space-y-2.5">
                                   {evaluation.strengths.map((s, i) => (
-                                    <li key={i} className="text-sm text-gray-300 leading-relaxed flex gap-2">
-                                      <span className="text-green-500 flex-shrink-0 mt-0.5">✓</span>
+                                    <li key={i} className="text-sm text-gray-700 leading-relaxed flex gap-2">
+                                      <span className="text-green-700 flex-shrink-0 mt-0.5">✓</span>
                                       <span>{s}</span>
                                     </li>
                                   ))}
                                 </ul>
                               </div>
                               <div>
-                                <p className="text-xs font-semibold text-red-400 uppercase tracking-wide mb-3">Gaps</p>
+                                <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-3">Gaps</p>
                                 <ul className="space-y-2.5">
                                   {evaluation.gaps.map((g, i) => (
-                                    <li key={i} className="text-sm text-gray-300 leading-relaxed flex gap-2">
-                                      <span className="text-red-500 flex-shrink-0 mt-0.5">✗</span>
+                                    <li key={i} className="text-sm text-gray-700 leading-relaxed flex gap-2">
+                                      <span className="text-red-600 flex-shrink-0 mt-0.5">✗</span>
                                       <span>{g}</span>
                                     </li>
                                   ))}
@@ -1407,16 +1630,15 @@ export default function ProjectPage() {
                               </div>
                             </div>
 
-                            {/* Recommendations */}
                             <div>
-                              <p className="text-xs font-semibold text-amber-400 uppercase tracking-wide mb-3">Recommendations</p>
-                              <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">{evaluation.recommendations}</p>
+                              <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">Recommendations</p>
+                              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{evaluation.recommendations}</p>
                             </div>
                           </div>
                         )}
 
                         {/* Entry fields */}
-                        <div className="divide-y divide-gray-800">
+                        <div className="divide-y divide-gray-100">
                           {fields.map(field => {
                             const content = field.selected
                               ? (field[`version_${field.selected}` as keyof EntryDraft] as string) ?? field.version_a
@@ -1427,44 +1649,40 @@ export default function ProjectPage() {
                             const isExpanded = expandedEntryFields[field.id] ?? false
 
                             if (isUploadedDoc) {
-                              // Uploaded document — collapsed by default, evaluation is the focus
                               return (
                                 <div key={field.id} className="px-5 py-4">
                                   <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
-                                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Uploaded Entry</p>
-                                      <span className="text-xs text-gray-600">{wordCount.toLocaleString()} words</span>
+                                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Uploaded Entry</p>
+                                      <span className="text-xs text-gray-400">{wordCount.toLocaleString()} words</span>
                                     </div>
                                     <div className="flex items-center gap-3">
                                       <button onClick={() => content && navigator.clipboard.writeText(content)}
-                                        className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Copy</button>
+                                        className="text-xs text-gray-400 hover:text-gray-700 transition-colors">Copy</button>
                                       <button
                                         onClick={() => setExpandedEntryFields(prev => ({ ...prev, [field.id]: !isExpanded }))}
-                                        className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+                                        className="text-xs text-green-700 hover:text-green-600 transition-colors">
                                         {isExpanded ? 'Collapse ↑' : 'View full entry ↓'}
                                       </button>
                                     </div>
                                   </div>
                                   {isExpanded && (
                                     <div className="mt-3 max-h-96 overflow-y-auto pr-1">
-                                      <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">{content}</p>
+                                      <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{content}</p>
                                     </div>
                                   )}
                                 </div>
                               )
                             }
 
-                            // AI-generated structured field — with version toggle + refine UI
                             const isRefining = refiningFieldId === field.id
                             const userHistory = (field.chat_history || []).filter(m => m.role === 'user')
                             return (
                               <div key={field.id} className="px-5 py-5">
 
-                                {/* Field header: label + version toggle + word count + copy */}
                                 <div className="flex items-start justify-between mb-3 gap-3">
                                   <div className="flex items-center gap-2 flex-wrap">
-                                    <p className="text-xs font-semibold text-gray-200 uppercase tracking-wide">{field.field_label}</p>
-                                    {/* Version toggle — only show when refinements exist */}
+                                    <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">{field.field_label}</p>
                                     {(field.version_b || field.version_c) && (
                                       <div className="flex items-center gap-1">
                                         {(['a', 'b', 'c'] as const).map(v => {
@@ -1475,55 +1693,52 @@ export default function ProjectPage() {
                                             <button key={v} onClick={() => switchVersion(field.id, v)}
                                               className={`text-xs px-2 py-0.5 rounded border font-medium uppercase transition-colors ${
                                                 isActive
-                                                  ? 'bg-indigo-600 border-indigo-500 text-white'
-                                                  : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200'
+                                                  ? 'bg-green-800 border-green-700 text-white'
+                                                  : 'bg-gray-100 border-gray-300 text-gray-500 hover:border-gray-400 hover:text-gray-700'
                                               }`}>
                                               {v}
                                             </button>
                                           )
                                         })}
                                         {(field.selected || 'a') !== 'a' && (
-                                          <span className="text-xs text-indigo-400 ml-0.5">refined</span>
+                                          <span className="text-xs text-green-700 ml-0.5">refined</span>
                                         )}
                                       </div>
                                     )}
                                   </div>
                                   <div className="flex items-center gap-3 flex-shrink-0">
                                     {field.word_limit && (
-                                      <span className={`text-xs tabular-nums ${overLimit ? 'text-red-400' : 'text-gray-500'}`}>
+                                      <span className={`text-xs tabular-nums ${overLimit ? 'text-red-600' : 'text-gray-400'}`}>
                                         {wordCount} / {field.word_limit}w
                                       </span>
                                     )}
                                     <button onClick={() => content && navigator.clipboard.writeText(content)}
-                                      className="text-xs text-gray-500 hover:text-gray-300 transition-colors">
+                                      className="text-xs text-gray-400 hover:text-gray-700 transition-colors">
                                       Copy
                                     </button>
                                   </div>
                                 </div>
 
-                                {/* Field content */}
-                                <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap mb-4">
-                                  {content || <span className="italic text-gray-600">Not yet generated</span>}
+                                <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap mb-4">
+                                  {content || <span className="italic text-gray-400">Not yet generated</span>}
                                 </p>
 
-                                {/* Refinement history — compact log of past instructions */}
                                 {userHistory.length > 0 && (
                                   <div className="mb-3 space-y-1.5">
                                     {userHistory.map((msg, i) => (
-                                      <div key={i} className="flex items-center gap-2 text-xs text-gray-500">
-                                        <span className="text-gray-700">↺</span>
+                                      <div key={i} className="flex items-center gap-2 text-xs text-gray-400">
+                                        <span className="text-gray-300">↺</span>
                                         <span className="italic">"{msg.content}"</span>
                                         {msg.version_created && (
-                                          <span className="text-indigo-500 font-medium uppercase">→ {msg.version_created}</span>
+                                          <span className="text-green-700 font-medium uppercase">→ {msg.version_created}</span>
                                         )}
                                       </div>
                                     ))}
                                   </div>
                                 )}
 
-                                {/* Refine with AI — input + button */}
                                 {refineErrors[field.id] && (
-                                  <p className="text-xs text-red-400 mb-2">{refineErrors[field.id]}</p>
+                                  <p className="text-xs text-red-600 mb-2">{refineErrors[field.id]}</p>
                                 )}
                                 <div className="flex gap-2">
                                   <input
@@ -1537,12 +1752,12 @@ export default function ProjectPage() {
                                     }}
                                     placeholder={`Refine with AI — e.g. "make this punchier" or "cut to ${field.word_limit ? field.word_limit + ' words' : '100 words'}"`}
                                     disabled={isRefining}
-                                    className="flex-1 bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors disabled:opacity-50"
+                                    className="flex-1 bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors disabled:opacity-50"
                                   />
                                   <button
                                     onClick={() => refineField(field, dirId)}
                                     disabled={isRefining || !refineMessage[field.id]?.trim()}
-                                    className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2 flex-shrink-0"
+                                    className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2 flex-shrink-0"
                                   >
                                     {isRefining ? (
                                       <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Refining…</>
@@ -1566,15 +1781,15 @@ export default function ProjectPage() {
           <div className="max-w-3xl">
 
             {/* Mode toggle */}
-            <div className="flex items-center gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 w-fit mb-6">
+            <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl p-1 w-fit mb-6">
               {(['generate', 'review'] as const).map(m => (
                 <button
                   key={m}
                   onClick={() => { setScriptMode(m); setScriptError('') }}
                   className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                     scriptMode === m
-                      ? 'bg-indigo-600 text-white'
-                      : 'text-gray-400 hover:text-white'
+                      ? 'bg-green-800 text-white'
+                      : 'text-gray-500 hover:text-gray-900'
                   }`}
                 >
                   {m === 'generate' ? 'Generate from Brief' : 'Review my Script'}
@@ -1583,52 +1798,141 @@ export default function ProjectPage() {
             </div>
 
             {/* Mode description */}
-            <p className="text-sm text-gray-400 mb-5">
+            <p className="text-sm text-gray-500 mb-5">
               {scriptMode === 'generate'
                 ? 'Generate a 2-minute award case study film script using your campaign brief and uploaded materials. The script follows the Hook → Challenge → Idea → Execution → Results → Close structure used at Cannes, D&AD, and Effies.'
                 : 'Upload your existing video script and get an optimised version with detailed reasoning on every change — written by a simulated 20-year award jury veteran.'}
             </p>
 
-            {/* Generate mode controls */}
-            {scriptMode === 'generate' && (
-              <div className="space-y-4 mb-6">
-                {/* Optional direction selector */}
-                {directions.length > 0 && (
-                  <div>
-                    <label className="block text-xs text-gray-400 mb-1.5">
-                      Target direction <span className="text-gray-600">(optional — narrows the script to a specific show and category)</span>
-                    </label>
+            {/* Award Show + Category selectors — shared across both modes */}
+            <div className="bg-white border border-gray-200 rounded-xl p-5 mb-5 space-y-4">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Target Award Show &amp; Category <span className="text-gray-400 font-normal normal-case">(optional — focuses the script)</span></p>
+
+              {/* Award Show dropdown */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1.5">Award Show</label>
+                  <select
+                    value={scriptShow}
+                    onChange={e => {
+                      setScriptShow(e.target.value)
+                      setScriptCategory('')
+                      setCategorySuggestions([])
+                      setSuggestCategoryError('')
+                    }}
+                    className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-green-600 transition-colors"
+                  >
+                    <option value="">No specific show</option>
+                    {kbShows.map(show => (
+                      <option key={show} value={show}>{show}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Category dropdown */}
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1.5">Category</label>
+                  {availableCategories.length > 0 ? (
                     <select
-                      value={selectedDirectionForScript}
-                      onChange={e => setSelectedDirectionForScript(e.target.value === '' ? '' : Number(e.target.value))}
-                      className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors w-full max-w-sm"
+                      value={scriptCategory}
+                      onChange={e => {
+                        setScriptCategory(e.target.value)
+                        setCategorySuggestions([])
+                        setSuggestCategoryError('')
+                      }}
+                      className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-green-600 transition-colors"
                     >
-                      <option value="">No specific direction</option>
-                      {directions.map(d => (
-                        <option key={d.id} value={d.id}>
-                          {d.best_show ? `${d.best_show} — ${d.best_category}` : d.name}
-                        </option>
+                      <option value="">No specific category</option>
+                      <option value="suggest">✦ Suggest Best Fits (AI)</option>
+                      {availableCategories.map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
                       ))}
                     </select>
-                  </div>
-                )}
-
-                {/* Guard: needs brief or materials */}
-                {!project.combined_text && !(project.materials || []).some(m => m.extracted_text) && (
-                  <div className="bg-amber-900/20 border border-amber-800/50 rounded-xl p-4">
-                    <p className="text-amber-400 text-sm">Add a campaign brief on the Brief tab, or upload materials, before generating a script.</p>
-                  </div>
-                )}
+                  ) : scriptShow ? (
+                    // Show not in SHOW_CATEGORIES map — free-text input
+                    <input
+                      type="text"
+                      value={customScriptCategory}
+                      onChange={e => setCustomScriptCategory(e.target.value)}
+                      placeholder="Type category…"
+                      className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
+                    />
+                  ) : (
+                    <select disabled className="w-full bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-400 cursor-not-allowed">
+                      <option>Select a show first</option>
+                    </select>
+                  )}
+                </div>
               </div>
-            )}
 
-            {/* Review mode controls — file upload */}
+              {/* Suggest Best Fits panel */}
+              {scriptCategory === 'suggest' && scriptShow && (
+                <div className="pt-1">
+                  {categorySuggestions.length === 0 ? (
+                    <div>
+                      <p className="text-xs text-gray-500 mb-3">
+                        AI will analyse your campaign and suggest the top 3 best-fit categories for <strong className="text-gray-700">{scriptShow}</strong>.
+                      </p>
+                      {suggestCategoryError && (
+                        <p className="text-xs text-red-600 mb-2">{suggestCategoryError}</p>
+                      )}
+                      <button
+                        onClick={suggestCategories}
+                        disabled={suggestingCategories || (!project.combined_text && !(project.materials || []).some(m => m.extracted_text))}
+                        className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                      >
+                        {suggestingCategories ? (
+                          <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Analysing…</>
+                        ) : 'Suggest Best Fit Categories'}
+                      </button>
+                      {!project.combined_text && !(project.materials || []).some(m => m.extracted_text) && (
+                        <p className="text-xs text-amber-700 mt-2">Add a brief or upload materials first.</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-xs text-gray-500 mb-3">Click a suggestion to select it as your target category:</p>
+                      <div className="space-y-2">
+                        {categorySuggestions.map((sug, i) => (
+                          <button
+                            key={i}
+                            onClick={() => {
+                              setScriptCategory(sug.category)
+                              setCategorySuggestions([])
+                            }}
+                            className="w-full text-left bg-gray-50 border border-gray-200 hover:border-green-500 hover:bg-green-50 rounded-lg px-4 py-3 transition-colors group"
+                          >
+                            <div className="flex items-start gap-3">
+                              <span className="text-xs font-bold text-green-700 bg-green-100 rounded-full w-5 h-5 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                {i + 1}
+                              </span>
+                              <div>
+                                <p className="text-sm font-medium text-gray-900 group-hover:text-green-800">{sug.category}</p>
+                                <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{sug.reasoning}</p>
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => { setCategorySuggestions([]); setSuggestCategoryError('') }}
+                        className="text-xs text-gray-400 hover:text-gray-700 mt-3 transition-colors"
+                      >
+                        ← Try again
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Review mode — file upload */}
             {scriptMode === 'review' && (
-              <div className="mb-6 space-y-3">
+              <div className="mb-5 space-y-3">
                 <div>
-                  <label className="block text-xs text-gray-400 mb-2">Upload your script (PDF, DOCX, or TXT)</label>
+                  <label className="block text-xs text-gray-500 mb-2">Upload your script (PDF, DOCX, or TXT)</label>
                   <label className={`block w-full border-2 border-dashed rounded-xl p-6 text-center transition-colors ${
-                    scriptFileUploading ? 'border-gray-700 opacity-60 cursor-not-allowed' : 'border-gray-700 hover:border-indigo-500 cursor-pointer'
+                    scriptFileUploading ? 'border-gray-200 opacity-60 cursor-not-allowed' : 'border-gray-300 hover:border-green-600 cursor-pointer'
                   }`}>
                     <input
                       type="file"
@@ -1638,46 +1942,32 @@ export default function ProjectPage() {
                       disabled={scriptFileUploading}
                     />
                     {scriptFileUploading ? (
-                      <p className="text-indigo-400 text-sm font-medium">Extracting text…</p>
+                      <p className="text-green-700 text-sm font-medium">Extracting text…</p>
                     ) : uploadedScriptText ? (
                       <div>
-                        <p className="text-green-400 text-sm font-medium">✓ {uploadedScriptName}</p>
-                        <p className="text-gray-500 text-xs mt-1">{uploadedScriptText.trim().split(/\s+/).length.toLocaleString()} words extracted · click to replace</p>
+                        <p className="text-green-700 text-sm font-medium">✓ {uploadedScriptName}</p>
+                        <p className="text-gray-400 text-xs mt-1">{uploadedScriptText.trim().split(/\s+/).length.toLocaleString()} words extracted · click to replace</p>
                       </div>
                     ) : (
-                      <><span className="text-indigo-400 font-medium text-sm">Click to upload your script</span><span className="text-gray-500 text-sm"> — PDF, DOCX, or TXT · max 10MB</span></>
+                      <><span className="text-green-700 font-medium text-sm">Click to upload your script</span><span className="text-gray-400 text-sm"> — PDF, DOCX, or TXT · max 10MB</span></>
                     )}
                   </label>
-                  {scriptFileError && <p className="text-red-400 text-xs mt-1.5">{scriptFileError}</p>}
+                  {scriptFileError && <p className="text-red-600 text-xs mt-1.5">{scriptFileError}</p>}
                 </div>
+              </div>
+            )}
 
-                {/* Optional: show/category context for review */}
-                {directions.length > 0 && (
-                  <div>
-                    <label className="block text-xs text-gray-400 mb-1.5">
-                      Optimise for show/category <span className="text-gray-600">(optional)</span>
-                    </label>
-                    <select
-                      value={selectedDirectionForScript}
-                      onChange={e => setSelectedDirectionForScript(e.target.value === '' ? '' : Number(e.target.value))}
-                      className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors w-full max-w-sm"
-                    >
-                      <option value="">No specific direction</option>
-                      {directions.map(d => (
-                        <option key={d.id} value={d.id}>
-                          {d.best_show ? `${d.best_show} — ${d.best_category}` : d.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+            {/* Generate mode guard */}
+            {scriptMode === 'generate' && !project.combined_text && !(project.materials || []).some(m => m.extracted_text) && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-5">
+                <p className="text-amber-700 text-sm">Add a campaign brief on the Brief tab, or upload materials, before generating a script.</p>
               </div>
             )}
 
             {/* Error */}
             {scriptError && (
-              <div className="mb-5 bg-red-900/20 border border-red-800 rounded-xl px-4 py-3">
-                <p className="text-red-400 text-sm">{scriptError}</p>
+              <div className="mb-5 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                <p className="text-red-600 text-sm">{scriptError}</p>
               </div>
             )}
 
@@ -1687,9 +1977,10 @@ export default function ProjectPage() {
               disabled={
                 generatingScript ||
                 (scriptMode === 'generate' && !project.combined_text && !(project.materials || []).some(m => m.extracted_text)) ||
-                (scriptMode === 'review' && !uploadedScriptText.trim())
+                (scriptMode === 'review' && !uploadedScriptText.trim()) ||
+                scriptCategory === 'suggest'
               }
-              className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors flex items-center gap-2 mb-8"
+              className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors flex items-center gap-2 mb-8"
             >
               {generatingScript ? (
                 <><svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
@@ -1698,6 +1989,9 @@ export default function ProjectPage() {
                 : scriptMode === 'review' ? (scriptAnalysis ? 'Re-review Script' : 'Review & Optimise Script')
                 : 'Generate Script'}
             </button>
+            {scriptCategory === 'suggest' && (
+              <p className="text-xs text-amber-700 -mt-6 mb-8">Select a category from the suggestions above before generating.</p>
+            )}
 
             {/* Script output */}
             {scriptText && (
@@ -1705,26 +1999,66 @@ export default function ProjectPage() {
 
                 {/* Review mode: reasoning panel first */}
                 {scriptMode === 'review' && scriptAnalysis && (
-                  <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                    <div className="px-5 py-4 border-b border-gray-800">
-                      <h3 className="text-sm font-semibold text-white">Script Analysis</h3>
-                      <p className="text-xs text-gray-500 mt-0.5">Claude Opus 4.6 · based on 20 years of award jury experience</p>
+                  <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                    <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-900">Script Analysis</h3>
+                        <p className="text-xs text-gray-400 mt-0.5">Claude Opus 4.6 · based on 20 years of award jury experience</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            const text = buildAnalysisText(
+                              scriptAnalysis,
+                              project.campaign_name,
+                              scriptShow,
+                              scriptCategory !== 'suggest' ? scriptCategory : customScriptCategory
+                            )
+                            navigator.clipboard.writeText(text)
+                          }}
+                          className="text-xs text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors"
+                          title="Copy analysis to clipboard"
+                        >
+                          Copy analysis
+                        </button>
+                        <button
+                          onClick={() => {
+                            const text = buildAnalysisText(
+                              scriptAnalysis,
+                              project.campaign_name,
+                              scriptShow,
+                              scriptCategory !== 'suggest' ? scriptCategory : customScriptCategory
+                            )
+                            const blob = new Blob([text], { type: 'text/plain' })
+                            const url = URL.createObjectURL(blob)
+                            const a = document.createElement('a')
+                            a.href = url
+                            a.download = `${(project.campaign_name || 'script').replace(/[^a-z0-9]/gi, '-').toLowerCase()}-analysis.txt`
+                            a.click()
+                            URL.revokeObjectURL(url)
+                          }}
+                          className="text-xs text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors"
+                          title="Download analysis as text file"
+                        >
+                          ↓ Download
+                        </button>
+                      </div>
                     </div>
                     <div className="px-5 py-5 space-y-5">
                       {/* Summary */}
                       <div>
-                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Overall Assessment</p>
-                        <p className="text-sm text-gray-300 leading-relaxed">{scriptAnalysis.summary}</p>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Overall Assessment</p>
+                        <p className="text-sm text-gray-700 leading-relaxed">{scriptAnalysis.summary}</p>
                       </div>
 
                       {/* Key improvements */}
                       {scriptAnalysis.key_improvements.length > 0 && (
                         <div>
-                          <p className="text-xs font-semibold text-indigo-400 uppercase tracking-wide mb-2">Key Improvements</p>
+                          <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-2">Key Improvements</p>
                           <ul className="space-y-2">
                             {scriptAnalysis.key_improvements.map((item, i) => (
-                              <li key={i} className="text-sm text-gray-300 flex gap-2">
-                                <span className="text-indigo-500 flex-shrink-0 mt-0.5">✦</span>
+                              <li key={i} className="text-sm text-gray-700 flex gap-2">
+                                <span className="text-green-700 flex-shrink-0 mt-0.5">✦</span>
                                 <span>{item}</span>
                               </li>
                             ))}
@@ -1735,15 +2069,15 @@ export default function ProjectPage() {
                       {/* Change-by-change breakdown */}
                       {scriptAnalysis.changes.length > 0 && (
                         <div>
-                          <p className="text-xs font-semibold text-amber-400 uppercase tracking-wide mb-3">Scene-by-Scene Changes</p>
+                          <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">Scene-by-Scene Changes</p>
                           <div className="space-y-3">
                             {scriptAnalysis.changes.map((change, i) => (
-                              <div key={i} className="bg-gray-950/60 border border-gray-800 rounded-lg px-4 py-3">
-                                <p className="text-xs font-medium text-amber-300 mb-1">{change.section}</p>
+                              <div key={i} className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3">
+                                <p className="text-xs font-medium text-amber-700 mb-1">{change.section}</p>
                                 {change.original && (
-                                  <p className="text-xs text-gray-600 italic mb-1.5">Original: "{change.original}"</p>
+                                  <p className="text-xs text-gray-400 italic mb-1.5">Original: "{change.original}"</p>
                                 )}
-                                <p className="text-sm text-gray-300">{change.reason}</p>
+                                <p className="text-sm text-gray-700">{change.reason}</p>
                               </div>
                             ))}
                           </div>
@@ -1754,20 +2088,23 @@ export default function ProjectPage() {
                 )}
 
                 {/* Script text */}
-                <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                  <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
+                <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                  <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
                     <div>
-                      <h3 className="text-sm font-semibold text-white">
+                      <h3 className="text-sm font-semibold text-gray-900">
                         {scriptMode === 'review' ? 'Optimised Script' : 'Generated Script'}
                       </h3>
-                      <p className="text-xs text-gray-500 mt-0.5">
+                      <p className="text-xs text-gray-400 mt-0.5">
                         {scriptMode === 'generate' ? 'Claude Sonnet 4.6' : 'Claude Opus 4.6'} · 2-minute case study film
+                        {(scriptShow || effectiveCategoryLabel) && (
+                          <span className="text-green-700"> · {[scriptShow, effectiveCategoryLabel && effectiveCategoryLabel !== 'Suggest Best Fits' ? effectiveCategoryLabel : null].filter(Boolean).join(' — ')}</span>
+                        )}
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
                       <button
                         onClick={() => navigator.clipboard.writeText(scriptText)}
-                        className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition-colors"
+                        className="text-xs text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors"
                       >
                         Copy script
                       </button>
@@ -1781,14 +2118,14 @@ export default function ProjectPage() {
                           a.click()
                           URL.revokeObjectURL(url)
                         }}
-                        className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition-colors"
+                        className="text-xs text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors"
                       >
                         ↓ Download
                       </button>
                     </div>
                   </div>
                   <div className="px-5 py-5">
-                    <pre className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap font-mono">{scriptText}</pre>
+                    <pre className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap font-mono">{scriptText}</pre>
                   </div>
                 </div>
 
@@ -1797,12 +2134,12 @@ export default function ProjectPage() {
 
             {/* Empty state */}
             {!scriptText && !generatingScript && (
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-10 text-center max-w-lg">
-                <div className="w-10 h-10 bg-indigo-900/40 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <span className="text-indigo-400 text-lg">▶</span>
+              <div className="bg-white border border-gray-200 rounded-xl p-10 text-center max-w-lg">
+                <div className="w-10 h-10 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="text-green-700 text-lg">▶</span>
                 </div>
-                <h3 className="text-sm font-medium text-white mb-2">No script yet</h3>
-                <p className="text-gray-500 text-sm">
+                <h3 className="text-sm font-medium text-gray-900 mb-2">No script yet</h3>
+                <p className="text-gray-400 text-sm">
                   {scriptMode === 'generate'
                     ? 'Click Generate Script to create a 2-minute award case study film script from your campaign materials.'
                     : 'Upload your existing script and click Review & Optimise to get a rewritten version with detailed change notes.'}
@@ -1817,42 +2154,42 @@ export default function ProjectPage() {
 
       {/* ── QUICK EVALUATE MODAL ── */}
       {showQuickEvalModal && quickEvalMaterialIdx !== null && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-md shadow-2xl">
-            <h2 className="text-base font-semibold text-white mb-1">Evaluate Existing Entry</h2>
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+          <div className="bg-white border border-gray-200 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <h2 className="text-base font-semibold text-gray-900 mb-1">Evaluate Existing Entry</h2>
             <p className="text-xs text-gray-400 mb-5">
               Which award show and category is this entry targeting?
-              <span className="block mt-1 text-gray-500 truncate">
+              <span className="block mt-1 text-gray-400 truncate">
                 {project.materials[quickEvalMaterialIdx]?.name}
               </span>
             </p>
 
             <div className="space-y-3 mb-5">
               <div>
-                <label className="block text-xs text-gray-400 mb-1.5">Award Show</label>
+                <label className="block text-xs text-gray-500 mb-1.5">Award Show</label>
                 <input
                   type="text"
                   value={quickEvalShow}
                   onChange={e => setQuickEvalShow(e.target.value)}
                   placeholder="e.g. Cannes Lions, Effies, WARC…"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                  className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-400 mb-1.5">Category</label>
+                <label className="block text-xs text-gray-500 mb-1.5">Category</label>
                 <input
                   type="text"
                   value={quickEvalCategory}
                   onChange={e => setQuickEvalCategory(e.target.value)}
                   placeholder="e.g. Grand Prix, Silver, Creative Effectiveness…"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                  className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
                 />
               </div>
             </div>
 
             {quickEvalError && (
-              <div className="mb-4 bg-red-900/20 border border-red-800 rounded-lg px-3 py-2">
-                <p className="text-red-400 text-xs">{quickEvalError}</p>
+              <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                <p className="text-red-600 text-xs">{quickEvalError}</p>
               </div>
             )}
 
@@ -1860,7 +2197,7 @@ export default function ProjectPage() {
               <button
                 onClick={evaluateUploadedEntry}
                 disabled={quickEvaluating}
-                className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2"
+                className="flex-1 bg-green-800 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2"
               >
                 {quickEvaluating ? (
                   <><svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Evaluating…</>
@@ -1869,14 +2206,14 @@ export default function ProjectPage() {
               <button
                 onClick={() => { setShowQuickEvalModal(false); setQuickEvalError('') }}
                 disabled={quickEvaluating}
-                className="px-4 py-2.5 text-sm text-gray-400 hover:text-white disabled:opacity-40 transition-colors"
+                className="px-4 py-2.5 text-sm text-gray-500 hover:text-gray-900 disabled:opacity-40 transition-colors"
               >
                 Cancel
               </button>
             </div>
 
             {quickEvaluating && (
-              <p className="text-xs text-gray-500 text-center mt-3">Claude Opus 4.6 is reviewing your entry — this takes about 30–60 seconds.</p>
+              <p className="text-xs text-gray-400 text-center mt-3">Claude Opus 4.6 is reviewing your entry — this takes about 30–60 seconds.</p>
             )}
           </div>
         </div>
