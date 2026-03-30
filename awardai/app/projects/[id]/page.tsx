@@ -205,7 +205,7 @@ export default function ProjectPage() {
   // Phase 2 — field refinement via edit-entry Edge Function
   const [refineMessage, setRefineMessage] = useState<Record<number, string>>({})
   const [refiningFieldId, setRefiningFieldId] = useState<number | null>(null)
-  const [refineError, setRefineError] = useState('')
+  const [refineErrors, setRefineErrors] = useState<Record<number, string>>({})
 
   // Quick evaluate from uploaded material
   const [orgId, setOrgId] = useState<number | null>(null)
@@ -702,7 +702,7 @@ export default function ProjectPage() {
     if (!msg || !project) return
 
     setRefiningFieldId(field.id)
-    setRefineError('')
+    setRefineErrors(prev => { const next = { ...prev }; delete next[field.id]; return next })
     try {
       const accessToken = await getToken()
       if (!accessToken) return
@@ -724,15 +724,16 @@ export default function ProjectPage() {
         }
       )
       const data = await res.json()
-      if (!res.ok || data.error) { setRefineError(data.error || `Error ${res.status}`); return }
-      // Replace the draft in entries state with the updated version from the server
+      if (!res.ok || data.error) {
+        setRefineErrors(prev => ({ ...prev, [field.id]: data.error || `Error ${res.status}` }))
+        return
+      }
       if (data.updated_draft) {
         setEntries(prev => prev.map(e => e.id === field.id ? data.updated_draft : e))
       }
-      // Clear the message input for this field
       setRefineMessage(prev => { const next = { ...prev }; delete next[field.id]; return next })
     } catch (err) {
-      setRefineError(err instanceof Error ? err.message : 'Network error.')
+      setRefineErrors(prev => ({ ...prev, [field.id]: err instanceof Error ? err.message : 'Network error.' }))
     } finally {
       setRefiningFieldId(null)
     }
@@ -1377,8 +1378,8 @@ export default function ProjectPage() {
                                 )}
 
                                 {/* Refine with AI — input + button */}
-                                {refineError && refiningFieldId === null && (
-                                  <p className="text-xs text-red-400 mb-2">{refineError}</p>
+                                {refineErrors[field.id] && (
+                                  <p className="text-xs text-red-400 mb-2">{refineErrors[field.id]}</p>
                                 )}
                                 <div className="flex gap-2">
                                   <input
