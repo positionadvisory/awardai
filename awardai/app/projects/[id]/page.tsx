@@ -90,6 +90,12 @@ type Direction = {
   chosen: boolean
 }
 
+type ChatMessage = {
+  role: 'user' | 'assistant'
+  content: string
+  version_created?: string
+}
+
 type EntryDraft = {
   id: number
   direction_id: number
@@ -100,6 +106,8 @@ type EntryDraft = {
   version_b: string | null
   version_c: string | null
   selected: string | null
+  custom_text: string | null
+  chat_history: ChatMessage[] | null
   award_show: string | null
   category: string | null
 }
@@ -193,6 +201,11 @@ export default function ProjectPage() {
 
   // Uploaded entry text expand/collapse in Entries tab
   const [expandedEntryFields, setExpandedEntryFields] = useState<Record<number, boolean>>({})
+
+  // Phase 2 — field refinement via edit-entry Edge Function
+  const [refineMessage, setRefineMessage] = useState<Record<number, string>>({})
+  const [refiningFieldId, setRefiningFieldId] = useState<number | null>(null)
+  const [refineError, setRefineError] = useState('')
 
   // Quick evaluate from uploaded material
   const [orgId, setOrgId] = useState<number | null>(null)
@@ -674,6 +687,54 @@ export default function ProjectPage() {
       setQuickEvalError(err instanceof Error ? err.message : 'Network error.')
     } finally {
       setQuickEvaluating(false)
+    }
+  }
+
+  // Switch which version (a/b/c) is displayed for a field — persists to DB
+  const switchVersion = async (fieldId: number, version: 'a' | 'b' | 'c') => {
+    await supabase.from('entry_drafts').update({ selected: version }).eq('id', fieldId)
+    setEntries(prev => prev.map(e => e.id === fieldId ? { ...e, selected: version } : e))
+  }
+
+  // Send a refinement instruction for a specific field to the edit-entry Edge Function
+  const refineField = async (field: EntryDraft, dirId: number) => {
+    const msg = refineMessage[field.id]?.trim()
+    if (!msg || !project) return
+
+    setRefiningFieldId(field.id)
+    setRefineError('')
+    try {
+      const accessToken = await getToken()
+      if (!accessToken) return
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/edit-entry`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          },
+          body: JSON.stringify({
+            project_id: project.id,
+            direction_id: dirId,
+            entry_draft_id: field.id,
+            message: msg,
+          }),
+        }
+      )
+      const data = await res.json()
+      if (!res.ok || data.error) { setRefineError(data.error || `Error ${res.status}`); return }
+      // Replace the draft in entries state with the updated version from the server
+      if (data.updated_draft) {
+        setEntries(prev => prev.map(e => e.id === field.id ? data.updated_draft : e))
+      }
+      // Clear the message input for this field
+      setRefineMessage(prev => { const next = { ...prev }; delete next[field.id]; return next })
+    } catch (err) {
+      setRefineError(err instanceof Error ? err.message : 'Network error.')
+    } finally {
+      setRefiningFieldId(null)
     }
   }
 
@@ -1248,12 +1309,41 @@ export default function ProjectPage() {
                               )
                             }
 
-                            // AI-generated structured field
+                            // AI-generated structured field — with version toggle + refine UI
+                            const isRefining = refiningFieldId === field.id
+                            const userHistory = (field.chat_history || []).filter(m => m.role === 'user')
                             return (
                               <div key={field.id} className="px-5 py-5">
-                                <div className="flex items-center justify-between mb-3">
-                                  <p className="text-xs font-semibold text-gray-200 uppercase tracking-wide">{field.field_label}</p>
-                                  <div className="flex items-center gap-3">
+
+                                {/* Field header: label + version toggle + word count + copy */}
+                                <div className="flex items-start justify-between mb-3 gap-3">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="text-xs font-semibold text-gray-200 uppercase tracking-wide">{field.field_label}</p>
+                                    {/* Version toggle — only show when refinements exist */}
+                                    {(field.version_b || field.version_c) && (
+                                      <div className="flex items-center gap-1">
+                                        {(['a', 'b', 'c'] as const).map(v => {
+                                          const hasV = v === 'a' ? !!field.version_a : v === 'b' ? !!field.version_b : !!field.version_c
+                                          if (!hasV) return null
+                                          const isActive = (field.selected || 'a') === v
+                                          return (
+                                            <button key={v} onClick={() => switchVersion(field.id, v)}
+                                              className={`text-xs px-2 py-0.5 rounded border font-medium uppercase transition-colors ${
+                                                isActive
+                                                  ? 'bg-indigo-600 border-indigo-500 text-white'
+                                                  : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200'
+                                              }`}>
+                                              {v}
+                                            </button>
+                                          )
+                                        })}
+                                        {(field.selected || 'a') !== 'a' && (
+                                          <span className="text-xs text-indigo-400 ml-0.5">refined</span>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-3 flex-shrink-0">
                                     {field.word_limit && (
                                       <span className={`text-xs tabular-nums ${overLimit ? 'text-red-400' : 'text-gray-500'}`}>
                                         {wordCount} / {field.word_limit}w
@@ -1265,9 +1355,55 @@ export default function ProjectPage() {
                                     </button>
                                   </div>
                                 </div>
-                                <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">
+
+                                {/* Field content */}
+                                <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap mb-4">
                                   {content || <span className="italic text-gray-600">Not yet generated</span>}
                                 </p>
+
+                                {/* Refinement history — compact log of past instructions */}
+                                {userHistory.length > 0 && (
+                                  <div className="mb-3 space-y-1.5">
+                                    {userHistory.map((msg, i) => (
+                                      <div key={i} className="flex items-center gap-2 text-xs text-gray-500">
+                                        <span className="text-gray-700">↺</span>
+                                        <span className="italic">"{msg.content}"</span>
+                                        {msg.version_created && (
+                                          <span className="text-indigo-500 font-medium uppercase">→ {msg.version_created}</span>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {/* Refine with AI — input + button */}
+                                {refineError && refiningFieldId === null && (
+                                  <p className="text-xs text-red-400 mb-2">{refineError}</p>
+                                )}
+                                <div className="flex gap-2">
+                                  <input
+                                    value={refineMessage[field.id] || ''}
+                                    onChange={e => setRefineMessage(prev => ({ ...prev, [field.id]: e.target.value }))}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter' && !e.shiftKey) {
+                                        e.preventDefault()
+                                        refineField(field, dirId)
+                                      }
+                                    }}
+                                    placeholder={`Refine with AI — e.g. "make this punchier" or "cut to ${field.word_limit ? field.word_limit + ' words' : '100 words'}"`}
+                                    disabled={isRefining}
+                                    className="flex-1 bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors disabled:opacity-50"
+                                  />
+                                  <button
+                                    onClick={() => refineField(field, dirId)}
+                                    disabled={isRefining || !refineMessage[field.id]?.trim()}
+                                    className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2 flex-shrink-0"
+                                  >
+                                    {isRefining ? (
+                                      <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Refining…</>
+                                    ) : 'Refine →'}
+                                  </button>
+                                </div>
                               </div>
                             )
                           })}
