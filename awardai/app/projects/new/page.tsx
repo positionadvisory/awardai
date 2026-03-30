@@ -61,7 +61,7 @@ export default function NewProjectPage() {
         combined_text: form.brief.trim() || null,
         target_shows: form.target_shows,
         org_id: profile.org_id,
-        created_by: user?.id,
+        user_id: user?.id,
         status: 'draft',
       })
       .select('id')
