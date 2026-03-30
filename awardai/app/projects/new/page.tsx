@@ -1,79 +1,49 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
 
-const AWARD_SHOWS = [
-  'Cannes Lions', 'D&AD', 'Clio Awards', 'One Show', 'Effies',
-  'Spikes Asia', 'Dubai Lynx', 'London International Awards',
-  'WARC Awards', 'Creative Circle', 'Campaign Big Awards',
-  'Epica Awards', 'New York Festivals', 'Eurobest',
-]
+type Project = {
+  id: number
+  campaign_name: string
+  client_name: string | null
+  status: string
+  created_at: string
+  target_shows: string[]
+}
 
-export default function NewProjectPage() {
+export default function ProjectsPage() {
   const { user, loading } = useAuth()
   const router = useRouter()
-  const [form, setForm] = useState({
-    campaign_name: '',
-    client_name: '',
-    brief: '',
-    target_shows: [] as string[],
-  })
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
+  const [projects, setProjects] = useState<Project[]>([])
+  const [fetching, setFetching] = useState(true)
 
-  const toggleShow = (show: string) => {
-    setForm(f => ({
-      ...f,
-      target_shows: f.target_shows.includes(show)
-        ? f.target_shows.filter(s => s !== show)
-        : [...f.target_shows, show],
-    }))
-  }
+  useEffect(() => {
+    if (!user) return
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!form.campaign_name.trim()) {
-      setError('Project name is required.')
-      return
-    }
-    setSaving(true)
-    setError('')
-
-    const { data: profile } = await supabase
+    supabase
       .from('profiles')
       .select('org_id')
-      .eq('id', user?.id)
+      .eq('id', user.id)
       .single()
-
-    if (!profile?.org_id) {
-      setError('Could not find your organisation. Please contact support.')
-      setSaving(false)
-      return
-    }
-
-    const { data, error: insertError } = await supabase
-      .from('projects')
-      .insert({
-        campaign_name: form.campaign_name.trim(),
-        client_name: form.client_name.trim() || null,
-        combined_text: form.brief.trim() || null,
-        target_shows: form.target_shows,
-        org_id: profile.org_id,
-        user_id: user?.id,
-        status: 'draft',
+      .then(({ data: profile }) => {
+        if (!profile?.org_id) { setFetching(false); return }
+        return supabase
+          .from('projects')
+          .select('id, campaign_name, client_name, status, created_at, target_shows')
+          .eq('org_id', profile.org_id)
+          .order('created_at', { ascending: false })
       })
-      .select('id')
-      .single()
+      .then((result) => {
+        if (result && !result.error && result.data) setProjects(result.data)
+        setFetching(false)
+      })
+  }, [user])
 
-    if (insertError) {
-      setError(insertError.message)
-      setSaving(false)
-      return
-    }
-
-    router.push(`/projects/${data.id}`)
+  const handleSignOut = async () => {
+    await supabase.auth.signOut()
+    router.push('/login')
   }
 
   if (loading) return (
@@ -84,102 +54,96 @@ export default function NewProjectPage() {
 
   return (
     <div className="min-h-screen bg-gray-100 text-gray-900">
-      <header className="border-b border-gray-200 bg-white px-6 py-4 flex items-center gap-4">
+      <header className="border-b border-gray-200 bg-white px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-7 h-7 rounded-lg bg-green-800 flex items-center justify-center">
+            <span className="text-xs font-bold text-white">A</span>
+          </div>
+          <span className="font-semibold text-gray-900">AwardAI</span>
+        </div>
         <button
-          onClick={() => router.push('/projects')}
-          className="text-gray-500 hover:text-gray-900 transition-colors text-sm"
+          onClick={handleSignOut}
+          className="text-sm text-gray-500 hover:text-gray-900 transition-colors"
         >
-          ← Projects
+          Sign out
         </button>
-        <span className="text-gray-300">|</span>
-        <span className="text-sm font-medium text-gray-900">New Project</span>
       </header>
 
-      <main className="max-w-2xl mx-auto px-6 py-10">
-        <h1 className="text-2xl font-semibold text-gray-900 mb-8">Create Project</h1>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
+      <main className="max-w-5xl mx-auto px-6 py-10">
+        <div className="flex items-center justify-between mb-8">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Project name <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={form.campaign_name}
-              onChange={e => setForm(f => ({ ...f, campaign_name: e.target.value }))}
-              placeholder="e.g. Nothing But Sheer Joy"
-              className="w-full bg-white border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
-            />
+            <h1 className="text-2xl font-semibold text-gray-900">Projects</h1>
+            <p className="text-gray-400 text-sm mt-1">Manage your award entry projects</p>
           </div>
+          <button
+            onClick={() => router.push('/projects/new')}
+            className="bg-green-800 hover:bg-green-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          >
+            + New Project
+          </button>
+        </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Client name
-            </label>
-            <input
-              type="text"
-              value={form.client_name}
-              onChange={e => setForm(f => ({ ...f, client_name: e.target.value }))}
-              placeholder="e.g. BMW"
-              className="w-full bg-white border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Campaign brief
-            </label>
-            <textarea
-              value={form.brief}
-              onChange={e => setForm(f => ({ ...f, brief: e.target.value }))}
-              rows={7}
-              placeholder="Describe the campaign — what it was, what it achieved, who it was for, and any standout results. You can upload supporting files after creating the project."
-              className="w-full bg-white border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors resize-none"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              Target award shows
-              <span className="text-gray-400 font-normal ml-2">— select all that apply</span>
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {AWARD_SHOWS.map(show => (
-                <button
-                  key={show}
-                  type="button"
-                  onClick={() => toggleShow(show)}
-                  className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                    form.target_shows.includes(show)
-                      ? 'bg-green-800 border-green-700 text-white'
-                      : 'bg-white border-gray-300 text-gray-500 hover:border-green-600 hover:text-green-700'
-                  }`}
-                >
-                  {show}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {error && <p className="text-red-600 text-sm">{error}</p>}
-
-          <div className="flex gap-3 pt-2">
+        {fetching ? (
+          <div className="text-gray-400 text-sm">Loading projects…</div>
+        ) : projects.length === 0 ? (
+          <div className="border border-dashed border-gray-300 rounded-xl p-16 text-center">
+            <p className="text-gray-400 text-sm mb-4">No projects yet</p>
             <button
-              type="submit"
-              disabled={saving}
-              className="bg-green-800 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-medium px-6 py-2.5 rounded-lg transition-colors"
+              onClick={() => router.push('/projects/new')}
+              className="bg-green-800 hover:bg-green-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
             >
-              {saving ? 'Creating…' : 'Create Project'}
-            </button>
-            <button
-              type="button"
-              onClick={() => router.push('/projects')}
-              className="text-gray-500 hover:text-gray-900 text-sm px-4 py-2.5 transition-colors"
-            >
-              Cancel
+              Create your first project
             </button>
           </div>
-        </form>
+        ) : (
+          <div className="grid gap-3">
+            {projects.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => router.push(`/projects/${p.id}`)}
+                className="w-full text-left bg-white hover:bg-gray-50 border border-gray-200 rounded-xl p-5 transition-colors"
+              >
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h2 className="font-medium text-gray-900">{p.campaign_name}</h2>
+                    {p.client_name && (
+                      <p className="text-gray-500 text-sm mt-0.5">{p.client_name}</p>
+                    )}
+                    {p.target_shows?.length > 0 && (
+                      <div className="flex gap-2 mt-2 flex-wrap">
+                        {p.target_shows.slice(0, 3).map((show) => (
+                          <span
+                            key={show}
+                            className="text-xs bg-green-50 text-green-800 border border-green-200 px-2 py-0.5 rounded-full"
+                          >
+                            {show}
+                          </span>
+                        ))}
+                        {p.target_shows.length > 3 && (
+                          <span className="text-xs text-gray-400">+{p.target_shows.length - 3} more</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium flex-shrink-0 ${
+                    p.status === 'active'
+                      ? 'bg-green-100 text-green-700'
+                      : p.status === 'final'
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {p.status}
+                  </span>
+                </div>
+                <p className="text-gray-400 text-xs mt-3">
+                  Created {new Date(p.created_at).toLocaleDateString('en-GB', {
+                    day: 'numeric', month: 'short', year: 'numeric'
+                  })}
+                </p>
+              </button>
+            ))}
+          </div>
+        )}
       </main>
     </div>
   )
