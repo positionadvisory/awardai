@@ -339,6 +339,7 @@ type Evaluation = {
   recommendations: string
   model_used: string | null
   created_at: string
+  eval_chat_history?: ChatMessage[]
 }
 
 type Tab = 'brief' | 'materials' | 'entries' | 'script' | 'directions'
@@ -445,6 +446,12 @@ export default function ProjectPage() {
   const [evaluateError, setEvaluateError] = useState('')
   const [evaluatingForDirectionId, setEvaluatingForDirectionId] = useState<number | null>(null)
 
+  // Evaluation chat — keyed by directionId
+  const [evalChatOpen, setEvalChatOpen] = useState<Record<number, boolean>>({})
+  const [evalChatInput, setEvalChatInput] = useState<Record<number, string>>({})
+  const [evalChatting, setEvalChatting] = useState<Record<number, boolean>>({})
+  const [evalChatHistory, setEvalChatHistory] = useState<Record<number, ChatMessage[]>>({})
+
   // Uploaded entry text expand/collapse in Entries tab
   const [expandedEntryFields, setExpandedEntryFields] = useState<Record<number, boolean>>({})
 
@@ -539,13 +546,19 @@ export default function ProjectPage() {
 
       if (evals && evals.length > 0 && draftsList.length > 0) {
         const evalMap: Record<number, Evaluation> = {}
+        const chatMap: Record<number, ChatMessage[]> = {}
         for (const ev of evals) {
           const relatedDraft = draftsList.find(d => d.id === ev.entry_draft_id)
           if (relatedDraft && !evalMap[relatedDraft.direction_id]) {
             evalMap[relatedDraft.direction_id] = ev
+            // Restore persisted eval chat history if present
+            if (ev.eval_chat_history && Array.isArray(ev.eval_chat_history) && ev.eval_chat_history.length > 0) {
+              chatMap[relatedDraft.direction_id] = ev.eval_chat_history
+            }
           }
         }
         setEvaluations(evalMap)
+        if (Object.keys(chatMap).length > 0) setEvalChatHistory(chatMap)
       }
 
       setFetching(false)
@@ -828,6 +841,9 @@ export default function ProjectPage() {
       if (!res.ok || data.error) { setEvaluateError(data.error || `Error ${res.status}`); return }
       if (data.evaluation) {
         setEvaluations(prev => ({ ...prev, [directionId]: data.evaluation }))
+        // Reset eval chat history when a fresh evaluation is run
+        setEvalChatHistory(prev => { const next = { ...prev }; delete next[directionId]; return next })
+        setEvalChatOpen(prev => { const next = { ...prev }; delete next[directionId]; return next })
       }
     } catch (err) {
       setEvaluateError(err instanceof Error ? err.message : 'Network error.')
@@ -944,6 +960,9 @@ export default function ProjectPage() {
       }
       if (data.evaluation) {
         setEvaluations(prev => ({ ...prev, [dir.id]: data.evaluation }))
+        // Reset eval chat on fresh quick-evaluation
+        setEvalChatHistory(prev => { const next = { ...prev }; delete next[dir.id]; return next })
+        setEvalChatOpen(prev => { const next = { ...prev }; delete next[dir.id]; return next })
       }
 
       setShowQuickEvalModal(false)
@@ -1099,6 +1118,61 @@ export default function ProjectPage() {
       setSuggestCategoryError(err instanceof Error ? err.message : 'Network error.')
     } finally {
       setSuggestingCategories(false)
+    }
+  }
+
+  // Send a message to the evaluation chat for a given direction
+  const sendEvalChat = async (dirId: number) => {
+    const evaluation = evaluations[dirId]
+    if (!evaluation) return
+    const msg = (evalChatInput[dirId] || '').trim()
+    if (!msg) return
+
+    const currentHistory = evalChatHistory[dirId] || []
+    setEvalChatting(prev => ({ ...prev, [dirId]: true }))
+    setEvalChatInput(prev => ({ ...prev, [dirId]: '' }))
+
+    try {
+      const accessToken = await getToken()
+      if (!accessToken) return
+
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat-evaluation`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          },
+          body: JSON.stringify({
+            evaluation_id: evaluation.id,
+            message: msg,
+            chat_history: currentHistory,
+          }),
+        }
+      )
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        // Show error inline without disrupting the chat
+        const errMsg = data.error || `Error ${res.status}`
+        setEvalChatHistory(prev => ({
+          ...prev,
+          [dirId]: [...currentHistory, { role: 'user', content: msg }, { role: 'assistant', content: `⚠ ${errMsg}` }],
+        }))
+        return
+      }
+      if (data.chat_history) {
+        setEvalChatHistory(prev => ({ ...prev, [dirId]: data.chat_history }))
+      }
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : 'Network error.'
+      setEvalChatHistory(prev => ({
+        ...prev,
+        [dirId]: [...currentHistory, { role: 'user', content: msg }, { role: 'assistant', content: `⚠ ${errMsg}` }],
+      }))
+    } finally {
+      setEvalChatting(prev => ({ ...prev, [dirId]: false }))
     }
   }
 
@@ -1735,6 +1809,103 @@ export default function ProjectPage() {
                               <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">Recommendations</p>
                               <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{evaluation.recommendations}</p>
                             </div>
+                          </div>
+                        )}
+
+                        {/* Evaluation Chat */}
+                        {evaluation && (
+                          <div className="px-5 py-4 border-b border-gray-200 bg-white">
+                            <button
+                              onClick={() => setEvalChatOpen(prev => ({ ...prev, [dirId]: !prev[dirId] }))}
+                              className="flex items-center gap-2 text-sm font-medium text-green-700 hover:text-green-600 transition-colors"
+                            >
+                              <span>✦ Ask about this evaluation</span>
+                              <span className="text-gray-400 text-xs">{evalChatOpen[dirId] ? '↑' : '↓'}</span>
+                              {(evalChatHistory[dirId] || []).length > 0 && !evalChatOpen[dirId] && (
+                                <span className="bg-green-100 text-green-800 text-xs px-1.5 py-0.5 rounded-full leading-none ml-1">
+                                  {Math.floor((evalChatHistory[dirId] || []).length / 2)} message{Math.floor((evalChatHistory[dirId] || []).length / 2) !== 1 ? 's' : ''}
+                                </span>
+                              )}
+                            </button>
+
+                            {evalChatOpen[dirId] && (
+                              <div className="mt-4">
+                                {/* Message thread */}
+                                {(evalChatHistory[dirId] || []).length === 0 ? (
+                                  <div className="mb-4">
+                                    <p className="text-xs text-gray-400 mb-3">Ask me anything about your scores, what to improve, or how this compares to what wins here.</p>
+                                    {/* Prompt starters */}
+                                    <div className="flex flex-wrap gap-2">
+                                      {[
+                                        'Why did I score low on Insight?',
+                                        'What would a winning entry do differently?',
+                                        'How can I improve my Results section?',
+                                        'What is the jury at this show looking for?',
+                                      ].map(prompt => (
+                                        <button
+                                          key={prompt}
+                                          onClick={() => {
+                                            setEvalChatInput(prev => ({ ...prev, [dirId]: prompt }))
+                                          }}
+                                          className="text-xs text-green-700 border border-green-200 hover:bg-green-50 px-3 py-1.5 rounded-lg transition-colors"
+                                        >
+                                          {prompt}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="space-y-3 mb-4 max-h-96 overflow-y-auto pr-1">
+                                    {(evalChatHistory[dirId] || []).map((msg, i) => (
+                                      <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                        <div className={`max-w-[85%] rounded-xl px-3.5 py-2.5 text-sm leading-relaxed ${
+                                          msg.role === 'user'
+                                            ? 'bg-green-800 text-white'
+                                            : 'bg-gray-50 border border-gray-200 text-gray-700'
+                                        }`}>
+                                          {msg.content}
+                                        </div>
+                                      </div>
+                                    ))}
+                                    {evalChatting[dirId] && (
+                                      <div className="flex justify-start">
+                                        <div className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 flex items-center gap-1.5">
+                                          <svg className="animate-spin h-3.5 w-3.5 text-green-700" viewBox="0 0 24 24" fill="none">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                                          </svg>
+                                          <span className="text-xs text-gray-400">Thinking…</span>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Input row */}
+                                <div className="flex gap-2">
+                                  <input
+                                    value={evalChatInput[dirId] || ''}
+                                    onChange={e => setEvalChatInput(prev => ({ ...prev, [dirId]: e.target.value }))}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter' && !e.shiftKey && !evalChatting[dirId]) {
+                                        e.preventDefault()
+                                        sendEvalChat(dirId)
+                                      }
+                                    }}
+                                    placeholder="Ask about your scores, what to improve, or what wins here…"
+                                    className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
+                                    disabled={evalChatting[dirId]}
+                                  />
+                                  <button
+                                    onClick={() => sendEvalChat(dirId)}
+                                    disabled={evalChatting[dirId] || !(evalChatInput[dirId] || '').trim()}
+                                    className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors flex-shrink-0"
+                                  >
+                                    Send
+                                  </button>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
 
