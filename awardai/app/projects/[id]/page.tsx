@@ -318,6 +318,8 @@ type EntryDraft = {
   chat_history: ChatMessage[] | null
   award_show: string | null
   category: string | null
+  draft_generation: number       // which generation this draft belongs to (1 = first, 2 = first improvement, etc.)
+  created_at?: string
 }
 
 type EvaluationScores = {
@@ -457,6 +459,8 @@ export default function ProjectPage() {
 
   // Uploaded entry text expand/collapse in Entries tab
   const [expandedEntryFields, setExpandedEntryFields] = useState<Record<number, boolean>>({})
+  // Draft version history expand/collapse — keyed by directionId
+  const [expandedDraftHistory, setExpandedDraftHistory] = useState<Record<number, boolean>>({})
 
   // Phase 2 — field refinement via edit-entry Edge Function
   const [refineMessage, setRefineMessage] = useState<Record<number, string>>({})
@@ -485,10 +489,14 @@ export default function ProjectPage() {
   const [scriptFileError, setScriptFileError] = useState('')
   // Track last reviewed show/category so button reactivates when user changes them
   const [lastReviewedParams, setLastReviewedParams] = useState<{ show: string; category: string } | null>(null)
-  // Generate mode: source selector ('all' = all project context, 'material' = specific material, 'entry' = entry draft)
+  // Script tab: source selector
   const [scriptSourceType, setScriptSourceType] = useState<'all' | 'material' | 'entry'>('all')
   const [scriptSourceMaterialIdx, setScriptSourceMaterialIdx] = useState<number>(-1)
   const [scriptSourceEntryDirectionId, setScriptSourceEntryDirectionId] = useState<number>(-1)
+  // Directions tab: source selector (same pattern)
+  const [dirSourceType, setDirSourceType] = useState<'all' | 'material' | 'entry'>('all')
+  const [dirSourceMaterialIdx, setDirSourceMaterialIdx] = useState<number>(-1)
+  const [dirSourceEntryDirectionId, setDirSourceEntryDirectionId] = useState<number>(-1)
   // KB awards count for Script Analysis subheadline
   const [kbCount, setKbCount] = useState<number>(0)
 
@@ -782,12 +790,25 @@ export default function ProjectPage() {
     try {
       const accessToken = await getToken()
       if (!accessToken) return
+
+      // Resolve context_override from source selector (same pattern as generateScript)
+      let dirContextOverride: string | undefined
+      if (dirSourceType === 'material') {
+        const mats = (project.materials || []).filter((m: { extracted_text?: string }) => m.extracted_text)
+        dirContextOverride = mats[dirSourceMaterialIdx]?.extracted_text || undefined
+      } else if (dirSourceType === 'entry' && dirSourceEntryDirectionId > -1) {
+        dirContextOverride = getEntryDraftContent(dirSourceEntryDirectionId) || undefined
+      }
+
+      const body: Record<string, unknown> = { project_id: project.id }
+      if (dirContextOverride?.trim()) body.context_override = dirContextOverride
+
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-directions`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}`, 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
-          body: JSON.stringify({ project_id: project.id }),
+          body: JSON.stringify(body),
         }
       )
       const data = await res.json()
@@ -798,7 +819,7 @@ export default function ProjectPage() {
     } finally { setGenerating(false) }
   }
 
-  const generateDraft = async (directionId: number) => {
+  const generateDraft = async (directionId: number, evaluationId?: number) => {
     if (!project) return
     setGeneratingDraft(true)
     setGenerateDraftError('')
@@ -806,18 +827,23 @@ export default function ProjectPage() {
     try {
       const accessToken = await getToken()
       if (!accessToken) return
+      const body: Record<string, unknown> = { project_id: project.id, direction_id: directionId }
+      if (evaluationId) body.evaluation_id = evaluationId
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-draft`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}`, 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
-          body: JSON.stringify({ project_id: project.id, direction_id: directionId }),
+          body: JSON.stringify(body),
         }
       )
       const data = await res.json()
       if (!res.ok || data.error) { setGenerateDraftError(data.error || `Error ${res.status}`); return }
-      setEntries(prev => [...prev.filter(e => e.direction_id !== directionId), ...(data.entry_drafts || [])])
-      setEvaluations(prev => { const next = { ...prev }; delete next[directionId]; return next })
+      if (data.entry_drafts?.length) {
+        // Append new generation — old drafts remain in state for history display
+        setEntries(prev => [...prev, ...data.entry_drafts])
+        // Note: evaluations are NOT cleared — they belong to their specific generation rows
+      }
       setTab('entries')
     } catch (err) {
       setGenerateDraftError(err instanceof Error ? err.message : 'Network error.')
@@ -1568,19 +1594,69 @@ export default function ProjectPage() {
         {/* ── DIRECTIONS ── */}
         {tab === 'directions' && (
           <div>
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-sm font-medium text-gray-700">Award Directions</h2>
                 <p className="text-gray-400 text-xs mt-0.5">AI-recommended show and category combinations. Generate a draft from any direction, then evaluate it.</p>
               </div>
-              <button onClick={generateDirections} disabled={generating || (!project.combined_text && !(project.materials || []).some(m => m.extracted_text))}
-                title={(!project.combined_text && !(project.materials || []).some(m => m.extracted_text)) ? 'Add a brief or upload materials first' : ''}
+              <button onClick={generateDirections} disabled={generating || (!project.combined_text && !(project.materials || []).some((m: { extracted_text?: string }) => m.extracted_text))}
+                title={(!project.combined_text && !(project.materials || []).some((m: { extracted_text?: string }) => m.extracted_text)) ? 'Add a brief or upload materials first' : ''}
                 className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
                 {generating ? (
                   <><svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Generating…</>
                 ) : directions.length > 0 ? 'Regenerate Directions' : 'Generate Directions'}
               </button>
             </div>
+
+            {/* Directions source selector — only when materials or entries exist */}
+            {(() => {
+              const mats = (project.materials || []).filter((m: { extracted_text?: string }) => m.extracted_text)
+              const entryDirIds = Array.from(new Set(entries.map(e => e.direction_id)))
+              if (mats.length === 0 && entryDirIds.length === 0) return null
+              return (
+                <div className="bg-white border border-gray-200 rounded-xl p-4 mb-5">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Direction Source</p>
+                  <div className="space-y-2">
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input type="radio" name="dirSource" checked={dirSourceType === 'all'}
+                        onChange={() => setDirSourceType('all')} className="mt-0.5 accent-green-700" />
+                      <div>
+                        <p className="text-sm text-gray-900">All project context</p>
+                        <p className="text-xs text-gray-400">Brief + all uploaded materials</p>
+                      </div>
+                    </label>
+                    {mats.map((m: { name: string; extracted_text?: string }, i: number) => (
+                      <label key={i} className="flex items-start gap-3 cursor-pointer">
+                        <input type="radio" name="dirSource"
+                          checked={dirSourceType === 'material' && dirSourceMaterialIdx === i}
+                          onChange={() => { setDirSourceType('material'); setDirSourceMaterialIdx(i) }}
+                          className="mt-0.5 accent-green-700" />
+                        <div>
+                          <p className="text-sm text-gray-900">{m.name}</p>
+                          <p className="text-xs text-gray-400">{(m.extracted_text || '').trim().split(/\s+/).filter(Boolean).length.toLocaleString()} words</p>
+                        </div>
+                      </label>
+                    ))}
+                    {entryDirIds.map(eid => {
+                      const dir = directions.find(d => d.id === eid)
+                      const label = dir ? `${dir.best_show} · ${dir.best_category}` : `Entry ${eid}`
+                      return (
+                        <label key={eid} className="flex items-start gap-3 cursor-pointer">
+                          <input type="radio" name="dirSource"
+                            checked={dirSourceType === 'entry' && dirSourceEntryDirectionId === eid}
+                            onChange={() => { setDirSourceType('entry'); setDirSourceEntryDirectionId(eid) }}
+                            className="mt-0.5 accent-green-700" />
+                          <div>
+                            <p className="text-sm text-gray-900">Entry draft — {label}</p>
+                            <p className="text-xs text-gray-400">Completed draft entry</p>
+                          </div>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })()}
 
             {generateError && <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3"><p className="text-red-600 text-sm">{generateError}</p></div>}
             {generateDraftError && <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3"><p className="text-red-600 text-sm">{generateDraftError}</p></div>}
@@ -1699,7 +1775,15 @@ export default function ProjectPage() {
               <div className="space-y-8">
                 {Array.from(new Set(entries.map(e => e.direction_id))).map(dirId => {
                     const d = directions.find(dir => dir.id === dirId)
-                    const fields = entries.filter(e => e.direction_id === dirId)
+                    const allDirEntries = entries.filter(e => e.direction_id === dirId)
+                    // Split by generation: current (latest) vs historical
+                    const maxGen = allDirEntries.length > 0 ? Math.max(...allDirEntries.map(e => e.draft_generation ?? 1)) : 1
+                    const fields = allDirEntries.filter(e => (e.draft_generation ?? 1) === maxGen)
+                    // Group historical generations: each group is an array of fields, sorted desc
+                    const historyGens: number[] = [...new Set(allDirEntries.map(e => e.draft_generation ?? 1))]
+                      .filter(g => g < maxGen).sort((a, b) => b - a)
+                    const historyByGen: Record<number, typeof allDirEntries> = {}
+                    for (const g of historyGens) historyByGen[g] = allDirEntries.filter(e => (e.draft_generation ?? 1) === g)
                     const dirName = d?.name || `${fields[0]?.award_show || ''} — ${fields[0]?.category || ''}`.replace(/^ — $/, 'Entry')
                     const dirShow = d?.best_show || fields[0]?.award_show || null
                     const dirCategory = d?.best_category || fields[0]?.category || null
@@ -1852,6 +1936,24 @@ export default function ProjectPage() {
                               <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">Recommendations</p>
                               <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{evaluation.recommendations}</p>
                             </div>
+
+                            {/* Generate Improved Draft — prominent CTA anchored to this evaluation */}
+                            <div className="mt-5 pt-4 border-t border-gray-200">
+                              <button
+                                onClick={() => generateDraft(dirId, evaluation.id)}
+                                disabled={generatingDraft || evaluating}
+                                className="w-full bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-5 py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
+                              >
+                                {isGeneratingThis ? (
+                                  <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Writing improved draft…</>
+                                ) : (
+                                  <>✦ Generate Improved Draft from this {evaluation.evaluation_mode === 'coach' ? 'Coach Review' : 'Jury Evaluation'}</>
+                                )}
+                              </button>
+                              <p className="text-xs text-gray-400 text-center mt-2">
+                                The new draft will directly address every gap and recommendation above. Previous drafts are kept for comparison.
+                              </p>
+                            </div>
                           </div>
                         )}
 
@@ -1906,7 +2008,8 @@ export default function ProjectPage() {
                                             ? 'bg-green-800 text-white'
                                             : 'bg-gray-50 border border-gray-200 text-gray-700'
                                         }`}>
-                                          {msg.content}
+                                          {/* Render line breaks and preserve paragraph spacing */}
+                                          <span className="whitespace-pre-wrap">{msg.content}</span>
                                         </div>
                                       </div>
                                     ))}
@@ -2083,6 +2186,50 @@ export default function ProjectPage() {
                             )
                           })}
                         </div>
+
+                        {/* Draft version history — collapsed by default */}
+                        {historyGens.length > 0 && (
+                          <div className="border-t border-gray-100">
+                            <button
+                              onClick={() => setExpandedDraftHistory(prev => ({ ...prev, [dirId]: !prev[dirId] }))}
+                              className="w-full flex items-center justify-between px-5 py-3 text-xs text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors"
+                            >
+                              <span>{historyGens.length} previous draft{historyGens.length !== 1 ? 's' : ''} — click to compare</span>
+                              <span>{expandedDraftHistory[dirId] ? '↑ Hide' : '↓ Show'}</span>
+                            </button>
+                            {expandedDraftHistory[dirId] && (
+                              <div className="divide-y divide-gray-100 bg-gray-50">
+                                {historyGens.map(gen => {
+                                  const genFields = historyByGen[gen]
+                                  const genDate = genFields[0]?.created_at
+                                    ? new Date(genFields[0].created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                                    : null
+                                  return (
+                                    <div key={gen} className="px-5 py-4">
+                                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
+                                        Draft v{gen}{genDate ? ` · ${genDate}` : ''}
+                                      </p>
+                                      <div className="space-y-3">
+                                        {genFields.map(field => {
+                                          const histContent = field.custom_text?.trim()
+                                            || (field.selected ? (field[`version_${field.selected}` as keyof EntryDraft] as string) : null)
+                                            || field.version_a || ''
+                                          return (
+                                            <div key={field.id}>
+                                              <p className="text-xs font-medium text-gray-500 mb-1">{field.field_label}</p>
+                                              <p className="text-sm text-gray-500 leading-relaxed line-clamp-3">{histContent}</p>
+                                            </div>
+                                          )
+                                        })}
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                       </div>
                     )
                   })}
