@@ -1780,7 +1780,7 @@ export default function ProjectPage() {
                     const maxGen = allDirEntries.length > 0 ? Math.max(...allDirEntries.map(e => e.draft_generation ?? 1)) : 1
                     const fields = allDirEntries.filter(e => (e.draft_generation ?? 1) === maxGen)
                     // Group historical generations: each group is an array of fields, sorted desc
-                    const historyGens: number[] = [...new Set(allDirEntries.map(e => e.draft_generation ?? 1))]
+                    const historyGens: number[] = Array.from(new Set(allDirEntries.map(e => e.draft_generation ?? 1)))
                       .filter(g => g < maxGen).sort((a, b) => b - a)
                     const historyByGen: Record<number, typeof allDirEntries> = {}
                     for (const g of historyGens) historyByGen[g] = allDirEntries.filter(e => (e.draft_generation ?? 1) === g)
