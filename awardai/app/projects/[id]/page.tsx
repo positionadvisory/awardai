@@ -1202,7 +1202,7 @@ export default function ProjectPage() {
         const errMsg = data.error || `Error ${res.status}`
         setEvalChatHistory(prev => ({
           ...prev,
-          [dirId]: [...currentHistory, { role: 'user', content: msg }, { role: 'assistant', content: `⚠ ${errMsg}` }],
+          [dirId]: [...(prev[dirId] || []), { role: 'user', content: msg }, { role: 'assistant', content: `⚠ ${errMsg}` }],
         }))
         return
       }
@@ -1213,7 +1213,7 @@ export default function ProjectPage() {
       const errMsg = err instanceof Error ? err.message : 'Network error.'
       setEvalChatHistory(prev => ({
         ...prev,
-        [dirId]: [...currentHistory, { role: 'user', content: msg }, { role: 'assistant', content: `⚠ ${errMsg}` }],
+        [dirId]: [...(prev[dirId] || []), { role: 'user', content: msg }, { role: 'assistant', content: `⚠ ${errMsg}` }],
       }))
     } finally {
       setEvalChatting(prev => ({ ...prev, [dirId]: false }))
