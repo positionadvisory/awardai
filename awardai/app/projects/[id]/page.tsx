@@ -1173,7 +1173,6 @@ export default function ProjectPage() {
     const msg = (evalChatInput[dirId] || '').trim()
     if (!msg) return
 
-    const currentHistory = evalChatHistory[dirId] || []
     setEvalChatting(prev => ({ ...prev, [dirId]: true }))
     setEvalChatInput(prev => ({ ...prev, [dirId]: '' }))
 
@@ -1193,7 +1192,7 @@ export default function ProjectPage() {
           body: JSON.stringify({
             evaluation_id: evaluation.id,
             message: msg,
-            chat_history: currentHistory,
+            // chat_history intentionally omitted — loaded server-side from DB (Phase 2 security)
           }),
         }
       )
