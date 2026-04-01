@@ -340,6 +340,7 @@ type Evaluation = {
   strengths: string[]
   gaps: string[]
   recommendations: string
+  changes_analysis?: string | null
   model_used: string | null
   evaluation_mode?: 'judge' | 'coach'
   created_at: string
@@ -450,6 +451,7 @@ export default function ProjectPage() {
   const [evaluateError, setEvaluateError] = useState('')
   const [evaluatingForDirectionId, setEvaluatingForDirectionId] = useState<number | null>(null)
   const [evaluatingMode, setEvaluatingMode] = useState<Record<number, 'judge' | 'coach'>>({})  // tracks which mode button is spinning
+  const [scoreDeltas, setScoreDeltas] = useState<Record<number, Record<string, number>>>({})    // delta per directionId, set after re-evaluation
 
   // Evaluation chat — keyed by directionId
   const [evalChatOpen, setEvalChatOpen] = useState<Record<number, boolean>>({})
@@ -850,7 +852,7 @@ export default function ProjectPage() {
     } finally { setGeneratingDraft(false); setGeneratingForDirectionId(null) }
   }
 
-  const evaluateEntry = async (directionId: number, mode: 'judge' | 'coach' = 'judge') => {
+  const evaluateEntry = async (directionId: number, mode: 'judge' | 'coach' = 'judge', previousEvaluationId?: number) => {
     if (!project) return
     setEvaluating(true)
     setEvaluateError('')
@@ -859,19 +861,27 @@ export default function ProjectPage() {
     try {
       const accessToken = await getToken()
       if (!accessToken) return
+      const body: Record<string, unknown> = { project_id: project.id, direction_id: directionId, mode }
+      if (previousEvaluationId) body.previous_evaluation_id = previousEvaluationId
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/evaluate-entry`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}`, 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
-          body: JSON.stringify({ project_id: project.id, direction_id: directionId, mode }),
+          body: JSON.stringify(body),
         }
       )
       const data = await res.json()
       if (!res.ok || data.error) { setEvaluateError(data.error || `Error ${res.status}`); return }
       if (data.evaluation) {
-        // Both modes can coexist — store keyed by directionId+mode, display the most recent
         setEvaluations(prev => ({ ...prev, [directionId]: data.evaluation }))
+        // Store score deltas if returned (comparison mode)
+        if (data.score_deltas) {
+          setScoreDeltas(prev => ({ ...prev, [directionId]: data.score_deltas }))
+        } else {
+          // Fresh eval with no previous — clear any stored deltas
+          setScoreDeltas(prev => { const next = { ...prev }; delete next[directionId]; return next })
+        }
         // Reset eval chat when a fresh evaluation is run
         setEvalChatHistory(prev => { const next = { ...prev }; delete next[directionId]; return next })
         setEvalChatOpen(prev => { const next = { ...prev }; delete next[directionId]; return next })
@@ -1790,6 +1800,12 @@ export default function ProjectPage() {
                     const evaluation = evaluations[dirId]
                     const isEvaluatingThis = evaluatingForDirectionId === dirId
                     const isGeneratingThis = generatingForDirectionId === dirId
+                    // Detect when draft has been improved since the last evaluation
+                    const evalDraft = evaluation ? allDirEntries.find(e => e.id === evaluation.entry_draft_id) : null
+                    const evalGeneration = evalDraft?.draft_generation ?? (evaluation ? 1 : maxGen)
+                    const needsReEval = evaluation !== undefined && maxGen > evalGeneration
+                    // Score deltas for this direction (set after a comparison re-evaluation)
+                    const deltas = scoreDeltas[dirId] ?? null
 
                     return (
                       <div key={dirId} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
@@ -1807,7 +1823,7 @@ export default function ProjectPage() {
                           <div className="flex items-center gap-3 flex-shrink-0 flex-wrap justify-end">
                             {/* Jury Evaluation button */}
                             <button
-                              onClick={() => evaluateEntry(dirId, 'judge')}
+                              onClick={() => evaluateEntry(dirId, 'judge', evaluation?.evaluation_mode === 'judge' ? evaluation.id : undefined)}
                               disabled={evaluating || generatingDraft}
                               title="Evaluate the entry as written — mirrors what a jury member sees"
                               className="bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
@@ -1820,7 +1836,7 @@ export default function ProjectPage() {
                             </button>
                             {/* Coach Review button */}
                             <button
-                              onClick={() => evaluateEntry(dirId, 'coach')}
+                              onClick={() => evaluateEntry(dirId, 'coach', evaluation?.evaluation_mode === 'coach' ? evaluation.id : undefined)}
                               disabled={evaluating || generatingDraft}
                               title="Review entry against all brief & materials — identifies what's being undersold"
                               className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
@@ -1860,16 +1876,53 @@ export default function ProjectPage() {
                           </div>
                         </div>
 
+                        {/* Needs re-evaluation notice — shown when draft has been improved since last eval */}
+                        {needsReEval && !isEvaluatingThis && (
+                          <div className="px-5 py-3 bg-amber-50 border-b border-amber-200 flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-2">
+                              <span className="text-amber-600 text-sm">⚡</span>
+                              <p className="text-sm text-amber-800">
+                                Draft updated — re-evaluate to see the impact on scores
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <button
+                                onClick={() => evaluateEntry(dirId, 'judge', evaluation!.id)}
+                                disabled={evaluating || generatingDraft}
+                                className="text-xs font-medium text-amber-800 hover:text-amber-900 border border-amber-300 hover:border-amber-500 bg-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40"
+                              >
+                                ⚖ Re-run Jury Eval
+                              </button>
+                              <button
+                                onClick={() => evaluateEntry(dirId, 'coach', evaluation!.id)}
+                                disabled={evaluating || generatingDraft}
+                                className="text-xs font-medium text-amber-800 hover:text-amber-900 border border-amber-300 hover:border-amber-500 bg-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40"
+                              >
+                                ✦ Re-run Coach Review
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
                         {/* Evaluation panel */}
                         {evaluation && (
                           <div className="px-5 py-5 border-b border-gray-200 bg-gray-50">
                             <div className="flex items-start justify-between mb-4">
                               <div>
-                                <div className="flex items-baseline gap-2">
+                                <div className="flex items-baseline gap-2 flex-wrap">
                                   <span className={`text-4xl font-bold tabular-nums ${scoreColor(evaluation.overall_score)}`}>
                                     {evaluation.overall_score.toFixed(1)}
                                   </span>
                                   <span className="text-gray-400 text-lg">/10</span>
+                                  {/* Overall delta badge */}
+                                  {deltas?.['overall'] !== undefined && deltas['overall'] !== 0 && (
+                                    <span className={`text-sm font-bold tabular-nums px-2 py-0.5 rounded-full ${deltas['overall'] > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                                      {deltas['overall'] > 0 ? `↑ +${deltas['overall']}` : `↓ ${deltas['overall']}`}
+                                    </span>
+                                  )}
+                                  {deltas?.['overall'] === 0 && (
+                                    <span className="text-sm text-gray-400 px-2 py-0.5 rounded-full bg-gray-100">— No change</span>
+                                  )}
                                   {/* Mode badge */}
                                   {evaluation.evaluation_mode === 'coach' ? (
                                     <span className="text-xs font-medium bg-green-100 text-green-800 border border-green-200 px-2 py-0.5 rounded-full">✦ Coach Review</span>
@@ -1891,20 +1944,45 @@ export default function ProjectPage() {
                             <div className="grid grid-cols-3 gap-2 mb-5">
                               {SCORE_DIMENSIONS.map(dim => {
                                 const score = evaluation.scores[dim.key] ?? 0
+                                const delta = deltas?.[dim.key]
                                 return (
                                   <div key={dim.key} className={`border rounded-lg px-3 py-2.5 ${scoreBg(score)}`}>
                                     <p className="text-xs text-gray-500 mb-1">{dim.label}</p>
-                                    <p className={`text-xl font-bold tabular-nums ${scoreColor(score)}`}>{score}</p>
+                                    <div className="flex items-baseline gap-1.5">
+                                      <p className={`text-xl font-bold tabular-nums ${scoreColor(score)}`}>{score}</p>
+                                      {delta !== undefined && delta !== 0 && (
+                                        <span className={`text-xs font-semibold tabular-nums ${delta > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                          {delta > 0 ? `↑+${delta}` : `↓${delta}`}
+                                        </span>
+                                      )}
+                                      {delta === 0 && (
+                                        <span className="text-xs text-gray-400">—</span>
+                                      )}
+                                    </div>
                                   </div>
                                 )
                               })}
                               {/* Brief Alignment — coach mode only */}
-                              {evaluation.scores.brief_alignment !== undefined && (
-                                <div className={`border-2 border-dashed rounded-lg px-3 py-2.5 ${scoreBg(evaluation.scores.brief_alignment)}`}>
-                                  <p className="text-xs text-gray-500 mb-1">Brief Alignment</p>
-                                  <p className={`text-xl font-bold tabular-nums ${scoreColor(evaluation.scores.brief_alignment)}`}>{evaluation.scores.brief_alignment}</p>
-                                </div>
-                              )}
+                              {evaluation.scores.brief_alignment !== undefined && (() => {
+                                const baScore = evaluation.scores.brief_alignment
+                                const baDelta = deltas?.['brief_alignment']
+                                return (
+                                  <div className={`border-2 border-dashed rounded-lg px-3 py-2.5 ${scoreBg(baScore)}`}>
+                                    <p className="text-xs text-gray-500 mb-1">Brief Alignment</p>
+                                    <div className="flex items-baseline gap-1.5">
+                                      <p className={`text-xl font-bold tabular-nums ${scoreColor(baScore)}`}>{baScore}</p>
+                                      {baDelta !== undefined && baDelta !== 0 && (
+                                        <span className={`text-xs font-semibold tabular-nums ${baDelta > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                          {baDelta > 0 ? `↑+${baDelta}` : `↓${baDelta}`}
+                                        </span>
+                                      )}
+                                      {baDelta === 0 && (
+                                        <span className="text-xs text-gray-400">—</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                )
+                              })()}
                             </div>
 
                             <div className="grid grid-cols-2 gap-5 mb-5">
@@ -1936,6 +2014,14 @@ export default function ProjectPage() {
                               <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">Recommendations</p>
                               <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{evaluation.recommendations}</p>
                             </div>
+
+                            {/* Notable changes — shown when a changes_analysis is present (comparison re-evaluation) */}
+                            {evaluation.changes_analysis && (
+                              <div className="mt-5 pt-4 border-t border-gray-200">
+                                <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-2">Notable Changes</p>
+                                <p className="text-sm text-gray-700 leading-relaxed">{evaluation.changes_analysis}</p>
+                              </div>
+                            )}
 
                             {/* Generate Improved Draft — prominent CTA anchored to this evaluation */}
                             <div className="mt-5 pt-4 border-t border-gray-200">
@@ -2186,6 +2272,33 @@ export default function ProjectPage() {
                             )
                           })}
                         </div>
+
+                        {/* Compact re-evaluate bar — always visible at bottom of draft area when an evaluation exists */}
+                        {evaluation && !needsReEval && (
+                          <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
+                            <p className="text-xs text-gray-400">Re-evaluate this draft</p>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => evaluateEntry(dirId, 'judge', evaluation.id)}
+                                disabled={evaluating || generatingDraft}
+                                className="text-xs text-gray-600 hover:text-gray-900 border border-gray-200 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40"
+                              >
+                                {isEvaluatingThis && evaluatingMode[dirId] === 'judge' ? (
+                                  <><svg className="animate-spin h-3 w-3 inline mr-1" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Evaluating…</>
+                                ) : '⚖ Jury Eval'}
+                              </button>
+                              <button
+                                onClick={() => evaluateEntry(dirId, 'coach', evaluation.id)}
+                                disabled={evaluating || generatingDraft}
+                                className="text-xs text-green-700 hover:text-green-900 border border-green-200 hover:border-green-400 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40"
+                              >
+                                {isEvaluatingThis && evaluatingMode[dirId] === 'coach' ? (
+                                  <><svg className="animate-spin h-3 w-3 inline mr-1" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Coaching…</>
+                                ) : '✦ Coach Review'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
 
                         {/* Draft version history — collapsed by default */}
                         {historyGens.length > 0 && (
