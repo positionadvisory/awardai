@@ -327,6 +327,7 @@ type EvaluationScores = {
   execution: number
   results: number
   jury_fit: number
+  brief_alignment?: number  // coach mode only
 }
 
 type Evaluation = {
@@ -338,6 +339,7 @@ type Evaluation = {
   gaps: string[]
   recommendations: string
   model_used: string | null
+  evaluation_mode?: 'judge' | 'coach'
   created_at: string
   eval_chat_history?: ChatMessage[]
 }
@@ -445,6 +447,7 @@ export default function ProjectPage() {
   const [evaluating, setEvaluating] = useState(false)
   const [evaluateError, setEvaluateError] = useState('')
   const [evaluatingForDirectionId, setEvaluatingForDirectionId] = useState<number | null>(null)
+  const [evaluatingMode, setEvaluatingMode] = useState<Record<number, 'judge' | 'coach'>>({})  // tracks which mode button is spinning
 
   // Evaluation chat — keyed by directionId
   const [evalChatOpen, setEvalChatOpen] = useState<Record<number, boolean>>({})
@@ -821,11 +824,12 @@ export default function ProjectPage() {
     } finally { setGeneratingDraft(false); setGeneratingForDirectionId(null) }
   }
 
-  const evaluateEntry = async (directionId: number) => {
+  const evaluateEntry = async (directionId: number, mode: 'judge' | 'coach' = 'judge') => {
     if (!project) return
     setEvaluating(true)
     setEvaluateError('')
     setEvaluatingForDirectionId(directionId)
+    setEvaluatingMode(prev => ({ ...prev, [directionId]: mode }))
     try {
       const accessToken = await getToken()
       if (!accessToken) return
@@ -834,20 +838,25 @@ export default function ProjectPage() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}`, 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
-          body: JSON.stringify({ project_id: project.id, direction_id: directionId }),
+          body: JSON.stringify({ project_id: project.id, direction_id: directionId, mode }),
         }
       )
       const data = await res.json()
       if (!res.ok || data.error) { setEvaluateError(data.error || `Error ${res.status}`); return }
       if (data.evaluation) {
+        // Both modes can coexist — store keyed by directionId+mode, display the most recent
         setEvaluations(prev => ({ ...prev, [directionId]: data.evaluation }))
-        // Reset eval chat history when a fresh evaluation is run
+        // Reset eval chat when a fresh evaluation is run
         setEvalChatHistory(prev => { const next = { ...prev }; delete next[directionId]; return next })
         setEvalChatOpen(prev => { const next = { ...prev }; delete next[directionId]; return next })
       }
     } catch (err) {
       setEvaluateError(err instanceof Error ? err.message : 'Network error.')
-    } finally { setEvaluating(false); setEvaluatingForDirectionId(null) }
+    } finally {
+      setEvaluating(false)
+      setEvaluatingForDirectionId(null)
+      setEvaluatingMode(prev => { const next = { ...prev }; delete next[directionId]; return next })
+    }
   }
 
   const evaluateUploadedEntry = async () => {
@@ -1712,14 +1721,31 @@ export default function ProjectPage() {
                             )}
                           </div>
                           <div className="flex items-center gap-3 flex-shrink-0 flex-wrap justify-end">
+                            {/* Jury Evaluation button */}
                             <button
-                              onClick={() => evaluateEntry(dirId)}
+                              onClick={() => evaluateEntry(dirId, 'judge')}
                               disabled={evaluating || generatingDraft}
+                              title="Evaluate the entry as written — mirrors what a jury member sees"
+                              className="bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                            >
+                              {isEvaluatingThis && evaluatingMode[dirId] === 'judge' ? (
+                                <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Evaluating…</>
+                              ) : (
+                                <>⚖ {evaluation?.evaluation_mode === 'judge' ? 'Re-run Jury Eval' : 'Jury Evaluation'}</>
+                              )}
+                            </button>
+                            {/* Coach Review button */}
+                            <button
+                              onClick={() => evaluateEntry(dirId, 'coach')}
+                              disabled={evaluating || generatingDraft}
+                              title="Review entry against all brief & materials — identifies what's being undersold"
                               className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
                             >
-                              {isEvaluatingThis ? (
-                                <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Evaluating…</>
-                              ) : evaluation ? 'Re-evaluate' : 'Evaluate Entry'}
+                              {isEvaluatingThis && evaluatingMode[dirId] === 'coach' ? (
+                                <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Coaching…</>
+                              ) : (
+                                <>✦ {evaluation?.evaluation_mode === 'coach' ? 'Re-run Coach Review' : 'Coach Review'}</>
+                              )}
                             </button>
                             {evaluation && d && (
                               <button
@@ -1755,13 +1781,23 @@ export default function ProjectPage() {
                           <div className="px-5 py-5 border-b border-gray-200 bg-gray-50">
                             <div className="flex items-start justify-between mb-4">
                               <div>
-                                <div className="flex items-baseline gap-1">
+                                <div className="flex items-baseline gap-2">
                                   <span className={`text-4xl font-bold tabular-nums ${scoreColor(evaluation.overall_score)}`}>
                                     {evaluation.overall_score.toFixed(1)}
                                   </span>
                                   <span className="text-gray-400 text-lg">/10</span>
+                                  {/* Mode badge */}
+                                  {evaluation.evaluation_mode === 'coach' ? (
+                                    <span className="text-xs font-medium bg-green-100 text-green-800 border border-green-200 px-2 py-0.5 rounded-full">✦ Coach Review</span>
+                                  ) : (
+                                    <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">⚖ Jury Evaluation</span>
+                                  )}
                                 </div>
-                                <p className="text-xs text-gray-400 mt-0.5">Overall quality · Claude Opus 4.6</p>
+                                <p className="text-xs text-gray-400 mt-0.5">
+                                  {evaluation.evaluation_mode === 'coach'
+                                    ? 'Scored against brief & materials · Claude Opus 4.6'
+                                    : 'Scored on entry as written · Claude Opus 4.6'}
+                                </p>
                               </div>
                               <p className="text-xs text-gray-400">
                                 {new Date(evaluation.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -1778,6 +1814,13 @@ export default function ProjectPage() {
                                   </div>
                                 )
                               })}
+                              {/* Brief Alignment — coach mode only */}
+                              {evaluation.scores.brief_alignment !== undefined && (
+                                <div className={`border-2 border-dashed rounded-lg px-3 py-2.5 ${scoreBg(evaluation.scores.brief_alignment)}`}>
+                                  <p className="text-xs text-gray-500 mb-1">Brief Alignment</p>
+                                  <p className={`text-xl font-bold tabular-nums ${scoreColor(evaluation.scores.brief_alignment)}`}>{evaluation.scores.brief_alignment}</p>
+                                </div>
+                              )}
                             </div>
 
                             <div className="grid grid-cols-2 gap-5 mb-5">
