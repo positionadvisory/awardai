@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
 
@@ -18,17 +19,18 @@ export default function ProjectsPage() {
   const router = useRouter()
   const [projects, setProjects] = useState<Project[]>([])
   const [fetching, setFetching] = useState(true)
+  const [userRole, setUserRole] = useState<string | null>(null)
 
   useEffect(() => {
     if (!user) return
-
     supabase
       .from('profiles')
-      .select('org_id')
+      .select('org_id, role')
       .eq('id', user.id)
       .single()
       .then(({ data: profile }) => {
         if (!profile?.org_id) { setFetching(false); return }
+        setUserRole(profile.role ?? null)
         return supabase
           .from('projects')
           .select('id, campaign_name, client_name, status, created_at, target_shows')
@@ -61,14 +63,23 @@ export default function ProjectsPage() {
           </div>
           <span className="font-semibold text-gray-900">AwardAI</span>
         </div>
-        <button
-          onClick={handleSignOut}
-          className="text-sm text-gray-500 hover:text-gray-900 transition-colors"
-        >
-          Sign out
-        </button>
+        <div className="flex items-center gap-4">
+          {userRole === 'admin' && (
+            <Link
+              href="/dashboard"
+              className="text-sm text-gray-500 hover:text-gray-900 transition-colors"
+            >
+              Dashboard
+            </Link>
+          )}
+          <button
+            onClick={handleSignOut}
+            className="text-sm text-gray-500 hover:text-gray-900 transition-colors"
+          >
+            Sign out
+          </button>
+        </div>
       </header>
-
       <main className="max-w-5xl mx-auto px-6 py-10">
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -82,7 +93,6 @@ export default function ProjectsPage() {
             + New Project
           </button>
         </div>
-
         {fetching ? (
           <div className="text-gray-400 text-sm">Loading projects…</div>
         ) : projects.length === 0 ? (
@@ -136,9 +146,7 @@ export default function ProjectsPage() {
                   </span>
                 </div>
                 <p className="text-gray-400 text-xs mt-3">
-                  Created {new Date(p.created_at).toLocaleDateString('en-GB', {
-                    day: 'numeric', month: 'short', year: 'numeric'
-                  })}
+                  Created {new Date(p.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                 </p>
               </button>
             ))}
