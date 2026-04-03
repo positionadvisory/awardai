@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
+import GeneratingBar from '@/components/GeneratingBar'
 
 // Canonical list of award shows — displayed in the Brief tab selector
 const CANONICAL_SHOWS = [
@@ -1617,6 +1618,12 @@ export default function ProjectPage() {
               </button>
             </div>
 
+            {generating && (
+              <div className="mt-3 mb-4">
+                <GeneratingBar isGenerating={generating} estimatedDuration={25000} />
+              </div>
+            )}
+
             {/* Directions source selector — only when materials or entries exist */}
             {(() => {
               const mats = (project.materials || []).filter((m: { extracted_text?: string }) => m.extracted_text)
@@ -1719,6 +1726,11 @@ export default function ProjectPage() {
                               </button>
                             )}
                           </div>
+                          {isGeneratingThis && (
+                            <div className="mt-3">
+                              <GeneratingBar isGenerating={isGeneratingThis} estimatedDuration={30000} />
+                            </div>
+                          )}
                         </div>
                         {d.win_likelihood !== null && (
                           <div className="text-right flex-shrink-0 space-y-3">
@@ -1874,6 +1886,12 @@ export default function ProjectPage() {
                             </button>
                           </div>
                         </div>
+
+                        {isGeneratingThis && (
+                          <div className="px-5 pt-3 pb-1">
+                            <GeneratingBar isGenerating={isGeneratingThis} estimatedDuration={30000} />
+                          </div>
+                        )}
 
                         {/* Needs re-evaluation notice — shown when draft has been improved since last eval */}
                         {needsReEval && !isEvaluatingThis && (
@@ -2613,6 +2631,12 @@ export default function ProjectPage() {
                 : scriptMode === 'review' ? (scriptAnalysis ? 'Review Script Again' : 'Review & Optimise Script')
                 : 'Generate Script'}
             </button>
+            {generatingScript && (
+              <div className="mb-6 -mt-4">
+                <GeneratingBar isGenerating={generatingScript} estimatedDuration={35000} />
+              </div>
+            )}
+
             {scriptCategory === 'suggest' && (
               <p className="text-xs text-amber-700 -mt-6 mb-8">Select a category from the suggestions above before generating.</p>
             )}
