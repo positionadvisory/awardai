@@ -186,7 +186,7 @@ export default function GeneratingBar({
 
     // Animate toward 85 % over estimatedDuration, then hold
     setProgress(0)
-    const TARGET = 85
+    const TARGET = 70
     const TICK_MS = 200
     const totalTicks = estimatedDuration / TICK_MS
     const increment = TARGET / totalTicks
@@ -260,7 +260,7 @@ export default function GeneratingBar({
           <span style={{
             fontSize: '11px',
             fontWeight: 500,
-            color: progress > 30 ? 'rgba(255,255,255,0.92)' : '#374151',
+            color: progress > 52 ? 'rgba(255,255,255,0.92)' : '#374151',
             textAlign: 'center',
             lineHeight: 1.3,
             userSelect: 'none',
