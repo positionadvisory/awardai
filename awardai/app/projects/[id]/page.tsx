@@ -1620,7 +1620,7 @@ export default function ProjectPage() {
 
             {generating && (
               <div className="mt-3 mb-4">
-                <GeneratingBar isGenerating={generating} estimatedDuration={25000} />
+                <GeneratingBar isGenerating={generating} estimatedDuration={50000} />
               </div>
             )}
 
@@ -1728,7 +1728,7 @@ export default function ProjectPage() {
                           </div>
                           {isGeneratingThis && (
                             <div className="mt-3">
-                              <GeneratingBar isGenerating={isGeneratingThis} estimatedDuration={30000} />
+                              <GeneratingBar isGenerating={isGeneratingThis} estimatedDuration={60000} />
                             </div>
                           )}
                         </div>
@@ -1889,7 +1889,7 @@ export default function ProjectPage() {
 
                         {isGeneratingThis && (
                           <div className="px-5 pt-3 pb-1">
-                            <GeneratingBar isGenerating={isGeneratingThis} estimatedDuration={30000} />
+                            <GeneratingBar isGenerating={isGeneratingThis} estimatedDuration={60000} />
                           </div>
                         )}
 
@@ -2633,7 +2633,7 @@ export default function ProjectPage() {
             </button>
             {generatingScript && (
               <div className="mb-6 -mt-4">
-                <GeneratingBar isGenerating={generatingScript} estimatedDuration={35000} />
+                <GeneratingBar isGenerating={generatingScript} estimatedDuration={70000} />
               </div>
             )}
 
