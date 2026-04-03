@@ -5,6 +5,19 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
 
+// ── Pricing ───────────────────────────────────────────────────────────────────
+const PRICING: Record<string, { input: number; output: number }> = {
+  'claude-sonnet-4-6': { input: 3, output: 15 },
+  'claude-opus-4-6': { input: 15, output: 75 },
+}
+function calcCost(model: string | null, inp: number | null, out: number | null): number {
+  const p = PRICING[model ?? ''] ?? PRICING['claude-sonnet-4-6']
+  return ((inp ?? 0) / 1_000_000) * p.input + ((out ?? 0) / 1_000_000) * p.output
+}
+function fmtCost(c: number): string {
+  return c < 0.005 ? '<$0.01' : `$${c.toFixed(2)}`
+}
+
 type Project = {
   id: number
   campaign_name: string
@@ -12,6 +25,7 @@ type Project = {
   target_shows: string[]
   status: string
   created_at: string
+  user_id: string
 }
 
 type Direction = {
@@ -20,6 +34,8 @@ type Direction = {
   best_show: string
   best_category: string
   win_likelihood: number
+  created_by: string
+  created_at: string
 }
 
 type Evaluation = {
@@ -28,6 +44,7 @@ type Evaluation = {
   overall_score: number
   scores: Record<string, number>
   created_at: string
+  created_by: string
 }
 
 type MonthlyUsage = {
@@ -38,6 +55,31 @@ type MonthlyUsage = {
   edits_run: number
   video_scripts_generated: number
   total_ai_tokens_used: number
+}
+
+type Profile = {
+  id: string
+  full_name: string | null
+  email: string | null
+  role: string | null
+  created_at: string
+}
+
+type UsageLog = {
+  id: number
+  user_id: string
+  action: string
+  model: string | null
+  input_tokens: number | null
+  output_tokens: number | null
+  created_at: string
+}
+
+type EntryDraft = {
+  id: number
+  direction_id: number
+  created_by: string
+  created_at: string
 }
 
 const DIMENSION_LABELS: Record<string, string> = {
@@ -57,6 +99,9 @@ export default function DashboardPage() {
   const [directions, setDirections] = useState<Direction[]>([])
   const [evaluations, setEvaluations] = useState<Evaluation[]>([])
   const [monthlyUsage, setMonthlyUsage] = useState<MonthlyUsage[]>([])
+  const [profiles, setProfiles] = useState<Profile[]>([])
+  const [usageLogs, setUsageLogs] = useState<UsageLog[]>([])
+  const [entryDrafts, setEntryDrafts] = useState<EntryDraft[]>([])
   const [fetching, setFetching] = useState(true)
   const [accessDenied, setAccessDenied] = useState(false)
 
@@ -80,23 +125,33 @@ export default function DashboardPage() {
 
       const now = new Date()
       const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1).toISOString()
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
       const [
         { data: projectsData },
         { data: directionsData },
         { data: evaluationsData },
         { data: usageData },
+        { data: profilesData },
+        { data: usageLogsData },
+        { data: entryDraftsData },
       ] = await Promise.all([
-        supabase.from('projects').select('id, campaign_name, client_name, target_shows, status, created_at').eq('org_id', orgId).order('created_at', { ascending: false }),
-        supabase.from('directions').select('id, project_id, best_show, best_category, win_likelihood').eq('org_id', orgId),
-        supabase.from('evaluations').select('id, project_id, overall_score, scores, created_at').eq('org_id', orgId),
+        supabase.from('projects').select('id, campaign_name, client_name, target_shows, status, created_at, user_id').eq('org_id', orgId).order('created_at', { ascending: false }),
+        supabase.from('directions').select('id, project_id, best_show, best_category, win_likelihood, created_by, created_at').eq('org_id', orgId),
+        supabase.from('evaluations').select('id, project_id, overall_score, scores, created_at, created_by').eq('org_id', orgId),
         supabase.from('monthly_usage').select('*').eq('org_id', orgId).gte('month', sixMonthsAgo).order('month', { ascending: true }),
+        supabase.from('profiles').select('id, full_name, email, role, created_at').eq('org_id', orgId),
+        supabase.from('usage_logs').select('id, user_id, action, model, input_tokens, output_tokens, created_at').eq('org_id', orgId).gte('created_at', thirtyDaysAgo).order('created_at', { ascending: false }).limit(1000),
+        supabase.from('entry_drafts').select('id, direction_id, created_by, created_at').eq('org_id', orgId),
       ])
 
       setProjects(projectsData ?? [])
       setDirections(directionsData ?? [])
       setEvaluations(evaluationsData ?? [])
       setMonthlyUsage(usageData ?? [])
+      setProfiles(profilesData ?? [])
+      setUsageLogs(usageLogsData ?? [])
+      setEntryDrafts(entryDraftsData ?? [])
       setFetching(false)
     }
 
@@ -187,6 +242,44 @@ export default function DashboardPage() {
     else if (p.status === 'final') statusCounts.final++
     else statusCounts.draft++
   }
+
+  // ── User activity ─────────────────────────────────────────────────
+  const now2 = new Date()
+  const monthStart = new Date(now2.getFullYear(), now2.getMonth(), 1)
+  const fourteenDaysAgo = new Date(now2.getTime() - 14 * 24 * 60 * 60 * 1000)
+  const threeDaysAgo = new Date(now2.getTime() - 3 * 24 * 60 * 60 * 1000)
+
+  const userActivityRows = profiles.map(profile => {
+    const userLogs = usageLogs.filter(l => l.user_id === profile.id)
+    const monthLogs = userLogs.filter(l => new Date(l.created_at) >= monthStart)
+    const userProjects = projects.filter(p => p.user_id === profile.id)
+    const userDirs = directions.filter(d => d.created_by === profile.id)
+    const userDraftRows = entryDrafts.filter(d => d.created_by === profile.id)
+    const userEvalRows = evaluations.filter(e => e.created_by === profile.id)
+
+    const costThisMonth = monthLogs.reduce((sum, l) => sum + calcCost(l.model, l.input_tokens, l.output_tokens), 0)
+    const draftsThisMonth = monthLogs.filter(l => l.action.includes('generate_draft') || l.action.includes('generate-draft')).length
+    const evalsThisMonth = monthLogs.filter(l => l.action.includes('evaluate')).length
+    const lastLog = userLogs[0]
+    const lastActive = lastLog?.created_at ?? null
+
+    // Flags
+    const flags: string[] = []
+    const draftDirIds = new Set(userDraftRows.map(d => d.direction_id))
+    const stuck = userDirs.some(d => new Date(d.created_at) < threeDaysAgo && !draftDirIds.has(d.id))
+    if (stuck) flags.push('stuck')
+    if (userDraftRows.length > 0 && userEvalRows.length === 0) flags.push('no_eval')
+    if (userProjects.length > 0 && (!lastActive || new Date(lastActive) < fourteenDaysAgo)) flags.push('inactive')
+
+    return { profile, projects: userProjects.length, draftsThisMonth, evalsThisMonth, costThisMonth, lastActive, flags }
+  })
+
+  // High usage flag — > 2× org average cost this month
+  const avgCost = userActivityRows.reduce((s, u) => s + u.costThisMonth, 0) / (userActivityRows.length || 1)
+  const userActivityFlagged = userActivityRows.map(u => ({
+    ...u,
+    flags: u.costThisMonth > avgCost * 2 && u.costThisMonth > 0.01 ? [...u.flags, 'high_usage'] : u.flags,
+  }))
 
   // AI activity — current month usage
   const currentMonth = monthlyUsage[monthlyUsage.length - 1]
@@ -485,6 +578,70 @@ export default function DashboardPage() {
 
           </div>
         </div>
+        {/* User Activity */}
+        <div className="mt-6 bg-white border border-gray-200 rounded-xl p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-700">User Activity</h2>
+              <p className="text-xs text-gray-400 mt-0.5">This month — click a row to view full detail</p>
+            </div>
+            <span className="text-xs text-gray-400">{profiles.length} user{profiles.length !== 1 ? 's' : ''}</span>
+          </div>
+
+          {profiles.length === 0 ? (
+            <p className="text-gray-400 text-sm">No users in this org yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    <th className="text-left text-gray-400 font-medium pb-2 pr-4">User</th>
+                    <th className="text-right text-gray-400 font-medium pb-2 px-3">Projects</th>
+                    <th className="text-right text-gray-400 font-medium pb-2 px-3">Drafts</th>
+                    <th className="text-right text-gray-400 font-medium pb-2 px-3">Evals</th>
+                    <th className="text-right text-gray-400 font-medium pb-2 px-3">Cost (mo)</th>
+                    <th className="text-right text-gray-400 font-medium pb-2 px-3">Last active</th>
+                    <th className="text-right text-gray-400 font-medium pb-2 pl-3">Flags</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {userActivityFlagged
+                    .sort((a, b) => b.costThisMonth - a.costThisMonth)
+                    .map(u => (
+                    <tr
+                      key={u.profile.id}
+                      className="hover:bg-gray-50 cursor-pointer transition-colors"
+                      onClick={() => router.push(`/dashboard/users/${u.profile.id}`)}
+                    >
+                      <td className="py-2.5 pr-4">
+                        <p className="font-medium text-gray-800">{u.profile.full_name ?? u.profile.email ?? 'Unknown'}</p>
+                        {u.profile.full_name && <p className="text-gray-400">{u.profile.email}</p>}
+                      </td>
+                      <td className="py-2.5 px-3 text-right text-gray-600">{u.projects}</td>
+                      <td className="py-2.5 px-3 text-right text-gray-600">{u.draftsThisMonth}</td>
+                      <td className="py-2.5 px-3 text-right text-gray-600">{u.evalsThisMonth}</td>
+                      <td className="py-2.5 px-3 text-right text-gray-600">{fmtCost(u.costThisMonth)}</td>
+                      <td className="py-2.5 px-3 text-right text-gray-400">
+                        {u.lastActive
+                          ? new Date(u.lastActive).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+                          : '—'}
+                      </td>
+                      <td className="py-2.5 pl-3">
+                        <div className="flex gap-1 justify-end flex-wrap">
+                          {u.flags.includes('high_usage') && <span className="bg-red-100 text-red-600 px-1.5 py-0.5 rounded">High cost</span>}
+                          {u.flags.includes('stuck') && <span className="bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Stuck</span>}
+                          {u.flags.includes('no_eval') && <span className="bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">No eval</span>}
+                          {u.flags.includes('inactive') && <span className="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">Inactive</span>}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
       </main>
     </div>
   )
