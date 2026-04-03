@@ -23,7 +23,7 @@ const STATEMENTS: string[] = [
   'Channeling what a Grand Prix winner sounds like.',
   'Imagining twelve strangers debating your entry.',
   'Making sure London jurors get the reference.',
-  'Adjusting for juries who've seen it all.',
+  'Adjusting for juries who\'ve seen it all.',
   'Writing as if Cannes is watching. It is.',
   'Appealing to jurors who judge on instinct.',
   'Reminding the entry the work is the hero.',
