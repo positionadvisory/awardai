@@ -1348,19 +1348,19 @@ export default function ProjectPage() {
     <div className="min-h-screen bg-gray-100 text-gray-900">
 
       {/* Header */}
-      <header className="border-b border-gray-200 bg-white px-6 py-4">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button onClick={() => router.push('/projects')} className="text-gray-500 hover:text-gray-900 transition-colors text-sm">
+      <header className="border-b border-gray-200 bg-white px-4 sm:px-6 py-4">
+        <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <button onClick={() => router.push('/projects')} className="text-gray-500 hover:text-gray-900 transition-colors text-sm shrink-0">
               ← Projects
             </button>
-            <span className="text-gray-300">|</span>
-            <div>
-              <h1 className="font-semibold text-gray-900 leading-tight">{project.campaign_name}</h1>
-              {project.client_name && <p className="text-gray-500 text-xs">{project.client_name}</p>}
+            <span className="text-gray-300 shrink-0">|</span>
+            <div className="min-w-0">
+              <h1 className="font-semibold text-gray-900 leading-tight truncate">{project.campaign_name}</h1>
+              {project.client_name && <p className="text-gray-500 text-xs truncate">{project.client_name}</p>}
             </div>
           </div>
-          <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+          <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${
             project.status === 'active' ? 'bg-green-100 text-green-700' :
             project.status === 'final' ? 'bg-green-100 text-green-800' :
             'bg-gray-100 text-gray-500'
@@ -1368,12 +1368,12 @@ export default function ProjectPage() {
         </div>
       </header>
 
-      {/* Tabs */}
+      {/* Tabs — horizontally scrollable on mobile */}
       <div className="border-b border-gray-200 bg-white">
-        <div className="max-w-5xl mx-auto px-6 flex">
+        <div className="max-w-5xl mx-auto px-2 sm:px-6 flex overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
           {TABS.map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
-              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+              className={`shrink-0 px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
                 tab === t.key ? 'border-green-700 text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-700'
               }`}>
               {t.label}
@@ -1385,7 +1385,7 @@ export default function ProjectPage() {
         </div>
       </div>
 
-      <main className="max-w-5xl mx-auto px-6 py-8">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
 
         {/* ── BRIEF ── */}
         {tab === 'brief' && (
@@ -1699,8 +1699,8 @@ export default function ProjectPage() {
                   const isGeneratingThis = generatingForDirectionId === d.id
                   return (
                     <div key={d.id} className={`bg-white border rounded-xl p-5 ${d.chosen ? 'border-green-700' : 'border-gray-200'}`}>
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1">
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                        <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <h3 className="font-medium text-gray-900">{d.name}</h3>
                             {d.chosen && <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">Selected</span>}
@@ -1733,13 +1733,13 @@ export default function ProjectPage() {
                           )}
                         </div>
                         {d.win_likelihood !== null && (
-                          <div className="text-right flex-shrink-0 space-y-3">
-                            {/* Category Fit — stored in win_likelihood column */}
+                          <div className="flex sm:flex-col gap-6 sm:gap-3 sm:text-right sm:flex-shrink-0 border-t sm:border-0 border-gray-100 pt-3 sm:pt-0">
+                            {/* Category Fit */}
                             <div>
                               <p className={`text-2xl font-bold tabular-nums ${d.win_likelihood >= 70 ? 'text-green-700' : d.win_likelihood >= 45 ? 'text-amber-700' : 'text-red-600'}`}>{d.win_likelihood}%</p>
                               <p className="text-gray-400 text-xs">category fit</p>
                             </div>
-                            {/* Win Likelihood — calculated from base show rate + eval score */}
+                            {/* Win Likelihood */}
                             <div>
                               {(() => {
                                 const evalScore = evaluations[d.id]?.overall_score
