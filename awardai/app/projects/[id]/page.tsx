@@ -4,6 +4,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
 import GeneratingBar from '@/components/GeneratingBar'
+import { MATERIALS_EVAL_STATEMENTS, JURY_EVAL_STATEMENTS, COACH_REVIEW_STATEMENTS } from '@/lib/generatingStatements'
 
 // Canonical list of award shows — displayed in the Brief tab selector
 const CANONICAL_SHOWS = [
@@ -1893,6 +1894,16 @@ export default function ProjectPage() {
                           </div>
                         )}
 
+                        {isEvaluatingThis && (
+                          <div className="px-5 pt-3 pb-1">
+                            <GeneratingBar
+                              isGenerating={isEvaluatingThis}
+                              estimatedDuration={50000}
+                              statements={evaluatingMode[dirId] === 'coach' ? COACH_REVIEW_STATEMENTS : JURY_EVAL_STATEMENTS}
+                            />
+                          </div>
+                        )}
+
                         {/* Needs re-evaluation notice — shown when draft has been improved since last eval */}
                         {needsReEval && !isEvaluatingThis && (
                           <div className="px-5 py-3 bg-amber-50 border-b border-amber-200 flex items-center justify-between gap-4">
@@ -2845,6 +2856,16 @@ export default function ProjectPage() {
               </div>
             )}
 
+            {quickEvaluating && (
+              <div className="mb-4">
+                <GeneratingBar
+                  isGenerating={quickEvaluating}
+                  estimatedDuration={50000}
+                  statements={MATERIALS_EVAL_STATEMENTS}
+                />
+              </div>
+            )}
+
             <div className="flex gap-3">
               <button
                 onClick={evaluateUploadedEntry}
@@ -2863,10 +2884,6 @@ export default function ProjectPage() {
                 Cancel
               </button>
             </div>
-
-            {quickEvaluating && (
-              <p className="text-xs text-gray-400 text-center mt-3">Claude Opus 4.6 is reviewing your entry — this takes about 30–60 seconds.</p>
-            )}
           </div>
         </div>
       )}
