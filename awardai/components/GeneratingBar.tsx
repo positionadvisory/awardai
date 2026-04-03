@@ -226,25 +226,47 @@ export default function GeneratingBar({
   }, [isGenerating, statementInterval])
 
   return (
-    <div className="w-full">
+    <div style={{ width: '100%' }}>
       {/* Track */}
-      <div className="relative w-full h-8 bg-gray-100 rounded-full overflow-hidden">
-        {/* Fill */}
-        <div
-          className="absolute inset-y-0 left-0 bg-green-600 rounded-full transition-all"
-          style={{
-            width: `${progress}%`,
-            transitionDuration: progress === 100 ? '500ms' : '200ms',
-            transitionTimingFunction: 'ease-out',
-          }}
-        />
+      <div style={{
+        position: 'relative',
+        width: '100%',
+        height: '32px',
+        backgroundColor: '#e5e7eb',
+        borderRadius: '9999px',
+        overflow: 'hidden',
+      }}>
+        {/* Green fill */}
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          bottom: 0,
+          left: 0,
+          backgroundColor: '#166534',
+          borderRadius: '9999px',
+          width: `${progress}%`,
+          transition: `width ${progress === 100 ? '500ms' : '200ms'} ease-out`,
+        }} />
 
         {/* Statement text — overlaid, centered */}
-        <div className="absolute inset-0 flex items-center justify-center px-4">
-          <span
-            className="text-xs font-medium text-white/90 text-center leading-tight select-none transition-opacity duration-400"
-            style={{ opacity: visible ? 1 : 0 }}
-          >
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '0 16px',
+        }}>
+          <span style={{
+            fontSize: '11px',
+            fontWeight: 500,
+            color: progress > 30 ? 'rgba(255,255,255,0.92)' : '#374151',
+            textAlign: 'center',
+            lineHeight: 1.3,
+            userSelect: 'none',
+            opacity: visible ? 1 : 0,
+            transition: 'opacity 0.4s ease',
+          }}>
             {STATEMENTS[statementIdx]}
           </span>
         </div>
