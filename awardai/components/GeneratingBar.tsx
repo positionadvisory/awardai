@@ -236,19 +236,19 @@ export default function GeneratingBar({
         borderRadius: '9999px',
         overflow: 'hidden',
       }}>
-        {/* Green fill */}
+        {/* Light green fill */}
         <div style={{
           position: 'absolute',
           top: 0,
           bottom: 0,
           left: 0,
-          backgroundColor: '#166534',
+          backgroundColor: '#86efac',
           borderRadius: '9999px',
           width: `${progress}%`,
           transition: `width ${progress === 100 ? '500ms' : '200ms'} ease-out`,
         }} />
 
-        {/* Statement text — overlaid, centered */}
+        {/* Statement text — overlaid, centered, always dark */}
         <div style={{
           position: 'absolute',
           inset: 0,
@@ -260,7 +260,7 @@ export default function GeneratingBar({
           <span style={{
             fontSize: '11px',
             fontWeight: 500,
-            color: progress > 52 ? 'rgba(255,255,255,0.92)' : '#374151',
+            color: '#374151',
             textAlign: 'center',
             lineHeight: 1.3,
             userSelect: 'none',
