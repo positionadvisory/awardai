@@ -56,39 +56,41 @@ export default function ProjectsPage() {
 
   return (
     <div className="min-h-screen bg-gray-100 text-gray-900">
-      <header className="border-b border-gray-200 bg-white px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-7 h-7 rounded-lg bg-green-800 flex items-center justify-center">
-            <span className="text-xs font-bold text-white">A</span>
+      <header className="border-b border-gray-200 bg-white px-4 sm:px-6 py-4">
+        <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="w-7 h-7 rounded-lg bg-green-800 flex items-center justify-center">
+              <span className="text-xs font-bold text-white">A</span>
+            </div>
+            <span className="font-semibold text-gray-900">AwardAI</span>
           </div>
-          <span className="font-semibold text-gray-900">AwardAI</span>
-        </div>
-        <div className="flex items-center gap-4">
-          {userRole === 'admin' && (
-            <Link
-              href="/dashboard"
+          <div className="flex items-center gap-4 shrink-0">
+            {userRole === 'admin' && (
+              <Link
+                href="/dashboard"
+                className="text-sm text-gray-500 hover:text-gray-900 transition-colors"
+              >
+                Dashboard
+              </Link>
+            )}
+            <button
+              onClick={handleSignOut}
               className="text-sm text-gray-500 hover:text-gray-900 transition-colors"
             >
-              Dashboard
-            </Link>
-          )}
-          <button
-            onClick={handleSignOut}
-            className="text-sm text-gray-500 hover:text-gray-900 transition-colors"
-          >
-            Sign out
-          </button>
+              Sign out
+            </button>
+          </div>
         </div>
       </header>
-      <main className="max-w-5xl mx-auto px-6 py-10">
-        <div className="flex items-center justify-between mb-8">
-          <div>
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-10">
+        <div className="flex items-center justify-between gap-3 mb-8">
+          <div className="min-w-0">
             <h1 className="text-2xl font-semibold text-gray-900">Projects</h1>
             <p className="text-gray-400 text-sm mt-1">Manage your award entry projects</p>
           </div>
           <button
             onClick={() => router.push('/projects/new')}
-            className="bg-green-800 hover:bg-green-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            className="shrink-0 bg-green-800 hover:bg-green-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
           >
             + New Project
           </button>
@@ -113,9 +115,9 @@ export default function ProjectsPage() {
                 onClick={() => router.push(`/projects/${p.id}`)}
                 className="w-full text-left bg-white hover:bg-gray-50 border border-gray-200 rounded-xl p-5 transition-colors"
               >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h2 className="font-medium text-gray-900">{p.campaign_name}</h2>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="font-medium text-gray-900 truncate">{p.campaign_name}</h2>
                     {p.client_name && (
                       <p className="text-gray-500 text-sm mt-0.5">{p.client_name}</p>
                     )}
