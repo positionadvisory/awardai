@@ -4,7 +4,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
 import GeneratingBar from '@/components/GeneratingBar'
-import { MATERIALS_EVAL_STATEMENTS, JURY_EVAL_STATEMENTS, COACH_REVIEW_STATEMENTS } from '@/lib/generatingStatements'
+import { MATERIALS_EVAL_STATEMENTS, JURY_EVAL_STATEMENTS, COACH_REVIEW_STATEMENTS, SCRIPT_GENERATE_STATEMENTS, SCRIPT_REVIEW_STATEMENTS } from '@/lib/generatingStatements'
 
 // Canonical list of award shows — displayed in the Brief tab selector
 const CANONICAL_SHOWS = [
@@ -284,6 +284,7 @@ type Project = {
   status: string
   script_text: string | null
   script_analysis: ScriptAnalysis | null
+  award_year: number | null  // Phase 5A: season year for historical context
 }
 
 type Direction = {
@@ -298,6 +299,8 @@ type Direction = {
   risks: string | null
   hook: string | null
   chosen: boolean
+  submitted: boolean          // Phase 5A
+  submission_outcome: string | null  // Phase 5A: 'shortlisted' | 'finalist' | 'winner' | 'no_place' | null
 }
 
 type ChatMessage = {
@@ -372,6 +375,26 @@ function scoreBg(score: number): string {
   return 'bg-red-50 border-red-200'
 }
 
+function outcomeLabel(outcome: string): string {
+  switch (outcome) {
+    case 'winner': return '🏆 Winner'
+    case 'finalist': return '🥈 Finalist'
+    case 'shortlisted': return '⭐ Shortlisted'
+    case 'no_place': return 'No place'
+    default: return outcome
+  }
+}
+
+function outcomeBadgeClass(outcome: string): string {
+  switch (outcome) {
+    case 'winner': return 'bg-amber-50 text-amber-800 border-amber-200'
+    case 'finalist': return 'bg-blue-50 text-blue-700 border-blue-200'
+    case 'shortlisted': return 'bg-green-50 text-green-700 border-green-200'
+    case 'no_place': return 'bg-gray-100 text-gray-500 border-gray-200'
+    default: return 'bg-gray-100 text-gray-500 border-gray-200'
+  }
+}
+
 function buildAnalysisText(
   analysis: ScriptAnalysis,
   campaignName: string,
@@ -433,6 +456,9 @@ export default function ProjectPage() {
   const [savingShows, setSavingShows] = useState(false)
   const [kbShows, setKbShows] = useState<string[]>([])
   const [customShowInput, setCustomShowInput] = useState('')
+  // Phase 5A: Award year
+  const [awardYear, setAwardYear] = useState<number | null>(null)
+  const [savingAwardYear, setSavingAwardYear] = useState(false)
 
   // Materials
   const [uploading, setUploading] = useState(false)
@@ -465,6 +491,10 @@ export default function ProjectPage() {
   const [expandedEntryFields, setExpandedEntryFields] = useState<Record<number, boolean>>({})
   // Draft version history expand/collapse — keyed by directionId
   const [expandedDraftHistory, setExpandedDraftHistory] = useState<Record<number, boolean>>({})
+
+  // Phase 5A: Outcome tracking state (optimistic, keyed by direction id)
+  const [dirSubmitted, setDirSubmitted] = useState<Record<number, boolean>>({})
+  const [dirOutcome, setDirOutcome] = useState<Record<number, string | null>>({})
 
   // Phase 2 — field refinement via edit-entry Edge Function
   const [refineMessage, setRefineMessage] = useState<Record<number, string>>({})
@@ -551,10 +581,22 @@ export default function ProjectPage() {
         setProject(proj)
         setBriefText(proj.combined_text || '')
         setTargetShows(proj.target_shows || [])
+        setAwardYear(proj.award_year ?? null)
         if (proj.script_text) setScriptText(proj.script_text)
         if (proj.script_analysis) setScriptAnalysis(proj.script_analysis)
       }
-      if (dirs) setDirections(dirs)
+      if (dirs) {
+        setDirections(dirs)
+        // Seed outcome tracking from DB
+        const submittedMap: Record<number, boolean> = {}
+        const outcomeMap: Record<number, string | null> = {}
+        for (const dir of dirs) {
+          submittedMap[dir.id] = dir.submitted ?? false
+          outcomeMap[dir.id] = dir.submission_outcome ?? null
+        }
+        setDirSubmitted(submittedMap)
+        setDirOutcome(outcomeMap)
+      }
 
       const draftsList = drafts || []
       if (draftsList.length > 0) setEntries(draftsList)
@@ -605,6 +647,20 @@ export default function ProjectPage() {
     setEditingShows(false)
     setSavingShows(false)
   }
+
+  // Phase 5A: Save award year (season year for historical context)
+  const saveAwardYear = async (year: number | null) => {
+    if (!project) return
+    setSavingAwardYear(true)
+    await supabase
+      .from('projects')
+      .update({ award_year: year, updated_at: new Date().toISOString() })
+      .eq('id', projectId)
+    setProject(p => p ? { ...p, award_year: year } : p)
+    setAwardYear(year)
+    setSavingAwardYear(false)
+  }
+
 
   const toggleShow = (show: string) => {
     setTargetShows(prev =>
@@ -895,6 +951,29 @@ export default function ProjectPage() {
       setEvaluatingForDirectionId(null)
       setEvaluatingMode(prev => { const next = { ...prev }; delete next[directionId]; return next })
     }
+  }
+
+  // Phase 5A: Mark a direction as submitted (optimistic update + DB write)
+  const markSubmitted = async (dirId: number) => {
+    setDirSubmitted(prev => ({ ...prev, [dirId]: true }))
+    await supabase
+      .from('directions')
+      .update({ submitted: true })
+      .eq('id', dirId)
+  }
+
+  // Phase 5A: Record the submission outcome for a direction
+  const recordOutcome = async (dirId: number, outcome: string) => {
+    // Toggle off if clicking the same outcome
+    const newOutcome = dirOutcome[dirId] === outcome ? null : outcome
+    setDirOutcome(prev => ({ ...prev, [dirId]: newOutcome }))
+    await supabase
+      .from('directions')
+      .update({
+        submission_outcome: newOutcome,
+        outcome_confirmed_at: newOutcome ? new Date().toISOString() : null,
+      })
+      .eq('id', dirId)
   }
 
   const evaluateUploadedEntry = async () => {
@@ -1527,6 +1606,32 @@ export default function ProjectPage() {
               )}
             </div>
 
+            {/* Phase 5A: Award Year — used for multi-season historical context */}
+            <div>
+              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                Award Season Year
+              </label>
+              <div className="flex items-center gap-3">
+                <select
+                  value={awardYear ?? ''}
+                  onChange={e => {
+                    const val = e.target.value ? parseInt(e.target.value) : null
+                    setAwardYear(val)
+                    saveAwardYear(val)
+                  }}
+                  disabled={savingAwardYear}
+                  className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-green-600 transition-colors disabled:opacity-50"
+                >
+                  <option value="">Not specified</option>
+                  {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() + 1 - i).map(yr => (
+                    <option key={yr} value={yr}>{yr}</option>
+                  ))}
+                </select>
+                {savingAwardYear && <span className="text-xs text-gray-400">Saving…</span>}
+                <p className="text-xs text-gray-400">Used to build multi-season context for direction generation.</p>
+              </div>
+            </div>
+
           </div>
         )}
 
@@ -1826,6 +1931,11 @@ export default function ProjectPage() {
                         <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between gap-4">
                           <div>
                             <h3 className="font-medium text-gray-900">{dirName}</h3>
+                            {dirOutcome[dirId] && (
+                              <span className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full border mt-1 ${outcomeBadgeClass(dirOutcome[dirId]!)}`}>
+                                {outcomeLabel(dirOutcome[dirId]!)}
+                              </span>
+                            )}
                             {dirShow && (
                               <p className="text-green-700 text-xs mt-0.5">
                                 {dirShow} · <span className="text-gray-400">{dirCategory}</span>
@@ -1886,6 +1996,43 @@ export default function ProjectPage() {
                               ) : 'Regenerate draft'}
                             </button>
                           </div>
+                        </div>
+
+                        {/* Phase 5A: Submission tracking */}
+                        <div className="px-5 py-2.5 bg-gray-50 border-b border-gray-100 flex items-center gap-3 flex-wrap">
+                          {!dirSubmitted[dirId] ? (
+                            <button
+                              onClick={() => markSubmitted(dirId)}
+                              className="text-xs text-gray-400 hover:text-gray-700 border border-gray-200 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+                            >
+                              <span>📤</span>
+                              <span>Mark as submitted</span>
+                            </button>
+                          ) : (
+                            <>
+                              <span className="text-xs text-gray-500 font-medium flex items-center gap-1.5">
+                                <span>📤</span>
+                                <span>Submitted</span>
+                              </span>
+                              <span className="text-gray-200 text-xs">·</span>
+                              <span className="text-xs text-gray-400">Outcome:</span>
+                              <div className="flex items-center gap-1.5">
+                                {(['shortlisted', 'finalist', 'winner', 'no_place'] as const).map(o => (
+                                  <button
+                                    key={o}
+                                    onClick={() => recordOutcome(dirId, o)}
+                                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                                      dirOutcome[dirId] === o
+                                        ? outcomeBadgeClass(o) + ' font-medium'
+                                        : 'border-gray-200 text-gray-400 hover:border-gray-400 hover:text-gray-600'
+                                    }`}
+                                  >
+                                    {outcomeLabel(o)}
+                                  </button>
+                                ))}
+                              </div>
+                            </>
+                          )}
                         </div>
 
                         {isGeneratingThis && (
@@ -2644,7 +2791,7 @@ export default function ProjectPage() {
             </button>
             {generatingScript && (
               <div className="mb-6 -mt-4">
-                <GeneratingBar isGenerating={generatingScript} estimatedDuration={70000} />
+                <GeneratingBar isGenerating={generatingScript} estimatedDuration={70000} statements={scriptMode === 'review' ? SCRIPT_REVIEW_STATEMENTS : SCRIPT_GENERATE_STATEMENTS} />
               </div>
             )}
 
