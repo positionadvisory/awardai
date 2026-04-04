@@ -24,6 +24,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import DeadlineCalendar from '@/components/shows/DeadlineCalendar'
 import BudgetCalculator from '@/components/shows/BudgetCalculator'
 
@@ -79,20 +80,21 @@ export default function ShowsDrawer({
     return () => { document.body.style.overflow = '' }
   }, [open])
 
-  if (!open) return null
+  // SSR guard — document.body is not available on the server
+  if (typeof window === 'undefined' || !open) return null
 
-  return (
+  return createPortal(
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/30 z-40 transition-opacity"
+        className="fixed inset-0 bg-black/30 z-[9998] transition-opacity"
         onClick={onClose}
         aria-hidden="true"
       />
 
       {/* Drawer panel */}
       <div
-        className="fixed inset-y-0 right-0 z-50 flex flex-col bg-white shadow-2xl"
+        className="fixed inset-y-0 right-0 z-[9999] flex flex-col bg-white shadow-2xl"
         style={{ width: 'min(90vw, 820px)' }}
         role="dialog"
         aria-modal="true"
@@ -169,6 +171,7 @@ export default function ShowsDrawer({
           </p>
         </div>
       </div>
-    </>
+    </>,
+    document.body
   )
 }
