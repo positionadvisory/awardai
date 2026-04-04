@@ -7,9 +7,14 @@ import { useAuth } from '@/lib/useAuth'
 const AWARD_SHOWS = [
   'Cannes Lions', 'D&AD', 'Clio Awards', 'One Show', 'Effies',
   'Spikes Asia', 'Dubai Lynx', 'London International Awards',
-  'WARC Awards', 'Creative Circle', 'Campaign Big Awards',
-  'Epica Awards', 'New York Festivals', 'Eurobest',
+  'WARC Awards', 'AdFest', 'AWARD Awards', 'Webby Awards',
+  'Creative Circle', 'Campaign Big Awards', 'Epica Awards',
+  'New York Festivals', 'Eurobest',
 ]
+
+const currentYear = new Date().getFullYear()
+// Show the last 3 years + next year as options
+const YEAR_OPTIONS = [currentYear + 1, currentYear, currentYear - 1, currentYear - 2]
 
 export default function NewProjectPage() {
   const { user, loading } = useAuth()
@@ -19,6 +24,7 @@ export default function NewProjectPage() {
     client_name: '',
     brief: '',
     target_shows: [] as string[],
+    award_year: currentYear,
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -60,6 +66,7 @@ export default function NewProjectPage() {
         client_name: form.client_name.trim() || null,
         combined_text: form.brief.trim() || null,
         target_shows: form.target_shows,
+        award_year: form.award_year,
         org_id: profile.org_id,
         user_id: user?.id,
         status: 'draft',
@@ -99,6 +106,7 @@ export default function NewProjectPage() {
         <h1 className="text-2xl font-semibold text-gray-900 mb-8">Create Project</h1>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Campaign name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Project name <span className="text-red-500">*</span>
@@ -112,19 +120,38 @@ export default function NewProjectPage() {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Client name
-            </label>
-            <input
-              type="text"
-              value={form.client_name}
-              onChange={e => setForm(f => ({ ...f, client_name: e.target.value }))}
-              placeholder="e.g. BMW"
-              className="w-full bg-white border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
-            />
+          {/* Client name + Award year — side by side */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Client name
+              </label>
+              <input
+                type="text"
+                value={form.client_name}
+                onChange={e => setForm(f => ({ ...f, client_name: e.target.value }))}
+                placeholder="e.g. BMW"
+                className="w-full bg-white border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Award season
+                <span className="text-gray-400 font-normal ml-1 text-xs">— which year are you entering?</span>
+              </label>
+              <select
+                value={form.award_year}
+                onChange={e => setForm(f => ({ ...f, award_year: parseInt(e.target.value) }))}
+                className="w-full bg-white border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:outline-none focus:border-green-600 transition-colors"
+              >
+                {YEAR_OPTIONS.map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
+          {/* Brief */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Campaign brief
@@ -138,6 +165,7 @@ export default function NewProjectPage() {
             />
           </div>
 
+          {/* Target shows */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">
               Target award shows
@@ -161,7 +189,11 @@ export default function NewProjectPage() {
             </div>
           </div>
 
-          {error && <p className="text-red-600 text-sm">{error}</p>}
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-lg">
+              {error}
+            </div>
+          )}
 
           <div className="flex gap-3 pt-2">
             <button
