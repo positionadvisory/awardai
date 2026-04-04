@@ -14,19 +14,39 @@
  *     prefilledQuality={78}             // optional — quality score 0–100
  *   />
  *
- * Integration points in projects-id-page:
- *   1. After directions are generated — "Explore timeline & budget →" button
- *   2. Direction card with evaluation — "Estimate ROI →" button
- *      (pre-fills show + converts overallScore: score/10 × 100 = quality)
- *
  * Destination: components/shows/ShowsDrawer.tsx
  * =============================================================================
  */
 
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import DeadlineCalendar from '@/components/shows/DeadlineCalendar'
-import BudgetCalculator from '@/components/shows/BudgetCalculator'
+import dynamic from 'next/dynamic'
+
+// ── Lazy child components (ssr: false prevents hydration mismatches) ───────────
+
+const DeadlineCalendar = dynamic(
+  () => import('@/components/shows/DeadlineCalendar'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center h-32">
+        <span className="text-sm text-gray-400">Loading calendar…</span>
+      </div>
+    ),
+  }
+)
+
+const BudgetCalculator = dynamic(
+  () => import('@/components/shows/BudgetCalculator'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center h-32">
+        <span className="text-sm text-gray-400">Loading calculator…</span>
+      </div>
+    ),
+  }
+)
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -49,14 +69,17 @@ export default function ShowsDrawer({
   prefilledShow,
   prefilledQuality,
 }: Props) {
-  const [tab, setTab] = useState<DrawerTab>(initialTab)
+  const [tab, setTab]       = useState<DrawerTab>(initialTab)
+  const [mounted, setMounted] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // Sync tab when the drawer opens with a specific initial tab
+  // Portal guard — ensure we only render on the client after hydration
+  useEffect(() => { setMounted(true) }, [])
+
+  // Sync tab + scroll to top when the drawer opens
   useEffect(() => {
     if (open) {
       setTab(initialTab)
-      // Scroll to top when reopened
       if (scrollRef.current) scrollRef.current.scrollTop = 0
     }
   }, [open, initialTab])
@@ -70,18 +93,14 @@ export default function ShowsDrawer({
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
 
-  // Prevent body scroll when drawer is open
+  // Prevent body scroll while open
   useEffect(() => {
-    if (open) {
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = ''
-    }
+    document.body.style.overflow = open ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
   }, [open])
 
-  // SSR guard — document.body is not available on the server
-  if (typeof window === 'undefined' || !open) return null
+  // Don't render until client-mounted, and don't render when closed
+  if (!mounted || !open) return null
 
   return createPortal(
     <>
@@ -109,7 +128,7 @@ export default function ShowsDrawer({
             </div>
             <div>
               <p className="text-sm font-semibold text-gray-900">Show Intelligence</p>
-              <p className="text-xs text-gray-400">Timelines, deadlines & entry ROI</p>
+              <p className="text-xs text-gray-400">Timelines, deadlines &amp; entry ROI</p>
             </div>
           </div>
           <button
@@ -126,7 +145,7 @@ export default function ShowsDrawer({
         {/* Tabs */}
         <div className="flex border-b border-gray-200 bg-white shrink-0 px-6">
           {([
-            { key: 'calendar' as DrawerTab, label: 'Timeline', icon: '📅' },
+            { key: 'calendar' as DrawerTab, label: 'Timeline',    icon: '📅' },
             { key: 'budget'   as DrawerTab, label: 'Budget & ROI', icon: '📊' },
           ] as { key: DrawerTab; label: string; icon: string }[]).map(t => (
             <button
@@ -170,6 +189,7 @@ export default function ShowsDrawer({
             deadlines before submitting. Win probability does not guarantee a result.
           </p>
         </div>
+
       </div>
     </>,
     document.body
