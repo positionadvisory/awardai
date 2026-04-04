@@ -73,6 +73,9 @@ export default function ProjectsPage() {
   const [profileOpen, setProfileOpen] = useState(false)
   const [uploadingCredentials, setUploadingCredentials] = useState(false)
   const [credentialsError, setCredentialsError] = useState('')
+  const [credentialsInputMode, setCredentialsInputMode] = useState<'pdf' | 'url'>('pdf')
+  const [credentialsUrl, setCredentialsUrl] = useState('')
+  const [isDragging, setIsDragging] = useState(false)
   const credentialsInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -120,59 +123,99 @@ export default function ProjectsPage() {
 
   // ── Agency profile credential upload ──────────────────────────────────────
 
-  const handleCredentialsUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (!file.name.toLowerCase().endsWith('.pdf')) {
-      setCredentialsError('Please upload a PDF file.')
-      return
-    }
-    if (file.size > 20 * 1024 * 1024) {
-      setCredentialsError('File must be under 20 MB.')
-      return
-    }
+  // Shared: POST body to extract-agency-profile edge function
+  const callExtractEdgeFunction = async (body: Record<string, string>) => {
+    const { data: refreshData } = await supabase.auth.refreshSession()
+    const accessToken = refreshData?.session?.access_token
+    if (!accessToken) { window.location.href = '/login'; return null }
 
+    const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/extract-agency-profile`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+        'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      throw new Error(errData.error || `Server error ${res.status}`)
+    }
+    return await res.json()
+  }
+
+  // Shared: validate + extract text from a PDF file, then call edge function
+  const processPdfFile = async (file: File) => {
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      setCredentialsError('Please use a PDF file.')
+      return
+    }
+    if (file.size > 40 * 1024 * 1024) {
+      setCredentialsError('File must be under 40 MB.')
+      return
+    }
     setUploadingCredentials(true)
     setCredentialsError('')
-
     try {
       const credentialsText = await extractPdfText(file)
       if (!credentialsText.trim() || credentialsText.length < 100) {
         setCredentialsError('Could not extract readable text from this PDF. Try a text-based PDF rather than a scanned image.')
-        setUploadingCredentials(false)
         return
       }
-
-      // Get fresh token
-      const { data: refreshData } = await supabase.auth.refreshSession()
-      const accessToken = refreshData?.session?.access_token
-      if (!accessToken) { window.location.href = '/login'; return }
-
-      const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/extract-agency-profile`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-          'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        },
-        body: JSON.stringify({ credentials_text: credentialsText }),
-      })
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}))
-        throw new Error(errData.error || `Server error ${res.status}`)
-      }
-
-      const data = await res.json()
-      setAgencyProfile(data.profile)
-      setProfileOpen(true) // Show the result
+      const data = await callExtractEdgeFunction({ credentials_text: credentialsText })
+      if (data) { setAgencyProfile(data.profile); setProfileOpen(true) }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Unknown error'
-      setCredentialsError(`Could not extract profile: ${msg}`)
+      setCredentialsError(`Could not extract profile: ${err instanceof Error ? err.message : 'Unknown error'}`)
     } finally {
       setUploadingCredentials(false)
-      // Reset file input
       if (credentialsInputRef.current) credentialsInputRef.current.value = ''
+    }
+  }
+
+  const handleCredentialsUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    await processPdfFile(file)
+  }
+
+  const handleCredentialsDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+    const file = e.dataTransfer.files?.[0]
+    if (!file) return
+    await processPdfFile(file)
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!isDragging) setIsDragging(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+  }
+
+  const handleCredentialsUrl = async () => {
+    const url = credentialsUrl.trim()
+    if (!url) return
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      setCredentialsError('Please enter a full URL starting with https://')
+      return
+    }
+    setUploadingCredentials(true)
+    setCredentialsError('')
+    try {
+      const data = await callExtractEdgeFunction({ url })
+      if (data) { setAgencyProfile(data.profile); setProfileOpen(true); setCredentialsUrl('') }
+    } catch (err) {
+      setCredentialsError(`Could not extract profile: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    } finally {
+      setUploadingCredentials(false)
     }
   }
 
@@ -310,79 +353,131 @@ export default function ProjectsPage() {
                       Extracted {new Date(agencyProfile.generated_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </p>
                   )}
-                  {/* Update credentials */}
-                  <div className="pt-2 border-t border-gray-100 flex items-center gap-3">
-                    <label className={`text-xs font-medium px-4 py-2 rounded-lg border transition-colors cursor-pointer ${
-                      uploadingCredentials
-                        ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed'
-                        : 'bg-white text-gray-700 border-gray-300 hover:border-green-600 hover:text-green-700'
-                    }`}>
-                      {uploadingCredentials ? (
-                        <span className="flex items-center gap-2">
-                          <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                          </svg>
-                          Extracting…
-                        </span>
-                      ) : '↑ Update credentials deck'}
-                      <input
-                        ref={credentialsInputRef}
-                        type="file"
-                        accept=".pdf"
-                        onChange={handleCredentialsUpload}
-                        disabled={uploadingCredentials}
-                        className="hidden"
-                      />
-                    </label>
-                    <p className="text-xs text-gray-400">Upload a new PDF to re-extract your agency profile</p>
+                  {/* Re-extract */}
+                  <div className="pt-4 border-t border-gray-100 space-y-3">
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Re-extract from</p>
+                    {/* Mode toggle */}
+                    <div className="flex gap-1 p-1 bg-gray-100 rounded-lg w-fit">
+                      <button type="button" onClick={() => { setCredentialsInputMode('pdf'); setCredentialsError('') }}
+                        className={`text-xs px-3 py-1.5 rounded-md transition-colors ${credentialsInputMode === 'pdf' ? 'bg-white text-gray-900 shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700'}`}>
+                        📄 Upload PDF
+                      </button>
+                      <button type="button" onClick={() => { setCredentialsInputMode('url'); setCredentialsError('') }}
+                        className={`text-xs px-3 py-1.5 rounded-md transition-colors ${credentialsInputMode === 'url' ? 'bg-white text-gray-900 shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700'}`}>
+                        🌐 Website URL
+                      </button>
+                    </div>
+                    {credentialsInputMode === 'pdf' ? (
+                      <div
+                        onDragOver={handleDragOver}
+                        onDragLeave={handleDragLeave}
+                        onDrop={handleCredentialsDrop}
+                        className={`border-2 border-dashed rounded-xl p-4 text-center transition-colors ${isDragging ? 'border-green-500 bg-green-50' : 'border-gray-300 hover:border-green-500'} ${uploadingCredentials ? 'opacity-60 pointer-events-none' : 'cursor-pointer'}`}
+                      >
+                        <label className="cursor-pointer">
+                          {uploadingCredentials ? (
+                            <span className="flex items-center justify-center gap-2 text-xs text-gray-500">
+                              <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
+                              Extracting…
+                            </span>
+                          ) : isDragging ? (
+                            <span className="text-xs font-medium text-green-700">Drop to extract</span>
+                          ) : (
+                            <span className="text-xs text-gray-500">
+                              <span className="font-medium text-gray-700">Drop a PDF here</span>, or <span className="text-green-700 font-medium">click to browse</span>
+                              <span className="block text-gray-400 mt-0.5">Max 40 MB</span>
+                            </span>
+                          )}
+                          <input ref={credentialsInputRef} type="file" accept=".pdf" onChange={handleCredentialsUpload} disabled={uploadingCredentials} className="hidden" />
+                        </label>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        <div className="flex gap-2">
+                          <input type="url" value={credentialsUrl} onChange={e => setCredentialsUrl(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') handleCredentialsUrl() }}
+                            placeholder="https://www.youragency.com" disabled={uploadingCredentials}
+                            className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors disabled:opacity-50" />
+                          <button onClick={handleCredentialsUrl} disabled={!credentialsUrl.trim() || uploadingCredentials}
+                            className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
+                            {uploadingCredentials ? (<><svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Extracting…</>) : 'Extract'}
+                          </button>
+                        </div>
+                        <p className="text-xs text-gray-400">We'll fetch your website and extract your agency context from it.</p>
+                      </div>
+                    )}
+                    {credentialsError && (
+                      <p className="text-xs text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg">{credentialsError}</p>
+                    )}
                   </div>
-                  {credentialsError && (
-                    <p className="text-xs text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg">{credentialsError}</p>
-                  )}
                 </div>
               ) : (
                 <div className="space-y-4">
                   <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                     <p className="text-sm text-gray-700 mb-1 font-medium">What this does</p>
                     <p className="text-sm text-gray-500 leading-relaxed">
-                      Upload your agency credentials deck (PDF) and AwardAI will extract your strategic approach, sector expertise, and writing style. This context is quietly injected into every entry draft and evaluation — making outputs feel like they came from your agency, not a generic AI.
+                      Upload your credentials deck or link to your agency website. AwardAI extracts your strategic approach, sector expertise, and writing style — then quietly injects this context into every entry draft and evaluation, making outputs feel like they came from your agency, not a generic AI.
                     </p>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <label className={`text-sm font-medium px-5 py-2.5 rounded-lg border transition-colors cursor-pointer ${
-                      uploadingCredentials
-                        ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed'
-                        : 'bg-green-800 text-white border-green-700 hover:bg-green-700'
-                    }`}>
-                      {uploadingCredentials ? (
-                        <span className="flex items-center gap-2">
-                          <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                          </svg>
-                          Extracting profile…
-                        </span>
-                      ) : 'Upload credentials deck (PDF)'}
-                      <input
-                        ref={credentialsInputRef}
-                        type="file"
-                        accept=".pdf"
-                        onChange={handleCredentialsUpload}
-                        disabled={uploadingCredentials}
-                        className="hidden"
-                      />
-                    </label>
-                    <button
-                      onClick={() => setProfileOpen(false)}
-                      className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
-                    >
-                      Skip for now
+
+                  {/* Mode toggle */}
+                  <div className="flex gap-1 p-1 bg-gray-100 rounded-lg w-fit">
+                    <button type="button" onClick={() => { setCredentialsInputMode('pdf'); setCredentialsError('') }}
+                      className={`text-xs px-3 py-1.5 rounded-md transition-colors ${credentialsInputMode === 'pdf' ? 'bg-white text-gray-900 shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700'}`}>
+                      📄 Upload PDF
+                    </button>
+                    <button type="button" onClick={() => { setCredentialsInputMode('url'); setCredentialsError('') }}
+                      className={`text-xs px-3 py-1.5 rounded-md transition-colors ${credentialsInputMode === 'url' ? 'bg-white text-gray-900 shadow-sm font-medium' : 'text-gray-500 hover:text-gray-700'}`}>
+                      🌐 Website URL
                     </button>
                   </div>
+
+                  {credentialsInputMode === 'pdf' ? (
+                    <div
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleCredentialsDrop}
+                      className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${isDragging ? 'border-green-500 bg-green-50' : 'border-gray-300 hover:border-green-500'} ${uploadingCredentials ? 'opacity-60 pointer-events-none' : 'cursor-pointer'}`}
+                    >
+                      <label className="cursor-pointer">
+                        {uploadingCredentials ? (
+                          <span className="flex items-center justify-center gap-2 text-sm text-gray-500">
+                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
+                            Extracting profile…
+                          </span>
+                        ) : isDragging ? (
+                          <span className="text-sm font-medium text-green-700">Drop to extract</span>
+                        ) : (
+                          <span className="text-sm text-gray-500">
+                            <span className="font-medium text-gray-700">Drop your credentials deck here</span>, or <span className="text-green-700 font-medium">click to browse</span>
+                            <span className="block text-xs text-gray-400 mt-1">PDF · Max 40 MB</span>
+                          </span>
+                        )}
+                        <input ref={credentialsInputRef} type="file" accept=".pdf" onChange={handleCredentialsUpload} disabled={uploadingCredentials} className="hidden" />
+                      </label>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <input type="url" value={credentialsUrl} onChange={e => setCredentialsUrl(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') handleCredentialsUrl() }}
+                          placeholder="https://www.youragency.com" disabled={uploadingCredentials}
+                          className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors disabled:opacity-50" />
+                        <button onClick={handleCredentialsUrl} disabled={!credentialsUrl.trim() || uploadingCredentials}
+                          className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors flex items-center gap-2">
+                          {uploadingCredentials ? (<><svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Extracting…</>) : 'Extract'}
+                        </button>
+                      </div>
+                      <p className="text-xs text-gray-400">We'll fetch your website and extract your agency context from it.</p>
+                    </div>
+                  )}
+
                   {credentialsError && (
                     <p className="text-xs text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg">{credentialsError}</p>
                   )}
+                  <button onClick={() => setProfileOpen(false)} className="text-sm text-gray-400 hover:text-gray-600 transition-colors">
+                    Skip for now
+                  </button>
                 </div>
               )}
             </div>
