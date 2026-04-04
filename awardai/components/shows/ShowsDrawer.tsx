@@ -104,17 +104,32 @@ export default function ShowsDrawer({
 
   return createPortal(
     <>
-      {/* Backdrop */}
+      {/* Backdrop — inline styles so positioning works regardless of Tailwind build */}
       <div
-        className="fixed inset-0 bg-black/30 z-[9998] transition-opacity"
+        style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(0,0,0,0.3)',
+          zIndex: 9998,
+        }}
         onClick={onClose}
         aria-hidden="true"
       />
 
-      {/* Drawer panel */}
+      {/* Drawer panel — inline styles for all critical layout/positioning */}
       <div
-        className="fixed inset-y-0 right-0 z-[9999] flex flex-col bg-white shadow-2xl"
-        style={{ width: 'min(90vw, 820px)' }}
+        style={{
+          position: 'fixed',
+          top: 0,
+          bottom: 0,
+          right: 0,
+          width: 'min(90vw, 820px)',
+          zIndex: 9999,
+          backgroundColor: '#ffffff',
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+        }}
         role="dialog"
         aria-modal="true"
         aria-label="Show timelines and budget"
