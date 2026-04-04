@@ -125,16 +125,20 @@ export default function ProjectsPage() {
 
   // Shared: POST body to extract-agency-profile edge function
   const callExtractEdgeFunction = async (body: Record<string, string>) => {
-    const { data: refreshData } = await supabase.auth.refreshSession()
-    const accessToken = refreshData?.session?.access_token
+    const { data: sessionData } = await supabase.auth.getSession()
+    const accessToken = sessionData?.session?.access_token
     if (!accessToken) { window.location.href = '/login'; return null }
 
-    const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/extract-agency-profile`, {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    if (!supabaseUrl || !anonKey) throw new Error('Missing Supabase configuration')
+
+    const res = await fetch(`${supabaseUrl}/functions/v1/extract-agency-profile`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}`,
-        'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        'apikey': anonKey,
       },
       body: JSON.stringify(body),
     })
