@@ -5,6 +5,8 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
 import GeneratingBar from '@/components/GeneratingBar'
 import { MATERIALS_EVAL_STATEMENTS, JURY_EVAL_STATEMENTS, COACH_REVIEW_STATEMENTS, SCRIPT_GENERATE_STATEMENTS, SCRIPT_REVIEW_STATEMENTS } from '@/lib/generatingStatements'
+import ShowsDrawer from '@/components/shows/ShowsDrawer'
+import { getDeadlineUrgency, resolveWinRateKey } from '@/lib/shows-data'
 
 // Canonical list of award shows — displayed in the Brief tab selector
 const CANONICAL_SHOWS = [
@@ -531,6 +533,24 @@ export default function ProjectPage() {
   const [dirSourceType, setDirSourceType] = useState<'all' | 'material' | 'entry'>('all')
   const [dirSourceMaterialIdx, setDirSourceMaterialIdx] = useState<number>(-1)
   const [dirSourceEntryDirectionId, setDirSourceEntryDirectionId] = useState<number>(-1)
+
+  // Show Intelligence drawer (Timeline + Budget) — opened after directions are generated
+  const [showsDrawerOpen, setShowsDrawerOpen] = useState(false)
+  const [drawerInitialTab, setDrawerInitialTab] = useState<'calendar' | 'budget'>('calendar')
+  const [drawerPrefilledShow, setDrawerPrefilledShow] = useState<string | undefined>()
+  const [drawerPrefilledQuality, setDrawerPrefilledQuality] = useState<number | undefined>()
+
+  /** Open the Show Intelligence drawer, optionally pre-filling the budget tab. */
+  const openShowsDrawer = (
+    tab: 'calendar' | 'budget',
+    show?: string,
+    quality?: number
+  ) => {
+    setDrawerInitialTab(tab)
+    setDrawerPrefilledShow(show)
+    setDrawerPrefilledQuality(quality)
+    setShowsDrawerOpen(true)
+  }
   // KB awards count for Script Analysis subheadline
   const [kbCount, setKbCount] = useState<number>(0)
 
@@ -1814,6 +1834,32 @@ export default function ProjectPage() {
                             {hasEval && <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${scoreBg(evaluations[d.id].overall_score)} ${scoreColor(evaluations[d.id].overall_score)}`}>{evaluations[d.id].overall_score}/10</span>}
                           </div>
                           {d.best_show && <p className="text-green-700 text-sm mt-0.5">{d.best_show} · <span className="text-gray-500">{d.best_category}</span></p>}
+                          {/* Deadline urgency badge — shown when timeline is tight or critical */}
+                          {d.best_show && (() => {
+                            const urgency = getDeadlineUrgency(d.best_show)
+                            if (urgency.level === 'critical') return (
+                              <div className="mt-1.5">
+                                <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-red-50 text-red-700 border border-red-200">
+                                  ⚠ {urgency.daysLeft}d to deadline — critical, insufficient time for entry + video
+                                </span>
+                              </div>
+                            )
+                            if (urgency.level === 'tight') return (
+                              <div className="mt-1.5">
+                                <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                                  ⏱ {urgency.daysLeft} days to deadline — tight, start entry immediately
+                                </span>
+                              </div>
+                            )
+                            if (urgency.level === 'prepare') return (
+                              <div className="mt-1.5">
+                                <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                                  📅 {urgency.daysLeft} days to deadline — prep phases beginning
+                                </span>
+                              </div>
+                            )
+                            return null
+                          })()}
                           {d.hook && <p className="text-gray-700 text-sm mt-2 italic">"{d.hook}"</p>}
                           {d.angle && <p className="text-gray-500 text-sm mt-2">{d.angle}</p>}
                           {d.likelihood_rationale && <p className="text-gray-400 text-xs mt-2">{d.likelihood_rationale}</p>}
@@ -1831,6 +1877,28 @@ export default function ProjectPage() {
                                 {hasEval ? 'View entry & evaluation →' : 'View entry →'}
                               </button>
                             )}
+                            {/* Divider */}
+                            <span className="text-gray-200 text-xs ml-auto">·</span>
+                            {/* Estimate ROI — pre-fills budget tab with show + eval score */}
+                            {d.best_show && resolveWinRateKey(d.best_show) && (
+                              <button
+                                onClick={() => openShowsDrawer(
+                                  'budget',
+                                  d.best_show ?? undefined,
+                                  hasEval ? Math.round((evaluations[d.id].overall_score / 10) * 100) : undefined
+                                )}
+                                className="text-xs text-gray-500 hover:text-green-700 border border-gray-200 hover:border-green-300 px-3 py-1.5 rounded-lg transition-colors"
+                              >
+                                📊 Estimate ROI
+                              </button>
+                            )}
+                            {/* View timeline */}
+                            <button
+                              onClick={() => openShowsDrawer('calendar')}
+                              className="text-xs text-gray-500 hover:text-green-700 border border-gray-200 hover:border-green-300 px-3 py-1.5 rounded-lg transition-colors"
+                            >
+                              📅 View timeline
+                            </button>
                           </div>
                           {isGeneratingThis && (
                             <div className="mt-3">
@@ -1868,6 +1936,32 @@ export default function ProjectPage() {
             )}
             {directions.some(d => d.win_likelihood !== null && !evaluations[d.id]) && (
               <p className="text-xs text-gray-400 mt-4">* Win likelihood based on show base rate only — evaluate an entry to factor in content quality.</p>
+            )}
+
+            {/* Show Intelligence CTA — surfaces timeline and budget tools after directions are generated */}
+            {directions.length > 0 && (
+              <div className="mt-5 bg-white border border-gray-200 rounded-xl px-5 py-4 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Explore show timelines & entry budgets</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    View submission deadlines, prep phase windows, and ROI estimates for any show.
+                  </p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button
+                    onClick={() => openShowsDrawer('calendar')}
+                    className="text-xs font-medium text-gray-700 border border-gray-200 hover:border-gray-400 hover:text-gray-900 px-4 py-2 rounded-lg transition-colors"
+                  >
+                    📅 Timeline
+                  </button>
+                  <button
+                    onClick={() => openShowsDrawer('budget')}
+                    className="text-xs font-medium bg-green-800 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
+                  >
+                    📊 Budget & ROI
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         )}
@@ -1976,6 +2070,20 @@ export default function ProjectPage() {
                                 title="Download evaluation as text file"
                               >
                                 ↓ Download
+                              </button>
+                            )}
+                            {/* Estimate ROI from evaluation score — pre-fills budget calculator */}
+                            {evaluation && dirShow && resolveWinRateKey(dirShow) && (
+                              <button
+                                onClick={() => openShowsDrawer(
+                                  'budget',
+                                  dirShow,
+                                  Math.round((evaluation.overall_score / 10) * 100)
+                                )}
+                                className="text-xs text-gray-500 hover:text-green-700 border border-gray-200 hover:border-green-300 px-3 py-2 rounded-lg transition-colors"
+                                title="Estimate entry ROI using this evaluation score"
+                              >
+                                📊 Estimate ROI
                               </button>
                             )}
                             <button
@@ -3034,6 +3142,15 @@ export default function ProjectPage() {
           </div>
         </div>
       )}
+
+      {/* ── Show Intelligence Drawer — Timeline & Budget ──────────────────── */}
+      <ShowsDrawer
+        open={showsDrawerOpen}
+        onClose={() => setShowsDrawerOpen(false)}
+        initialTab={drawerInitialTab}
+        prefilledShow={drawerPrefilledShow}
+        prefilledQuality={drawerPrefilledQuality}
+      />
 
     </div>
   )
