@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
 
 const ADMIN_EMAIL = 'ben@positionadvisory.com'
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://gotshortlisted.com'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,13 @@ export default function AdminPage() {
   const [error, setError]     = useState('')
   const [toggling, setToggling] = useState<number | null>(null)
   const [search, setSearch]   = useState('')
+
+  // Platform invite state
+  const [inviteEmail, setInviteEmail]   = useState('')
+  const [inviting, setInviting]         = useState(false)
+  const [inviteLink, setInviteLink]     = useState('')
+  const [inviteError, setInviteError]   = useState('')
+  const [copied, setCopied]             = useState(false)
 
   // ── Gate: only ben ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -95,6 +103,43 @@ export default function AdminPage() {
     }
   }
 
+  // ── Platform invite ───────────────────────────────────────────────────────
+  const generatePlatformInvite = async () => {
+    if (!inviteEmail.trim() || !inviteEmail.includes('@')) {
+      setInviteError('Enter a valid email address.')
+      return
+    }
+    setInviting(true)
+    setInviteError('')
+    setInviteLink('')
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token
+      if (!token) return
+
+      const res = await fetch('/api/platform-invite/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email: inviteEmail.trim().toLowerCase() }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Failed to generate invite')
+      setInviteLink(data.link)
+      setInviteEmail('')
+    } catch (e) {
+      setInviteError(e instanceof Error ? e.message : 'Unknown error')
+    } finally {
+      setInviting(false)
+    }
+  }
+
+  const copyLink = () => {
+    if (!inviteLink) return
+    navigator.clipboard.writeText(inviteLink)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
   // ── Filtered list ─────────────────────────────────────────────────────────
   const filtered = orgs.filter(o => {
     const q = search.toLowerCase()
@@ -122,7 +167,7 @@ export default function AdminPage() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
           <div>
             <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9ca3af', marginBottom: 4 }}>
-              AwardAI Admin
+              Shortlist Admin
             </div>
             <h1 style={{ fontSize: 26, fontWeight: 700, color: '#111827', margin: 0 }}>
               Organisations
@@ -158,6 +203,76 @@ export default function AdminPage() {
               ← App
             </a>
           </div>
+        </div>
+
+        {/* ── Platform Invite ─────────────────────────────────────────────── */}
+        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '20px 24px', marginBottom: 28 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', marginBottom: 4 }}>
+            Invite someone to Shortlist
+          </div>
+          <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 16 }}>
+            Generates a sign-up link for a new user to create their own agency account. Copy the link and paste it into your invite email.
+          </div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            <input
+              type="email"
+              placeholder="their@agency.com"
+              value={inviteEmail}
+              onChange={e => setInviteEmail(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && generatePlatformInvite()}
+              style={{
+                flex: '1 1 240px', padding: '9px 14px', borderRadius: 8, border: '1px solid #d1d5db',
+                fontSize: 14, outline: 'none', background: '#fff',
+              }}
+            />
+            <button
+              onClick={generatePlatformInvite}
+              disabled={inviting}
+              style={{
+                padding: '9px 20px', borderRadius: 8, background: '#166534',
+                color: '#fff', fontSize: 14, fontWeight: 500, border: 'none',
+                cursor: inviting ? 'wait' : 'pointer', opacity: inviting ? 0.7 : 1,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {inviting ? 'Generating…' : 'Generate invite link'}
+            </button>
+          </div>
+
+          {inviteError && (
+            <div style={{ marginTop: 10, fontSize: 13, color: '#dc2626' }}>{inviteError}</div>
+          )}
+
+          {inviteLink && (
+            <div style={{ marginTop: 14, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '12px 16px' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: '#166534', marginBottom: 6 }}>
+                ✓ Invite link ready — valid for 30 days
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <code style={{
+                  flex: 1, fontSize: 12, background: '#fff', border: '1px solid #d1fae5',
+                  borderRadius: 6, padding: '6px 10px', color: '#374151', wordBreak: 'break-all',
+                }}>
+                  {inviteLink}
+                </code>
+                <button
+                  onClick={copyLink}
+                  style={{
+                    padding: '6px 14px', borderRadius: 6, border: '1px solid #166534',
+                    background: copied ? '#166534' : '#fff',
+                    color: copied ? '#fff' : '#166534',
+                    fontSize: 13, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {copied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+              <div style={{ marginTop: 10, fontSize: 12, color: '#6b7280' }}>
+                Paste this link into your invite email. The recipient will create their own account and organisation on Shortlist.
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Summary strip */}
