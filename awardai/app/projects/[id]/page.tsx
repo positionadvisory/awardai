@@ -1486,6 +1486,16 @@ export default function ProjectPage() {
         {tab === 'brief' && (
           <div className="max-w-2xl space-y-8">
 
+            {/* First-time onboarding hint — shown only when brief and materials are both empty */}
+            {!project.combined_text && (project.materials ?? []).length === 0 && (
+              <div className="bg-green-50 border border-green-200 rounded-xl px-5 py-4">
+                <p className="text-sm font-medium text-green-900 mb-1">Welcome to Shortlist — here&apos;s where to start</p>
+                <p className="text-sm text-green-700 leading-relaxed">
+                  Add a brief below describing your campaign and entry objectives, then upload your campaign materials on the <button onClick={() => setTab('materials')} className="underline font-medium hover:text-green-900 transition-colors">Materials tab</button>. Shortlist uses both to generate award entry directions and draft your entries.
+                </p>
+              </div>
+            )}
+
             {/* Project Description */}
             <div>
               <div className="flex items-start justify-between mb-2">
