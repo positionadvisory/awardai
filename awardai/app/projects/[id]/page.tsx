@@ -538,17 +538,11 @@ export default function ProjectPage() {
   const [showsDrawerOpen, setShowsDrawerOpen] = useState(false)
   const [drawerInitialTab, setDrawerInitialTab] = useState<'calendar' | 'budget'>('calendar')
   const [drawerPrefilledShow, setDrawerPrefilledShow] = useState<string | undefined>()
-  const [drawerPrefilledQuality, setDrawerPrefilledQuality] = useState<number | undefined>()
 
-  /** Open the Show Intelligence drawer, optionally pre-filling the budget tab. */
-  const openShowsDrawer = (
-    tab: 'calendar' | 'budget',
-    show?: string,
-    quality?: number
-  ) => {
+  /** Open the Show Intelligence drawer, optionally highlighting a specific show in the Budget Planner. */
+  const openShowsDrawer = (tab: 'calendar' | 'budget', show?: string) => {
     setDrawerInitialTab(tab)
     setDrawerPrefilledShow(show)
-    setDrawerPrefilledQuality(quality)
     setShowsDrawerOpen(true)
   }
   // KB awards count for Script Analysis subheadline
@@ -1075,6 +1069,7 @@ export default function ProjectPage() {
           award_show: quickEvalShow.trim(),
           category: quickEvalCategory.trim(),
           sort_order: 0,
+          draft_generation: 1,
         })
         .select()
         .single()
@@ -1879,17 +1874,13 @@ export default function ProjectPage() {
                             )}
                             {/* Divider */}
                             <span className="text-gray-200 text-xs ml-auto">·</span>
-                            {/* Estimate ROI — pre-fills budget tab with show + eval score */}
+                            {/* Budget Planner shortcut */}
                             {d.best_show && resolveWinRateKey(d.best_show) && (
                               <button
-                                onClick={() => openShowsDrawer(
-                                  'budget',
-                                  d.best_show ?? undefined,
-                                  hasEval ? Math.round((evaluations[d.id].overall_score / 10) * 100) : undefined
-                                )}
+                                onClick={() => openShowsDrawer('budget', d.best_show ?? undefined)}
                                 className="text-xs text-gray-500 hover:text-green-700 border border-gray-200 hover:border-green-300 px-3 py-1.5 rounded-lg transition-colors"
                               >
-                                📊 Estimate ROI
+                                📋 Plan budget
                               </button>
                             )}
                             {/* View timeline */}
@@ -1897,7 +1888,7 @@ export default function ProjectPage() {
                               onClick={() => openShowsDrawer('calendar')}
                               className="text-xs text-gray-500 hover:text-green-700 border border-gray-200 hover:border-green-300 px-3 py-1.5 rounded-lg transition-colors"
                             >
-                              📅 View timeline
+                              📅 Timeline
                             </button>
                           </div>
                           {isGeneratingThis && (
@@ -1972,6 +1963,30 @@ export default function ProjectPage() {
             {evaluateError && (
               <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
                 <p className="text-red-600 text-sm">{evaluateError}</p>
+              </div>
+            )}
+
+            {/* Budget Planner CTA — always shown in Entries tab when directions exist */}
+            {directions.length > 0 && (
+              <div className="mb-5 bg-white border border-gray-200 rounded-xl px-5 py-3 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Plan your entry budget</p>
+                  <p className="text-xs text-gray-400 mt-0.5">See costs, deadlines and a budget summary across all directions.</p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button
+                    onClick={() => openShowsDrawer('calendar')}
+                    className="text-xs font-medium text-gray-700 border border-gray-200 hover:border-gray-400 hover:text-gray-900 px-3 py-2 rounded-lg transition-colors"
+                  >
+                    📅 Timeline
+                  </button>
+                  <button
+                    onClick={() => openShowsDrawer('budget')}
+                    className="text-xs font-medium bg-green-800 hover:bg-green-700 text-white px-3 py-2 rounded-lg transition-colors"
+                  >
+                    📋 Budget Planner
+                  </button>
+                </div>
               </div>
             )}
 
@@ -2072,18 +2087,14 @@ export default function ProjectPage() {
                                 ↓ Download
                               </button>
                             )}
-                            {/* Estimate ROI from evaluation score — pre-fills budget calculator */}
-                            {evaluation && dirShow && resolveWinRateKey(dirShow) && (
+                            {/* Budget Planner shortcut — highlights this direction's show */}
+                            {dirShow && resolveWinRateKey(dirShow) && (
                               <button
-                                onClick={() => openShowsDrawer(
-                                  'budget',
-                                  dirShow,
-                                  Math.round((evaluation.overall_score / 10) * 100)
-                                )}
+                                onClick={() => openShowsDrawer('budget', dirShow)}
                                 className="text-xs text-gray-500 hover:text-green-700 border border-gray-200 hover:border-green-300 px-3 py-2 rounded-lg transition-colors"
-                                title="Estimate entry ROI using this evaluation score"
+                                title="Open Budget Planner for this direction"
                               >
-                                📊 Estimate ROI
+                                📋 Plan budget
                               </button>
                             )}
                             <button
@@ -2638,6 +2649,30 @@ export default function ProjectPage() {
         {tab === 'script' && (
           <div className="max-w-3xl">
 
+            {/* Budget Planner CTA */}
+            {directions.length > 0 && (
+              <div className="mb-5 bg-white border border-gray-200 rounded-xl px-5 py-3 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Plan your entry budget</p>
+                  <p className="text-xs text-gray-400 mt-0.5">See entry costs and deadlines across all directions for this project.</p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button
+                    onClick={() => openShowsDrawer('calendar')}
+                    className="text-xs font-medium text-gray-700 border border-gray-200 hover:border-gray-400 hover:text-gray-900 px-3 py-2 rounded-lg transition-colors"
+                  >
+                    📅 Timeline
+                  </button>
+                  <button
+                    onClick={() => openShowsDrawer('budget')}
+                    className="text-xs font-medium bg-green-800 hover:bg-green-700 text-white px-3 py-2 rounded-lg transition-colors"
+                  >
+                    📋 Budget Planner
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Mode toggle */}
             <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl p-1 w-fit mb-6">
               {(['generate', 'review'] as const).map(m => (
@@ -3148,8 +3183,9 @@ export default function ProjectPage() {
         open={showsDrawerOpen}
         onClose={() => setShowsDrawerOpen(false)}
         initialTab={drawerInitialTab}
+        directions={directions}
+        orgId={orgId}
         prefilledShow={drawerPrefilledShow}
-        prefilledQuality={drawerPrefilledQuality}
       />
 
     </div>
