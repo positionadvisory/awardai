@@ -249,9 +249,9 @@ export default function ProjectsPage() {
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 shrink-0">
             <div className="w-7 h-7 rounded-lg bg-green-800 flex items-center justify-center">
-              <span className="text-xs font-bold text-white">A</span>
+              <span className="text-xs font-bold text-white">S</span>
             </div>
-            <span className="font-semibold text-gray-900">AwardAI</span>
+            <span className="font-semibold text-gray-900">Shortlist</span>
           </div>
           <div className="flex items-center gap-4 shrink-0">
             {userRole === 'admin' && (
@@ -420,7 +420,7 @@ export default function ProjectsPage() {
                   <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                     <p className="text-sm text-gray-700 mb-1 font-medium">What this does</p>
                     <p className="text-sm text-gray-500 leading-relaxed">
-                      Upload your credentials deck or link to your agency website. AwardAI extracts your strategic approach, sector expertise, and writing style — then quietly injects this context into every entry draft and evaluation, making outputs feel like they came from your agency, not a generic AI.
+                      Upload your credentials deck or link to your agency website. Shortlist extracts your strategic approach, sector expertise, and writing style — then quietly injects this context into every entry draft and evaluation, making outputs feel like they came from your agency, not a generic AI.
                     </p>
                   </div>
 
