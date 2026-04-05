@@ -5,11 +5,25 @@
 // URL format: /signup?token=xxx&email=user@agency.com
 // On success: Supabase onboarding trigger auto-creates their org.
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
+// ── Outer shell — required by Next.js 14 when using useSearchParams ───────────
 export default function SignupPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center px-4">
+        <p className="text-sm text-gray-400">Loading…</p>
+      </div>
+    }>
+      <SignupContent />
+    </Suspense>
+  )
+}
+
+// ── Inner component — reads URL params, handles all logic ─────────────────────
+function SignupContent() {
   const router       = useRouter()
   const params       = useSearchParams()
   const tokenParam   = params.get('token') ?? ''
