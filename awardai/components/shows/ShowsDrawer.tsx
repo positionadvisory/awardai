@@ -2,16 +2,17 @@
 /**
  * ShowsDrawer.tsx — Award Show Timeline & Budget Drawer
  * =============================================================================
- * Slide-over panel that surfaces the DeadlineCalendar and BudgetCalculator
- * features without leaving the project workspace.
+ * Slide-over panel surfacing the DeadlineCalendar and BudgetPlanner features
+ * without leaving the project workspace.
  *
  * Usage:
  *   <ShowsDrawer
  *     open={showsDrawerOpen}
  *     onClose={() => setShowsDrawerOpen(false)}
  *     initialTab="calendar"            // or "budget"
- *     prefilledShow="Cannes Lions"      // optional — pre-selects show in budget
- *     prefilledQuality={78}             // optional — quality score 0–100
+ *     directions={directions}          // Direction[] from project state
+ *     orgId={orgId}                    // for loading/saving cost defaults
+ *     prefilledShow="Cannes Lions"     // optional — highlights show in planner
  *   />
  *
  * Destination: components/shows/ShowsDrawer.tsx
@@ -29,20 +30,20 @@ const DeadlineCalendar = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex items-center justify-center h-32">
-        <span className="text-sm text-gray-400">Loading calendar…</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '8rem' }}>
+        <span style={{ fontSize: '0.875rem', color: '#9ca3af' }}>Loading calendar…</span>
       </div>
     ),
   }
 )
 
-const BudgetCalculator = dynamic(
-  () => import('@/components/shows/BudgetCalculator'),
+const BudgetPlanner = dynamic(
+  () => import('@/components/shows/BudgetPlanner'),
   {
     ssr: false,
     loading: () => (
-      <div className="flex items-center justify-center h-32">
-        <span className="text-sm text-gray-400">Loading calculator…</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '8rem' }}>
+        <span style={{ fontSize: '0.875rem', color: '#9ca3af' }}>Loading planner…</span>
       </div>
     ),
   }
@@ -52,12 +53,21 @@ const BudgetCalculator = dynamic(
 
 type DrawerTab = 'calendar' | 'budget'
 
+type Direction = {
+  id: number
+  name: string
+  best_show: string | null
+  best_category: string | null
+  win_likelihood: number | null
+}
+
 type Props = {
   open: boolean
   onClose: () => void
   initialTab?: DrawerTab
+  directions?: Direction[]
+  orgId?: number | null
   prefilledShow?: string
-  prefilledQuality?: number
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -66,17 +76,18 @@ export default function ShowsDrawer({
   open,
   onClose,
   initialTab = 'calendar',
+  directions = [],
+  orgId,
   prefilledShow,
-  prefilledQuality,
 }: Props) {
-  const [tab, setTab]       = useState<DrawerTab>(initialTab)
-  const [mounted, setMounted] = useState(false)
-  const scrollRef = useRef<HTMLDivElement>(null)
+  const [tab, setTab]           = useState<DrawerTab>(initialTab)
+  const [mounted, setMounted]   = useState(false)
+  const scrollRef               = useRef<HTMLDivElement>(null)
 
-  // Portal guard — ensure we only render on the client after hydration
+  // Portal guard — only render on client after hydration
   useEffect(() => { setMounted(true) }, [])
 
-  // Sync tab + scroll to top when the drawer opens
+  // Sync tab + scroll to top when drawer opens
   useEffect(() => {
     if (open) {
       setTab(initialTab)
@@ -84,46 +95,38 @@ export default function ShowsDrawer({
     }
   }, [open, initialTab])
 
-  // Close on Escape key
+  // Close on Escape
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && open) onClose()
-    }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && open) onClose() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
 
-  // Prevent body scroll while open
+  // Body scroll lock
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
   }, [open])
 
-  // Don't render until client-mounted, and don't render when closed
   if (!mounted || !open) return null
+
+  const hasBudgetData = directions.some(d => d.best_show)
 
   return createPortal(
     <>
-      {/* Backdrop — inline styles so positioning works regardless of Tailwind build */}
+      {/* Backdrop */}
       <div
-        style={{
-          position: 'fixed',
-          inset: 0,
-          backgroundColor: 'rgba(0,0,0,0.3)',
-          zIndex: 9998,
-        }}
+        style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.3)', zIndex: 9998 }}
         onClick={onClose}
         aria-hidden="true"
       />
 
-      {/* Drawer panel — inline styles for all critical layout/positioning */}
+      {/* Drawer panel */}
       <div
         style={{
           position: 'fixed',
-          top: 0,
-          bottom: 0,
-          right: 0,
-          width: 'min(90vw, 820px)',
+          top: 0, bottom: 0, right: 0,
+          width: 'min(90vw, 860px)',
           zIndex: 9999,
           backgroundColor: '#ffffff',
           display: 'flex',
@@ -132,7 +135,7 @@ export default function ShowsDrawer({
         }}
         role="dialog"
         aria-modal="true"
-        aria-label="Show timelines and budget"
+        aria-label="Show timelines and budget planning"
       >
 
         {/* Header */}
@@ -143,7 +146,7 @@ export default function ShowsDrawer({
             </div>
             <div>
               <p className="text-sm font-semibold text-gray-900">Show Intelligence</p>
-              <p className="text-xs text-gray-400">Timelines, deadlines &amp; entry ROI</p>
+              <p className="text-xs text-gray-400">Deadline calendar &amp; entry budget planner</p>
             </div>
           </div>
           <button
@@ -160,8 +163,8 @@ export default function ShowsDrawer({
         {/* Tabs */}
         <div className="flex border-b border-gray-200 bg-white shrink-0 px-6">
           {([
-            { key: 'calendar' as DrawerTab, label: 'Timeline',    icon: '📅' },
-            { key: 'budget'   as DrawerTab, label: 'Budget & ROI', icon: '📊' },
+            { key: 'calendar' as DrawerTab, label: 'Timeline',      icon: '📅' },
+            { key: 'budget'   as DrawerTab, label: 'Budget Planner', icon: '📋' },
           ] as { key: DrawerTab; label: string; icon: string }[]).map(t => (
             <button
               key={t.key}
@@ -179,7 +182,12 @@ export default function ShowsDrawer({
               <span>{t.label}</span>
               {t.key === 'budget' && prefilledShow && (
                 <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full ml-0.5">
-                  prefilled
+                  this direction
+                </span>
+              )}
+              {t.key === 'budget' && hasBudgetData && !prefilledShow && (
+                <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full ml-0.5">
+                  {directions.filter(d => d.best_show).length} direction{directions.filter(d => d.best_show).length !== 1 ? 's' : ''}
                 </span>
               )}
             </button>
@@ -190,9 +198,10 @@ export default function ShowsDrawer({
         <div ref={scrollRef} className="flex-1 overflow-y-auto bg-gray-50">
           {tab === 'calendar' && <DeadlineCalendar />}
           {tab === 'budget' && (
-            <BudgetCalculator
+            <BudgetPlanner
+              directions={directions}
+              orgId={orgId}
               prefilledShow={prefilledShow}
-              prefilledQuality={prefilledQuality}
             />
           )}
         </div>
@@ -200,8 +209,7 @@ export default function ShowsDrawer({
         {/* Footer */}
         <div className="px-6 py-3 border-t border-gray-200 bg-white shrink-0">
           <p className="text-xs text-gray-400">
-            ⚠ All dates and win rates are estimates based on historical data. Verify official
-            deadlines before submitting. Win probability does not guarantee a result.
+            ⚠ Entry fees and deadlines are estimates from historical data. Always verify at official show websites before committing budget.
           </p>
         </div>
 
