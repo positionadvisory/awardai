@@ -87,7 +87,16 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <p className="text-center text-gray-400 text-xs mt-6">Access by invitation only.</p>
+        <p className="text-center text-gray-400 text-xs mt-6 leading-relaxed">
+          We&apos;re currently in a private trial phase.<br />
+          Want to get shortlisted in more awards?{' '}
+          <a
+            href="mailto:ben@positionadvisory.com?subject=I%E2%80%99d%20like%20to%20get%20Shortlisted%20more%20often%20please"
+            className="text-green-700 hover:text-green-600 underline transition-colors"
+          >
+            Email ben@positionadvisory.com
+          </a>
+        </p>
       </div>
     </div>
   )
