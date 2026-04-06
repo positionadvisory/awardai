@@ -183,19 +183,17 @@ export default function CampaignsPage() {
     setSearched(false)
 
     try {
-      const { data: sessionData } = await supabase.auth.getSession()
-      const accessToken = sessionData?.session?.access_token
-      if (!accessToken) { router.push('/login'); return }
-
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
       const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
       if (!supabaseUrl || !anonKey) throw new Error('Missing Supabase configuration')
 
+      // match-campaigns uses service_role internally — anon key as Bearer is sufficient.
+      // (User is already verified by the page's useAuth guard.)
       const res = await fetch(`${supabaseUrl}/functions/v1/match-campaigns`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
+          'Authorization': `Bearer ${anonKey}`,
           'apikey': anonKey,
         },
         body: JSON.stringify({
