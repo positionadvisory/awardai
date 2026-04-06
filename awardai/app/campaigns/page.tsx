@@ -21,6 +21,16 @@ type Campaign = {
   similarity: number
 }
 
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Return at most `limit` words, appending … if truncated. */
+function w(text: string | null | undefined, limit = 30): string | null {
+  if (!text?.trim()) return null
+  const words = text.trim().split(/\s+/)
+  if (words.length <= limit) return text.trim()
+  return words.slice(0, limit).join(' ') + '…'
+}
+
 // ─── Tier badge colours ────────────────────────────────────────────────────────
 
 function tierStyle(tier: string | null): string {
@@ -55,7 +65,8 @@ function SimilarityBadge({ score }: { score: number }) {
 // ─── Result card ──────────────────────────────────────────────────────────────
 
 function CampaignCard({ c }: { c: Campaign }) {
-  const [expanded, setExpanded] = useState(false)
+  const idea = w(c.what, 30)
+  const winFactor = w(c.win_factor, 30)
   return (
     <div className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:border-gray-300 transition-colors">
       <div className="px-5 py-4">
@@ -91,28 +102,18 @@ function CampaignCard({ c }: { c: Campaign }) {
           )}
         </div>
 
-        {/* Idea */}
-        {c.what && (
-          <p className={`mt-3 text-xs text-gray-700 leading-relaxed ${expanded ? '' : 'line-clamp-2'}`}>
-            <span className="font-medium text-gray-500">Idea: </span>{c.what}
+        {/* Idea — fixed 30-word summary, no expand */}
+        {idea && (
+          <p className="mt-3 text-xs text-gray-700 leading-relaxed">
+            <span className="font-medium text-gray-500">Idea: </span>{idea}
           </p>
         )}
 
-        {/* Win factor */}
-        {c.win_factor && (
-          <p className={`mt-1.5 text-xs text-gray-700 leading-relaxed ${expanded ? '' : 'line-clamp-2'}`}>
-            <span className="font-medium text-green-700">Win factor: </span>{c.win_factor}
+        {/* Win factor — fixed 30-word summary */}
+        {winFactor && (
+          <p className="mt-1.5 text-xs text-gray-700 leading-relaxed">
+            <span className="font-medium text-green-700">Win factor: </span>{winFactor}
           </p>
-        )}
-
-        {/* Expand toggle */}
-        {(c.what?.length ?? 0) + (c.win_factor?.length ?? 0) > 120 && (
-          <button
-            onClick={() => setExpanded(e => !e)}
-            className="mt-2 text-xs text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            {expanded ? 'Show less ↑' : 'Show more ↓'}
-          </button>
         )}
       </div>
     </div>
