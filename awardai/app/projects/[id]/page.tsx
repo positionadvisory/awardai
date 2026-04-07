@@ -436,7 +436,10 @@ export default function ProjectPage() {
   const [project, setProject] = useState<Project | null>(null)
   const [directions, setDirections] = useState<Direction[]>([])
   const [entries, setEntries] = useState<EntryDraft[]>([])
-  const [evaluations, setEvaluations] = useState<Record<number, Evaluation>>({})
+  const [evaluations, setEvaluations] = useState<Record<number, { judge?: Evaluation; coach?: Evaluation }>>({})
+  const [evalDisplayMode, setEvalDisplayMode] = useState<Record<number, 'judge' | 'coach'>>({})
+  const [evalHistory, setEvalHistory] = useState<Record<number, Evaluation[]>>({})
+  const [evalHistoryOpen, setEvalHistoryOpen] = useState<Record<number, boolean>>({})
   const [tab, setTab] = useState<Tab>('brief')
   const [fetching, setFetching] = useState(true)
 
@@ -449,6 +452,15 @@ export default function ProjectPage() {
   const [savingShows, setSavingShows] = useState(false)
   const [kbShows, setKbShows] = useState<string[]>([])
   const [customShowInput, setCustomShowInput] = useState('')
+  // Show request flow
+  const [showRequestModal, setShowRequestModal] = useState(false)
+  const [showRequestName, setShowRequestName] = useState('')
+  const [showRequestUrl, setShowRequestUrl] = useState('')
+  const [showRequestMarket, setShowRequestMarket] = useState('')
+  const [showRequestKitUrl, setShowRequestKitUrl] = useState('')
+  const [showRequestSubmitting, setShowRequestSubmitting] = useState(false)
+  const [showRequestDone, setShowRequestDone] = useState(false)
+  const [showRequestNoKit, setShowRequestNoKit] = useState(false)
 
   // Materials
   const [uploading, setUploading] = useState(false)
@@ -458,6 +470,8 @@ export default function ProjectPage() {
   // Directions generation
   const [generating, setGenerating] = useState(false)
   const [generateError, setGenerateError] = useState('')
+  const [smartDirectionsLoading, setSmartDirectionsLoading] = useState<Record<number, 'alternatives' | 'other_shows' | null>>({})
+  const [smartDirectionsError, setSmartDirectionsError] = useState<Record<number, string>>({})
 
   // Draft generation
   const [generatingDraft, setGeneratingDraft] = useState(false)
@@ -519,6 +533,10 @@ export default function ProjectPage() {
   const [dirSourceEntryDirectionId, setDirSourceEntryDirectionId] = useState<number>(-1)
   // KB awards count for Script Analysis subheadline
   const [kbCount, setKbCount] = useState<number>(0)
+  // Script: asset mode + eval inclusion
+  const [scriptAssetMode, setScriptAssetMode] = useState<'best_possible' | 'minimal'>('best_possible')
+  const [scriptIncludeEval, setScriptIncludeEval] = useState(false)
+  const [scriptEvalDirectionId, setScriptEvalDirectionId] = useState<number>(-1)
 
   // Quick evaluate from uploaded material
   const [orgId, setOrgId] = useState<number | null>(null)
@@ -576,19 +594,65 @@ export default function ProjectPage() {
       if (draftsList.length > 0) setEntries(draftsList)
 
       if (evals && evals.length > 0 && draftsList.length > 0) {
-        const evalMap: Record<number, Evaluation> = {}
-        const chatMap: Record<number, ChatMessage[]> = {}
-        for (const ev of evals) {
-          const relatedDraft = draftsList.find(d => d.id === ev.entry_draft_id)
-          if (relatedDraft && !evalMap[relatedDraft.direction_id]) {
-            evalMap[relatedDraft.direction_id] = ev
-            // Restore persisted eval chat history if present
-            if (ev.eval_chat_history && Array.isArray(ev.eval_chat_history) && ev.eval_chat_history.length > 0) {
-              chatMap[relatedDraft.direction_id] = ev.eval_chat_history
-            }
+        // Build lookup: entry_draft_id → { direction_id, draft_generation }
+        const draftInfo: Record<number, { direction_id: number; draft_generation: number }> = {}
+        for (const d of draftsList) {
+          draftInfo[d.id] = { direction_id: d.direction_id, draft_generation: d.draft_generation ?? 0 }
+        }
+
+        // Find the max draft_generation per direction (current generation)
+        const maxGenByDir: Record<number, number> = {}
+        for (const d of draftsList) {
+          const gen = d.draft_generation ?? 0
+          if (maxGenByDir[d.direction_id] === undefined || gen > maxGenByDir[d.direction_id]) {
+            maxGenByDir[d.direction_id] = gen
           }
         }
+
+        // evals ordered by created_at DESC — first seen wins for active slot
+        const evalMap: Record<number, { judge?: Evaluation; coach?: Evaluation }> = {}
+        const historyMap: Record<number, Evaluation[]> = {}
+        const displayModeMap: Record<number, 'judge' | 'coach'> = {}
+        const chatMap: Record<number, ChatMessage[]> = {}
+        // Track most-recent created_at per direction to set display mode
+        const latestByDir: Record<number, { ts: string; mode: 'judge' | 'coach' }> = {}
+
+        for (const ev of evals) {
+          const info = draftInfo[ev.entry_draft_id]
+          if (!info) continue
+          const { direction_id, draft_generation } = info
+          const maxGen = maxGenByDir[direction_id] ?? 0
+          const mode: 'judge' | 'coach' = ev.evaluation_mode === 'coach' ? 'coach' : 'judge'
+
+          if (draft_generation === maxGen && !evalMap[direction_id]?.[mode]) {
+            // Active slot for this mode — first (most recent) wins
+            if (!evalMap[direction_id]) evalMap[direction_id] = {}
+            evalMap[direction_id][mode] = ev
+
+            // Track most-recently run mode for display default
+            if (!latestByDir[direction_id] || ev.created_at > latestByDir[direction_id].ts) {
+              latestByDir[direction_id] = { ts: ev.created_at, mode }
+            }
+
+            // Restore chat history from most-recent judge eval
+            if (mode === 'judge' && ev.eval_chat_history && Array.isArray(ev.eval_chat_history) && ev.eval_chat_history.length > 0) {
+              chatMap[direction_id] = ev.eval_chat_history
+            }
+          } else {
+            // Older generation or second eval of same mode → history
+            if (!historyMap[direction_id]) historyMap[direction_id] = []
+            historyMap[direction_id].push(ev)
+          }
+        }
+
+        // Set display mode to whichever mode was run most recently
+        for (const [dirId, { mode }] of Object.entries(latestByDir)) {
+          displayModeMap[Number(dirId)] = mode
+        }
+
         setEvaluations(evalMap)
+        setEvalHistory(historyMap)
+        setEvalDisplayMode(displayModeMap)
         if (Object.keys(chatMap).length > 0) setEvalChatHistory(chatMap)
       }
 
@@ -626,6 +690,64 @@ export default function ProjectPage() {
     setTargetShows(prev =>
       prev.includes(show) ? prev.filter(s => s !== show) : [...prev, show]
     )
+  }
+
+  // Check if a typed show name is unknown (not in kbShows) and open the request modal
+  const handleCustomShowAdd = (val: string) => {
+    if (!val.trim()) return
+    const isKnown = kbShows.some(s => s.toLowerCase() === val.trim().toLowerCase())
+    if (isKnown) {
+      // Just add it — it's a known show
+      const canonical = kbShows.find(s => s.toLowerCase() === val.trim().toLowerCase()) ?? val.trim()
+      if (!targetShows.includes(canonical)) setTargetShows(prev => [...prev, canonical])
+      setCustomShowInput('')
+    } else {
+      // Unknown show — open the request modal
+      setShowRequestName(val.trim())
+      setShowRequestUrl('')
+      setShowRequestMarket('')
+      setShowRequestKitUrl('')
+      setShowRequestDone(false)
+      setShowRequestNoKit(false)
+      setShowRequestModal(true)
+    }
+  }
+
+  const submitShowRequest = async () => {
+    if (!showRequestName.trim()) return
+    setShowRequestSubmitting(true)
+    try {
+      const accessToken = await getToken()
+      if (!accessToken) return
+      const res = await fetch('/api/shows/request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          show_name:     showRequestName.trim(),
+          show_url:      showRequestUrl.trim() || null,
+          market:        showRequestMarket.trim() || null,
+          entry_kit_url: showRequestKitUrl.trim() || null,
+          project_id:    project?.id ?? null,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        // Add to the user's target shows anyway so they can proceed
+        if (!targetShows.includes(showRequestName.trim())) {
+          setTargetShows(prev => [...prev, showRequestName.trim()])
+        }
+        setCustomShowInput('')
+        setShowRequestDone(true)
+        setShowRequestNoKit(!showRequestKitUrl.trim())
+      }
+    } catch (e) {
+      console.error('Show request submit error:', e)
+    } finally {
+      setShowRequestSubmitting(false)
+    }
   }
 
   const downloadEvaluation = (d: Direction, evaluation: Evaluation) => {
@@ -839,6 +961,47 @@ export default function ProjectPage() {
     } finally { setGenerating(false) }
   }
 
+  // Generate smart directions from a specific evaluation
+  const generateSmartDirections = async (
+    directionId: number,
+    evaluationId: number,
+    mode: 'alternatives' | 'other_shows'
+  ) => {
+    if (!project) return
+    setSmartDirectionsLoading(prev => ({ ...prev, [directionId]: mode }))
+    setSmartDirectionsError(prev => { const n = { ...prev }; delete n[directionId]; return n })
+    try {
+      const accessToken = await getToken()
+      if (!accessToken) return
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-directions`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}`, 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
+          body: JSON.stringify({
+            project_id: project.id,
+            evaluation_id: evaluationId,
+            suggest_mode: mode,
+          }),
+        }
+      )
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        setSmartDirectionsError(prev => ({ ...prev, [directionId]: data.error || `Error ${res.status}` }))
+        return
+      }
+      // Append new smart directions to existing list and switch to Directions tab
+      if (data.directions?.length) {
+        setDirections(prev => [...prev, ...data.directions])
+        setTab('directions')
+      }
+    } catch (err) {
+      setSmartDirectionsError(prev => ({ ...prev, [directionId]: err instanceof Error ? err.message : 'Network error.' }))
+    } finally {
+      setSmartDirectionsLoading(prev => { const n = { ...prev }; delete n[directionId]; return n })
+    }
+  }
+
   const generateDraft = async (directionId: number, evaluationId?: number) => {
     if (!project) return
     setGeneratingDraft(true)
@@ -892,7 +1055,21 @@ export default function ProjectPage() {
       const data = await res.json()
       if (!res.ok || data.error) { setEvaluateError(data.error || `Error ${res.status}`); return }
       if (data.evaluation) {
-        setEvaluations(prev => ({ ...prev, [directionId]: data.evaluation }))
+        const newEval: Evaluation = data.evaluation
+        const evalMode: 'judge' | 'coach' = newEval.evaluation_mode === 'coach' ? 'coach' : 'judge'
+        // Push old eval of same mode to history before replacing
+        const displaced = evaluations[directionId]?.[evalMode]
+        if (displaced) {
+          setEvalHistory(prev => ({
+            ...prev,
+            [directionId]: [displaced, ...(prev[directionId] ?? [])]
+          }))
+        }
+        setEvaluations(prev => ({
+          ...prev,
+          [directionId]: { ...(prev[directionId] ?? {}), [evalMode]: newEval }
+        }))
+        setEvalDisplayMode(prev => ({ ...prev, [directionId]: evalMode }))
         // Store score deltas if returned (comparison mode)
         if (data.score_deltas) {
           setScoreDeltas(prev => ({ ...prev, [directionId]: data.score_deltas }))
@@ -1022,7 +1199,20 @@ export default function ProjectPage() {
         return
       }
       if (data.evaluation) {
-        setEvaluations(prev => ({ ...prev, [dir.id]: data.evaluation }))
+        const newEval: Evaluation = data.evaluation
+        const evalMode: 'judge' | 'coach' = newEval.evaluation_mode === 'coach' ? 'coach' : 'judge'
+        const displacedQuick = evaluations[dir.id]?.[evalMode]
+        if (displacedQuick) {
+          setEvalHistory(prev => ({
+            ...prev,
+            [dir.id]: [displacedQuick, ...(prev[dir.id] ?? [])]
+          }))
+        }
+        setEvaluations(prev => ({
+          ...prev,
+          [dir.id]: { ...(prev[dir.id] ?? {}), [evalMode]: newEval }
+        }))
+        setEvalDisplayMode(prev => ({ ...prev, [dir.id]: evalMode }))
         // Reset eval chat on fresh quick-evaluation
         setEvalChatHistory(prev => { const next = { ...prev }; delete next[dir.id]; return next })
         setEvalChatOpen(prev => { const next = { ...prev }; delete next[dir.id]; return next })
@@ -1186,7 +1376,8 @@ export default function ProjectPage() {
 
   // Send a message to the evaluation chat for a given direction
   const sendEvalChat = async (dirId: number) => {
-    const evaluation = evaluations[dirId]
+    const activeMode = evalDisplayMode[dirId] ?? 'judge'
+    const evaluation = evaluations[dirId]?.[activeMode]
     if (!evaluation) return
     const msg = (evalChatInput[dirId] || '').trim()
     if (!msg) return
@@ -1281,6 +1472,14 @@ export default function ProjectPage() {
         }
       }
 
+      // Resolve eval ID for eval-informed script
+      let resolvedEvalId: number | undefined
+      if (scriptMode === 'generate' && scriptIncludeEval && scriptEvalDirectionId > -1) {
+        const dirEvalBoth = evaluations[scriptEvalDirectionId] ?? {}
+        const evalForScript = dirEvalBoth.judge ?? dirEvalBoth.coach
+        if (evalForScript) resolvedEvalId = evalForScript.id
+      }
+
       const body: Record<string, unknown> = {
         project_id: project.id,
         mode: scriptMode,
@@ -1288,6 +1487,8 @@ export default function ProjectPage() {
         ...(effectiveCategory ? { category: effectiveCategory } : {}),
         ...(scriptMode === 'review' ? { uploaded_script_text: uploadedScriptText } : {}),
         ...(contextOverride ? { context_override: contextOverride } : {}),
+        ...(scriptMode === 'generate' ? { asset_mode: scriptAssetMode } : {}),
+        ...(resolvedEvalId ? { evaluation_id: resolvedEvalId } : {}),
       }
 
       const res = await fetch(
@@ -1494,24 +1695,14 @@ export default function ProjectPage() {
                       onKeyDown={e => {
                         if (e.key === 'Enter') {
                           e.preventDefault()
-                          const val = customShowInput.trim()
-                          if (val && !targetShows.includes(val)) {
-                            setTargetShows(prev => [...prev, val])
-                          }
-                          setCustomShowInput('')
+                          handleCustomShowAdd(customShowInput)
                         }
                       }}
                       placeholder="Add a show not in the list…"
                       className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
                     />
                     <button
-                      onClick={() => {
-                        const val = customShowInput.trim()
-                        if (val && !targetShows.includes(val)) {
-                          setTargetShows(prev => [...prev, val])
-                        }
-                        setCustomShowInput('')
-                      }}
+                      onClick={() => handleCustomShowAdd(customShowInput)}
                       disabled={!customShowInput.trim()}
                       className="bg-gray-100 hover:bg-gray-200 disabled:opacity-40 text-gray-700 text-sm px-4 py-2 rounded-lg border border-gray-300 transition-colors"
                     >
@@ -1712,7 +1903,9 @@ export default function ProjectPage() {
               <div className="grid gap-4">
                 {directions.map(d => {
                   const hasEntries = entries.some(e => e.direction_id === d.id)
-                  const hasEval = !!evaluations[d.id]
+                  const dirEvalBoth = evaluations[d.id] ?? {}
+                  const dirBestEval = dirEvalBoth.judge ?? dirEvalBoth.coach ?? null
+                  const hasEval = !!dirBestEval
                   const isGeneratingThis = generatingForDirectionId === d.id
                   return (
                     <div key={d.id} className={`bg-white border rounded-xl p-5 ${d.chosen ? 'border-green-700' : 'border-gray-200'}`}>
@@ -1722,7 +1915,7 @@ export default function ProjectPage() {
                             <h3 className="font-medium text-gray-900">{d.name}</h3>
                             {d.chosen && <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">Selected</span>}
                             {hasEntries && <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full border border-green-200">Draft ready</span>}
-                            {hasEval && <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${scoreBg(evaluations[d.id].overall_score)} ${scoreColor(evaluations[d.id].overall_score)}`}>{evaluations[d.id].overall_score}/10</span>}
+                            {hasEval && dirBestEval && <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${scoreBg(dirBestEval.overall_score)} ${scoreColor(dirBestEval.overall_score)}`}>{dirBestEval.overall_score}/10</span>}
                           </div>
                           {d.best_show && <p className="text-green-700 text-sm mt-0.5">{d.best_show} · <span className="text-gray-500">{d.best_category}</span></p>}
                           {d.hook && <p className="text-gray-700 text-sm mt-2 italic">"{d.hook}"</p>}
@@ -1759,7 +1952,7 @@ export default function ProjectPage() {
                             {/* Win Likelihood */}
                             <div>
                               {(() => {
-                                const evalScore = evaluations[d.id]?.overall_score
+                                const evalScore = (evaluations[d.id]?.judge ?? evaluations[d.id]?.coach)?.overall_score
                                 const winPct = calculateWinLikelihood(d.best_show, evalScore)
                                 return (
                                   <>
@@ -1777,7 +1970,7 @@ export default function ProjectPage() {
                 })}
               </div>
             )}
-            {directions.some(d => d.win_likelihood !== null && !evaluations[d.id]) && (
+            {directions.some(d => d.win_likelihood !== null && !(evaluations[d.id]?.judge ?? evaluations[d.id]?.coach)) && (
               <p className="text-xs text-gray-400 mt-4">* Win likelihood based on show base rate only — evaluate an entry to factor in content quality.</p>
             )}
           </div>
@@ -1825,7 +2018,13 @@ export default function ProjectPage() {
                     const dirName = d?.name || `${fields[0]?.award_show || ''} — ${fields[0]?.category || ''}`.replace(/^ — $/, 'Entry')
                     const dirShow = d?.best_show || fields[0]?.award_show || null
                     const dirCategory = d?.best_category || fields[0]?.category || null
-                    const evaluation = evaluations[dirId]
+                    const evalBoth = evaluations[dirId] ?? {}
+                    const activeMode: 'judge' | 'coach' = evalDisplayMode[dirId] ?? 'judge'
+                    const evaluation = evalBoth[activeMode]
+                    const hasJudge = !!evalBoth.judge
+                    const hasCoach = !!evalBoth.coach
+                    const hasBothModes = hasJudge && hasCoach
+                    const dirHistory = evalHistory[dirId] ?? []
                     const isEvaluatingThis = evaluatingForDirectionId === dirId
                     const isGeneratingThis = generatingForDirectionId === dirId
                     // Detect when draft has been improved since the last evaluation
@@ -1851,7 +2050,7 @@ export default function ProjectPage() {
                           <div className="flex items-center gap-3 flex-shrink-0 flex-wrap justify-end">
                             {/* Jury Evaluation button */}
                             <button
-                              onClick={() => evaluateEntry(dirId, 'judge', evaluation?.evaluation_mode === 'judge' ? evaluation.id : undefined)}
+                              onClick={() => evaluateEntry(dirId, 'judge', evalBoth.judge?.id)}
                               disabled={evaluating || generatingDraft}
                               title="Evaluate the entry as written — mirrors what a jury member sees"
                               className="bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
@@ -1859,12 +2058,12 @@ export default function ProjectPage() {
                               {isEvaluatingThis && evaluatingMode[dirId] === 'judge' ? (
                                 <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Evaluating…</>
                               ) : (
-                                <>⚖ {evaluation?.evaluation_mode === 'judge' ? 'Re-run Jury Eval' : 'Jury Evaluation'}</>
+                                <>⚖ {hasJudge ? 'Re-run Jury Eval' : 'Jury Evaluation'}</>
                               )}
                             </button>
                             {/* Coach Review button */}
                             <button
-                              onClick={() => evaluateEntry(dirId, 'coach', evaluation?.evaluation_mode === 'coach' ? evaluation.id : undefined)}
+                              onClick={() => evaluateEntry(dirId, 'coach', evalBoth.coach?.id)}
                               disabled={evaluating || generatingDraft}
                               title="Review entry against all brief & materials — identifies what's being undersold"
                               className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
@@ -1872,7 +2071,7 @@ export default function ProjectPage() {
                               {isEvaluatingThis && evaluatingMode[dirId] === 'coach' ? (
                                 <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Coaching…</>
                               ) : (
-                                <>✦ {evaluation?.evaluation_mode === 'coach' ? 'Re-run Coach Review' : 'Coach Review'}</>
+                                <>✦ {hasCoach ? 'Re-run Coach Review' : 'Coach Review'}</>
                               )}
                             </button>
                             {evaluation && d && (
@@ -1884,14 +2083,46 @@ export default function ProjectPage() {
                                 ↓ Download
                               </button>
                             )}
-                            <button
-                              onClick={() => setTab('directions')}
-                              className="text-xs text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5"
-                              title="Explore AI-recommended show and category directions"
-                            >
-                              <span>Suggest Directions</span>
-                              <span>→</span>
-                            </button>
+                            {/* Smart Directions — shown when an evaluation exists */}
+                            {(hasJudge || hasCoach) ? (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    const evalForSmart = evalBoth.judge ?? evalBoth.coach
+                                    if (evalForSmart) generateSmartDirections(dirId, evalForSmart.id, 'alternatives')
+                                  }}
+                                  disabled={evaluating || generatingDraft || !!smartDirectionsLoading[dirId]}
+                                  title="Suggest alternative categories in the same show, informed by this evaluation"
+                                  className="text-xs text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-40"
+                                >
+                                  {smartDirectionsLoading[dirId] === 'alternatives' ? (
+                                    <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Finding…</>
+                                  ) : '✦ Alt Categories'}
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    const evalForSmart = evalBoth.judge ?? evalBoth.coach
+                                    if (evalForSmart) generateSmartDirections(dirId, evalForSmart.id, 'other_shows')
+                                  }}
+                                  disabled={evaluating || generatingDraft || !!smartDirectionsLoading[dirId]}
+                                  title="Suggest other shows where this entry's strengths would land best"
+                                  className="text-xs text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-40"
+                                >
+                                  {smartDirectionsLoading[dirId] === 'other_shows' ? (
+                                    <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Finding…</>
+                                  ) : '✦ Other Shows'}
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                onClick={() => setTab('directions')}
+                                className="text-xs text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5"
+                                title="Explore AI-recommended show and category directions"
+                              >
+                                <span>Suggest Directions</span>
+                                <span>→</span>
+                              </button>
+                            )}
                             <button
                               onClick={() => generateDraft(dirId)}
                               disabled={generatingDraft || evaluating}
@@ -1920,6 +2151,14 @@ export default function ProjectPage() {
                           </div>
                         )}
 
+                        {/* Smart directions error */}
+                        {smartDirectionsError[dirId] && (
+                          <div className="px-5 py-2 bg-red-50 border-b border-red-100 flex items-center justify-between gap-2">
+                            <p className="text-xs text-red-600">{smartDirectionsError[dirId]}</p>
+                            <button onClick={() => setSmartDirectionsError(prev => { const n = { ...prev }; delete n[dirId]; return n })} className="text-red-400 hover:text-red-600 text-xs">✕</button>
+                          </div>
+                        )}
+
                         {/* Needs re-evaluation notice — shown when draft has been improved since last eval */}
                         {needsReEval && !isEvaluatingThis && (
                           <div className="px-5 py-3 bg-amber-50 border-b border-amber-200 flex items-center justify-between gap-4">
@@ -1931,26 +2170,46 @@ export default function ProjectPage() {
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0">
                               <button
-                                onClick={() => evaluateEntry(dirId, 'judge', evaluation!.id)}
+                                onClick={() => evaluateEntry(dirId, 'judge', evalBoth.judge?.id)}
                                 disabled={evaluating || generatingDraft}
                                 className="text-xs font-medium text-amber-800 hover:text-amber-900 border border-amber-300 hover:border-amber-500 bg-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40"
                               >
-                                ⚖ Re-run Jury Eval
+                                ⚖ {hasJudge ? 'Re-run Jury Eval' : 'Jury Evaluation'}
                               </button>
                               <button
-                                onClick={() => evaluateEntry(dirId, 'coach', evaluation!.id)}
+                                onClick={() => evaluateEntry(dirId, 'coach', evalBoth.coach?.id)}
                                 disabled={evaluating || generatingDraft}
                                 className="text-xs font-medium text-amber-800 hover:text-amber-900 border border-amber-300 hover:border-amber-500 bg-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40"
                               >
-                                ✦ Re-run Coach Review
+                                ✦ {hasCoach ? 'Re-run Coach Review' : 'Coach Review'}
                               </button>
                             </div>
                           </div>
                         )}
 
                         {/* Evaluation panel */}
-                        {evaluation && (
-                          <div className="px-5 py-5 border-b border-gray-200 bg-gray-50">
+                        {(hasJudge || hasCoach) && (
+                          <div className="border-b border-gray-200 bg-gray-50">
+
+                            {/* Mode toggle tab strip — only shown when both modes have been run */}
+                            {hasBothModes && (
+                              <div className="px-5 pt-4 flex items-center gap-1 border-b border-gray-200">
+                                <button
+                                  onClick={() => setEvalDisplayMode(prev => ({ ...prev, [dirId]: 'judge' }))}
+                                  className={`text-xs font-medium px-3 py-1.5 rounded-t-lg border-b-2 transition-colors -mb-px ${activeMode === 'judge' ? 'border-gray-800 text-gray-900 bg-white' : 'border-transparent text-gray-400 hover:text-gray-700'}`}
+                                >
+                                  ⚖ Jury Evaluation
+                                </button>
+                                <button
+                                  onClick={() => setEvalDisplayMode(prev => ({ ...prev, [dirId]: 'coach' }))}
+                                  className={`text-xs font-medium px-3 py-1.5 rounded-t-lg border-b-2 transition-colors -mb-px ${activeMode === 'coach' ? 'border-green-700 text-green-800 bg-white' : 'border-transparent text-gray-400 hover:text-gray-700'}`}
+                                >
+                                  ✦ Coach Review
+                                </button>
+                              </div>
+                            )}
+
+                          <div className="px-5 py-5">
                             <div className="flex items-start justify-between mb-4">
                               <div>
                                 <div className="flex items-baseline gap-2 flex-wrap">
@@ -2185,6 +2444,69 @@ export default function ProjectPage() {
                               </p>
                             </div>
                           </div>
+                          </div>
+                        )}
+
+                        {/* Previous Evaluations History */}
+                        {dirHistory.length > 0 && (
+                          <div className="px-5 py-3 border-b border-gray-100 bg-white">
+                            <button
+                              onClick={() => setEvalHistoryOpen(prev => ({ ...prev, [dirId]: !prev[dirId] }))}
+                              className="flex items-center gap-2 text-xs text-gray-400 hover:text-gray-700 transition-colors"
+                            >
+                              <span className="text-gray-300">↕</span>
+                              <span>{evalHistoryOpen[dirId] ? 'Hide' : 'See'} previous evaluations</span>
+                              <span className="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{dirHistory.length}</span>
+                            </button>
+                            {evalHistoryOpen[dirId] && (
+                              <div className="mt-3 space-y-3">
+                                {dirHistory.map((hist, hIdx) => {
+                                  const hMode = hist.evaluation_mode === 'coach' ? 'coach' : 'judge'
+                                  const hDate = new Date(hist.created_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: '2-digit' })
+                                  const hJudgeOutput = hMode === 'judge' && hist.output ? hist.output as JudgeOutput : null
+                                  const hCoachOutput = hMode === 'coach' && hist.output ? hist.output as CoachOutput : null
+                                  return (
+                                    <div key={hIdx} className="border border-gray-100 rounded-lg p-3 bg-gray-50">
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <span className="text-xs font-medium text-gray-500">
+                                          {hMode === 'coach' ? '✦ Coach Review' : '⚖ Jury Evaluation'}
+                                        </span>
+                                        <span className="text-xs text-gray-300">·</span>
+                                        <span className="text-xs text-gray-400">{hDate}</span>
+                                        <span className="text-xs text-gray-300">·</span>
+                                        <span className={`text-xs font-bold tabular-nums ${scoreColor(hist.overall_score)}`}>
+                                          {hist.overall_score.toFixed(1)}/10
+                                        </span>
+                                      </div>
+                                      {hJudgeOutput && (
+                                        <div className="space-y-1.5">
+                                          {hJudgeOutput.talks_up?.slice(0, 2).map((t, i) => (
+                                            <p key={i} className="text-xs text-gray-600 italic border-l-2 border-green-300 pl-2">"{t}"</p>
+                                          ))}
+                                          {hJudgeOutput.kills_it?.slice(0, 2).map((k, i) => (
+                                            <p key={i} className="text-xs text-gray-600 italic border-l-2 border-red-300 pl-2">"{k}"</p>
+                                          ))}
+                                        </div>
+                                      )}
+                                      {hCoachOutput && (
+                                        <div className="space-y-1.5">
+                                          {hCoachOutput.focus_point && (
+                                            <p className="text-xs text-gray-600 border-l-2 border-green-300 pl-2">{hCoachOutput.focus_point}</p>
+                                          )}
+                                          {hCoachOutput.priority_fixes?.slice(0, 2).map((fix, i) => (
+                                            <p key={i} className="text-xs text-gray-500 pl-2">→ {fix.fix}</p>
+                                          ))}
+                                        </div>
+                                      )}
+                                      {!hist.output && hist.strengths && (
+                                        <p className="text-xs text-gray-500 line-clamp-2">{hist.strengths}</p>
+                                      )}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
                         )}
 
                         {/* Evaluation Chat */}
@@ -2418,27 +2740,27 @@ export default function ProjectPage() {
                         </div>
 
                         {/* Compact re-evaluate bar — always visible at bottom of draft area when an evaluation exists */}
-                        {evaluation && !needsReEval && (
+                        {(hasJudge || hasCoach) && !needsReEval && (
                           <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
                             <p className="text-xs text-gray-400">Re-evaluate this draft</p>
                             <div className="flex items-center gap-2">
                               <button
-                                onClick={() => evaluateEntry(dirId, 'judge', evaluation.id)}
+                                onClick={() => evaluateEntry(dirId, 'judge', evalBoth.judge?.id)}
                                 disabled={evaluating || generatingDraft}
                                 className="text-xs text-gray-600 hover:text-gray-900 border border-gray-200 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40"
                               >
                                 {isEvaluatingThis && evaluatingMode[dirId] === 'judge' ? (
                                   <><svg className="animate-spin h-3 w-3 inline mr-1" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Evaluating…</>
-                                ) : '⚖ Jury Eval'}
+                                ) : hasJudge ? '⚖ Re-run Jury Eval' : '⚖ Jury Eval'}
                               </button>
                               <button
-                                onClick={() => evaluateEntry(dirId, 'coach', evaluation.id)}
+                                onClick={() => evaluateEntry(dirId, 'coach', evalBoth.coach?.id)}
                                 disabled={evaluating || generatingDraft}
                                 className="text-xs text-green-700 hover:text-green-900 border border-green-200 hover:border-green-400 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40"
                               >
                                 {isEvaluatingThis && evaluatingMode[dirId] === 'coach' ? (
                                   <><svg className="animate-spin h-3 w-3 inline mr-1" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Coaching…</>
-                                ) : '✦ Coach Review'}
+                                ) : hasCoach ? '✦ Re-run Coach Review' : '✦ Coach Review'}
                               </button>
                             </div>
                           </div>
@@ -2584,6 +2906,16 @@ export default function ProjectPage() {
                   <select
                     value={scriptShow}
                     onChange={e => {
+                      if (e.target.value === '__request__') {
+                        setShowRequestName('')
+                        setShowRequestUrl('')
+                        setShowRequestMarket('')
+                        setShowRequestKitUrl('')
+                        setShowRequestDone(false)
+                        setShowRequestNoKit(false)
+                        setShowRequestModal(true)
+                        return
+                      }
                       setScriptShow(e.target.value)
                       setScriptCategory('')
                       setCategorySuggestions([])
@@ -2595,6 +2927,7 @@ export default function ProjectPage() {
                     {kbShows.map(show => (
                       <option key={show} value={show}>{show}</option>
                     ))}
+                    <option value="__request__" className="text-gray-400">✦ Request a show…</option>
                   </select>
                 </div>
 
@@ -2730,6 +3063,76 @@ export default function ProjectPage() {
             {scriptMode === 'generate' && !project.combined_text && !(project.materials || []).some(m => m.extracted_text) && (
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-5">
                 <p className="text-amber-700 text-sm">Add a campaign brief on the Brief tab, or upload materials, before generating a script.</p>
+              </div>
+            )}
+
+            {/* Asset mode + eval options — generate mode only */}
+            {scriptMode === 'generate' && (
+              <div className="mb-5 space-y-4">
+                {/* Asset mode toggle */}
+                <div>
+                  <p className="text-xs font-medium text-gray-600 mb-2">Asset availability</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setScriptAssetMode('best_possible')}
+                      className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                        scriptAssetMode === 'best_possible'
+                          ? 'bg-gray-800 text-white border-gray-800'
+                          : 'bg-white text-gray-500 border-gray-300 hover:border-gray-600 hover:text-gray-700'
+                      }`}
+                    >
+                      Best possible assets
+                    </button>
+                    <button
+                      onClick={() => setScriptAssetMode('minimal')}
+                      className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                        scriptAssetMode === 'minimal'
+                          ? 'bg-gray-800 text-white border-gray-800'
+                          : 'bg-white text-gray-500 border-gray-300 hover:border-gray-600 hover:text-gray-700'
+                      }`}
+                    >
+                      Minimal assets only
+                    </button>
+                  </div>
+                  {scriptAssetMode === 'minimal' && (
+                    <p className="text-xs text-gray-400 mt-1.5">Script will call out exactly what to source for each scene — ideal for lean productions.</p>
+                  )}
+                </div>
+
+                {/* Eval context inclusion */}
+                {directions.some(d => !!(evaluations[d.id]?.judge ?? evaluations[d.id]?.coach)) && (
+                  <div>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={scriptIncludeEval}
+                        onChange={e => setScriptIncludeEval(e.target.checked)}
+                        className="rounded border-gray-300 text-green-700 focus:ring-green-600"
+                      />
+                      <span className="text-xs font-medium text-gray-700">Include evaluation insights</span>
+                    </label>
+                    {scriptIncludeEval && (
+                      <div className="mt-2 ml-5">
+                        <p className="text-xs text-gray-400 mb-1.5">Which direction's evaluation to use:</p>
+                        <select
+                          value={scriptEvalDirectionId}
+                          onChange={e => setScriptEvalDirectionId(Number(e.target.value))}
+                          className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-xs text-gray-900 focus:outline-none focus:border-green-600 transition-colors"
+                        >
+                          <option value={-1}>Select a direction…</option>
+                          {directions.filter(d => !!(evaluations[d.id]?.judge ?? evaluations[d.id]?.coach)).map(d => (
+                            <option key={d.id} value={d.id}>{d.name}</option>
+                          ))}
+                        </select>
+                        {scriptEvalDirectionId > -1 && (
+                          <p className="text-xs text-gray-400 mt-1">
+                            Script will amplify this entry's strengths and directly address the gaps identified in the evaluation.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -2953,6 +3356,26 @@ export default function ProjectPage() {
                   placeholder="e.g. Cannes Lions, Effies, WARC…"
                   className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
                 />
+                {quickEvalShow.trim().length > 2 && !kbShows.some(s => s.toLowerCase() === quickEvalShow.trim().toLowerCase()) && (
+                  <p className="text-xs text-amber-700 mt-1">
+                    Not in our system yet.{' '}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowRequestName(quickEvalShow.trim())
+                        setShowRequestUrl('')
+                        setShowRequestMarket('')
+                        setShowRequestKitUrl('')
+                        setShowRequestDone(false)
+                        setShowRequestNoKit(false)
+                        setShowRequestModal(true)
+                      }}
+                      className="underline hover:no-underline"
+                    >
+                      Request it
+                    </button>{' '}and we'll add it shortly.
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1.5">Category</label>
@@ -2999,6 +3422,96 @@ export default function ProjectPage() {
               >
                 Cancel
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Show Request Modal */}
+      {showRequestModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="px-6 pt-6 pb-2">
+              <h2 className="text-lg font-semibold text-gray-900 mb-1">Request a new show</h2>
+              {!showRequestDone ? (
+                <>
+                  <p className="text-sm text-gray-500 mb-4">
+                    <span className="font-medium text-gray-800">{showRequestName}</span> isn't in our system yet. Give us a few details and we'll add it shortly.
+                  </p>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Show website</label>
+                      <input
+                        type="url"
+                        value={showRequestUrl}
+                        onChange={e => setShowRequestUrl(e.target.value)}
+                        placeholder="https://example.com"
+                        className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Primary market</label>
+                      <input
+                        type="text"
+                        value={showRequestMarket}
+                        onChange={e => setShowRequestMarket(e.target.value)}
+                        placeholder="e.g. Global, APAC, Australia…"
+                        className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Entry kit URL <span className="text-gray-400 font-normal">(optional but helpful)</span></label>
+                      <input
+                        type="url"
+                        value={showRequestKitUrl}
+                        onChange={e => setShowRequestKitUrl(e.target.value)}
+                        placeholder="https://example.com/entry-kit"
+                        className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-5">
+                    <button
+                      onClick={submitShowRequest}
+                      disabled={showRequestSubmitting}
+                      className="flex-1 bg-green-800 hover:bg-green-700 disabled:opacity-40 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-colors"
+                    >
+                      {showRequestSubmitting ? 'Sending…' : 'Send request'}
+                    </button>
+                    <button
+                      onClick={() => { setShowRequestModal(false); setCustomShowInput('') }}
+                      disabled={showRequestSubmitting}
+                      className="px-4 py-2.5 text-sm text-gray-500 hover:text-gray-900 disabled:opacity-40 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="py-4 text-center">
+                    <div className="text-3xl mb-3">✓</div>
+                    <p className="text-sm font-medium text-gray-900 mb-1">Request sent for <span className="text-green-800">{showRequestName}</span></p>
+                    <p className="text-sm text-gray-500 mb-1">We'll add it to the system shortly.</p>
+                    {showRequestNoKit && (
+                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">
+                        No entry kit provided — we'll track one down, but it may take a little longer.
+                      </p>
+                    )}
+                    <p className="text-xs text-gray-400 mt-3">
+                      <span className="font-medium text-gray-700">{showRequestName}</span> has been added to your target shows in the meantime.
+                    </p>
+                  </div>
+                  <div className="pb-2">
+                    <button
+                      onClick={() => setShowRequestModal(false)}
+                      className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium px-4 py-2.5 rounded-xl transition-colors"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
