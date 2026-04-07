@@ -2188,7 +2188,7 @@ export default function ProjectPage() {
                         )}
 
                         {/* Evaluation panel */}
-                        {(hasJudge || hasCoach) && (
+                        {evaluation && (hasJudge || hasCoach) && (
                           <div className="border-b border-gray-200 bg-gray-50">
 
                             {/* Mode toggle tab strip — only shown when both modes have been run */}
