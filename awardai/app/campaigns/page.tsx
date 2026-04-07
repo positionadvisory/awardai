@@ -136,9 +136,10 @@ export default function CampaignsPage() {
   const [userRole, setUserRole] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Auth guard
+  // Auth guard — restricted to super-admin only
   useEffect(() => {
     if (!loading && !user) router.push('/login')
+    if (!loading && user && user.email !== 'ben@positionadvisory.com') router.push('/projects')
   }, [user, loading, router])
 
   // Fetch profile + distinct shows on mount
