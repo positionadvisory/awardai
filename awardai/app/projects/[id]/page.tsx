@@ -4,9 +4,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
 import GeneratingBar from '@/components/GeneratingBar'
-import { MATERIALS_EVAL_STATEMENTS, JURY_EVAL_STATEMENTS, COACH_REVIEW_STATEMENTS, SCRIPT_GENERATE_STATEMENTS, SCRIPT_REVIEW_STATEMENTS } from '@/lib/generatingStatements'
-import ShowsDrawer from '@/components/shows/ShowsDrawer'
-import { getDeadlineUrgency, resolveWinRateKey } from '@/lib/shows-data'
+import { MATERIALS_EVAL_STATEMENTS, JURY_EVAL_STATEMENTS, COACH_REVIEW_STATEMENTS } from '@/lib/generatingStatements'
 
 // Canonical list of award shows — displayed in the Brief tab selector
 const CANONICAL_SHOWS = [
@@ -286,7 +284,6 @@ type Project = {
   status: string
   script_text: string | null
   script_analysis: ScriptAnalysis | null
-  award_year: number | null  // Phase 5A: season year for historical context
 }
 
 type Direction = {
@@ -301,8 +298,6 @@ type Direction = {
   risks: string | null
   hook: string | null
   chosen: boolean
-  submitted: boolean          // Phase 5A
-  submission_outcome: string | null  // Phase 5A: 'shortlisted' | 'finalist' | 'winner' | 'no_place' | null
 }
 
 type ChatMessage = {
@@ -339,6 +334,20 @@ type EvaluationScores = {
   brief_alignment?: number  // coach mode only
 }
 
+// v3 evaluation output types (stored in output jsonb column)
+type JudgeOutput = {
+  talks_up: string[]
+  kills_it: string[]
+  recommendations: string
+}
+type PriorityFix = { fix: string; why: string; action: string }
+type CoachOutput = {
+  focus_point: string
+  priority_fixes: PriorityFix[]
+  cuts: string[]
+}
+type EvaluationOutput = JudgeOutput | CoachOutput
+
 type Evaluation = {
   id: number
   entry_draft_id: number
@@ -352,6 +361,8 @@ type Evaluation = {
   evaluation_mode?: 'judge' | 'coach'
   created_at: string
   eval_chat_history?: ChatMessage[]
+  // v3: structured output — null/undefined means legacy display
+  output?: EvaluationOutput | null
 }
 
 type Tab = 'brief' | 'materials' | 'entries' | 'script' | 'directions'
@@ -375,26 +386,6 @@ function scoreBg(score: number): string {
   if (score >= 8) return 'bg-green-50 border-green-200'
   if (score >= 6) return 'bg-amber-50 border-amber-200'
   return 'bg-red-50 border-red-200'
-}
-
-function outcomeLabel(outcome: string): string {
-  switch (outcome) {
-    case 'winner': return '🏆 Winner'
-    case 'finalist': return '🥈 Finalist'
-    case 'shortlisted': return '⭐ Shortlisted'
-    case 'no_place': return 'No place'
-    default: return outcome
-  }
-}
-
-function outcomeBadgeClass(outcome: string): string {
-  switch (outcome) {
-    case 'winner': return 'bg-amber-50 text-amber-800 border-amber-200'
-    case 'finalist': return 'bg-blue-50 text-blue-700 border-blue-200'
-    case 'shortlisted': return 'bg-green-50 text-green-700 border-green-200'
-    case 'no_place': return 'bg-gray-100 text-gray-500 border-gray-200'
-    default: return 'bg-gray-100 text-gray-500 border-gray-200'
-  }
 }
 
 function buildAnalysisText(
@@ -458,9 +449,6 @@ export default function ProjectPage() {
   const [savingShows, setSavingShows] = useState(false)
   const [kbShows, setKbShows] = useState<string[]>([])
   const [customShowInput, setCustomShowInput] = useState('')
-  // Phase 5A: Award year
-  const [awardYear, setAwardYear] = useState<number | null>(null)
-  const [savingAwardYear, setSavingAwardYear] = useState(false)
 
   // Materials
   const [uploading, setUploading] = useState(false)
@@ -493,10 +481,6 @@ export default function ProjectPage() {
   const [expandedEntryFields, setExpandedEntryFields] = useState<Record<number, boolean>>({})
   // Draft version history expand/collapse — keyed by directionId
   const [expandedDraftHistory, setExpandedDraftHistory] = useState<Record<number, boolean>>({})
-
-  // Phase 5A: Outcome tracking state (optimistic, keyed by direction id)
-  const [dirSubmitted, setDirSubmitted] = useState<Record<number, boolean>>({})
-  const [dirOutcome, setDirOutcome] = useState<Record<number, string | null>>({})
 
   // Phase 2 — field refinement via edit-entry Edge Function
   const [refineMessage, setRefineMessage] = useState<Record<number, string>>({})
@@ -533,18 +517,6 @@ export default function ProjectPage() {
   const [dirSourceType, setDirSourceType] = useState<'all' | 'material' | 'entry'>('all')
   const [dirSourceMaterialIdx, setDirSourceMaterialIdx] = useState<number>(-1)
   const [dirSourceEntryDirectionId, setDirSourceEntryDirectionId] = useState<number>(-1)
-
-  // Show Intelligence drawer (Timeline + Budget) — opened after directions are generated
-  const [showsDrawerOpen, setShowsDrawerOpen] = useState(false)
-  const [drawerInitialTab, setDrawerInitialTab] = useState<'calendar' | 'budget'>('calendar')
-  const [drawerPrefilledShow, setDrawerPrefilledShow] = useState<string | undefined>()
-
-  /** Open the Show Intelligence drawer, optionally highlighting a specific show in the Budget Planner. */
-  const openShowsDrawer = (tab: 'calendar' | 'budget', show?: string) => {
-    setDrawerInitialTab(tab)
-    setDrawerPrefilledShow(show)
-    setShowsDrawerOpen(true)
-  }
   // KB awards count for Script Analysis subheadline
   const [kbCount, setKbCount] = useState<number>(0)
 
@@ -595,22 +567,10 @@ export default function ProjectPage() {
         setProject(proj)
         setBriefText(proj.combined_text || '')
         setTargetShows(proj.target_shows || [])
-        setAwardYear(proj.award_year ?? null)
         if (proj.script_text) setScriptText(proj.script_text)
         if (proj.script_analysis) setScriptAnalysis(proj.script_analysis)
       }
-      if (dirs) {
-        setDirections(dirs)
-        // Seed outcome tracking from DB
-        const submittedMap: Record<number, boolean> = {}
-        const outcomeMap: Record<number, string | null> = {}
-        for (const dir of dirs) {
-          submittedMap[dir.id] = dir.submitted ?? false
-          outcomeMap[dir.id] = dir.submission_outcome ?? null
-        }
-        setDirSubmitted(submittedMap)
-        setDirOutcome(outcomeMap)
-      }
+      if (dirs) setDirections(dirs)
 
       const draftsList = drafts || []
       if (draftsList.length > 0) setEntries(draftsList)
@@ -661,20 +621,6 @@ export default function ProjectPage() {
     setEditingShows(false)
     setSavingShows(false)
   }
-
-  // Phase 5A: Save award year (season year for historical context)
-  const saveAwardYear = async (year: number | null) => {
-    if (!project) return
-    setSavingAwardYear(true)
-    await supabase
-      .from('projects')
-      .update({ award_year: year, updated_at: new Date().toISOString() })
-      .eq('id', projectId)
-    setProject(p => p ? { ...p, award_year: year } : p)
-    setAwardYear(year)
-    setSavingAwardYear(false)
-  }
-
 
   const toggleShow = (show: string) => {
     setTargetShows(prev =>
@@ -967,29 +913,6 @@ export default function ProjectPage() {
     }
   }
 
-  // Phase 5A: Mark a direction as submitted (optimistic update + DB write)
-  const markSubmitted = async (dirId: number) => {
-    setDirSubmitted(prev => ({ ...prev, [dirId]: true }))
-    await supabase
-      .from('directions')
-      .update({ submitted: true })
-      .eq('id', dirId)
-  }
-
-  // Phase 5A: Record the submission outcome for a direction
-  const recordOutcome = async (dirId: number, outcome: string) => {
-    // Toggle off if clicking the same outcome
-    const newOutcome = dirOutcome[dirId] === outcome ? null : outcome
-    setDirOutcome(prev => ({ ...prev, [dirId]: newOutcome }))
-    await supabase
-      .from('directions')
-      .update({
-        submission_outcome: newOutcome,
-        outcome_confirmed_at: newOutcome ? new Date().toISOString() : null,
-      })
-      .eq('id', dirId)
-  }
-
   const evaluateUploadedEntry = async () => {
     if (!project || quickEvalMaterialIdx === null || !user) return
     const material = project.materials[quickEvalMaterialIdx]
@@ -1069,7 +992,6 @@ export default function ProjectPage() {
           award_show: quickEvalShow.trim(),
           category: quickEvalCategory.trim(),
           sort_order: 0,
-          draft_generation: 1,
         })
         .select()
         .single()
@@ -1486,16 +1408,6 @@ export default function ProjectPage() {
         {tab === 'brief' && (
           <div className="max-w-2xl space-y-8">
 
-            {/* First-time onboarding hint — shown only when brief and materials are both empty */}
-            {!project.combined_text && (project.materials ?? []).length === 0 && (
-              <div className="bg-green-50 border border-green-200 rounded-xl px-5 py-4">
-                <p className="text-sm font-medium text-green-900 mb-1">Welcome to Shortlist — here&apos;s where to start</p>
-                <p className="text-sm text-green-700 leading-relaxed">
-                  Add a brief below describing your campaign and entry objectives, then upload your campaign materials on the <button onClick={() => setTab('materials')} className="underline font-medium hover:text-green-900 transition-colors">Materials tab</button>. Shortlist uses both to generate award entry directions and draft your entries.
-                </p>
-              </div>
-            )}
-
             {/* Project Description */}
             <div>
               <div className="flex items-start justify-between mb-2">
@@ -1629,32 +1541,6 @@ export default function ProjectPage() {
                   )}
                 </div>
               )}
-            </div>
-
-            {/* Phase 5A: Award Year — used for multi-season historical context */}
-            <div>
-              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                Award Season Year
-              </label>
-              <div className="flex items-center gap-3">
-                <select
-                  value={awardYear ?? ''}
-                  onChange={e => {
-                    const val = e.target.value ? parseInt(e.target.value) : null
-                    setAwardYear(val)
-                    saveAwardYear(val)
-                  }}
-                  disabled={savingAwardYear}
-                  className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-green-600 transition-colors disabled:opacity-50"
-                >
-                  <option value="">Not specified</option>
-                  {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() + 1 - i).map(yr => (
-                    <option key={yr} value={yr}>{yr}</option>
-                  ))}
-                </select>
-                {savingAwardYear && <span className="text-xs text-gray-400">Saving…</span>}
-                <p className="text-xs text-gray-400">Used to build multi-season context for direction generation.</p>
-              </div>
             </div>
 
           </div>
@@ -1839,32 +1725,6 @@ export default function ProjectPage() {
                             {hasEval && <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${scoreBg(evaluations[d.id].overall_score)} ${scoreColor(evaluations[d.id].overall_score)}`}>{evaluations[d.id].overall_score}/10</span>}
                           </div>
                           {d.best_show && <p className="text-green-700 text-sm mt-0.5">{d.best_show} · <span className="text-gray-500">{d.best_category}</span></p>}
-                          {/* Deadline urgency badge — shown when timeline is tight or critical */}
-                          {d.best_show && (() => {
-                            const urgency = getDeadlineUrgency(d.best_show)
-                            if (urgency.level === 'critical') return (
-                              <div className="mt-1.5">
-                                <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-red-50 text-red-700 border border-red-200">
-                                  ⚠ {urgency.daysLeft}d to deadline — critical, insufficient time for entry + video
-                                </span>
-                              </div>
-                            )
-                            if (urgency.level === 'tight') return (
-                              <div className="mt-1.5">
-                                <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                                  ⏱ {urgency.daysLeft} days to deadline — tight, start entry immediately
-                                </span>
-                              </div>
-                            )
-                            if (urgency.level === 'prepare') return (
-                              <div className="mt-1.5">
-                                <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                                  📅 {urgency.daysLeft} days to deadline — prep phases beginning
-                                </span>
-                              </div>
-                            )
-                            return null
-                          })()}
                           {d.hook && <p className="text-gray-700 text-sm mt-2 italic">"{d.hook}"</p>}
                           {d.angle && <p className="text-gray-500 text-sm mt-2">{d.angle}</p>}
                           {d.likelihood_rationale && <p className="text-gray-400 text-xs mt-2">{d.likelihood_rationale}</p>}
@@ -1882,24 +1742,6 @@ export default function ProjectPage() {
                                 {hasEval ? 'View entry & evaluation →' : 'View entry →'}
                               </button>
                             )}
-                            {/* Divider */}
-                            <span className="text-gray-200 text-xs ml-auto">·</span>
-                            {/* Budget Planner shortcut */}
-                            {d.best_show && resolveWinRateKey(d.best_show) && (
-                              <button
-                                onClick={() => openShowsDrawer('budget', d.best_show ?? undefined)}
-                                className="text-xs text-gray-500 hover:text-green-700 border border-gray-200 hover:border-green-300 px-3 py-1.5 rounded-lg transition-colors"
-                              >
-                                📋 Plan budget
-                              </button>
-                            )}
-                            {/* View timeline */}
-                            <button
-                              onClick={() => openShowsDrawer('calendar')}
-                              className="text-xs text-gray-500 hover:text-green-700 border border-gray-200 hover:border-green-300 px-3 py-1.5 rounded-lg transition-colors"
-                            >
-                              📅 Timeline
-                            </button>
                           </div>
                           {isGeneratingThis && (
                             <div className="mt-3">
@@ -1938,32 +1780,6 @@ export default function ProjectPage() {
             {directions.some(d => d.win_likelihood !== null && !evaluations[d.id]) && (
               <p className="text-xs text-gray-400 mt-4">* Win likelihood based on show base rate only — evaluate an entry to factor in content quality.</p>
             )}
-
-            {/* Show Intelligence CTA — surfaces timeline and budget tools after directions are generated */}
-            {directions.length > 0 && (
-              <div className="mt-5 bg-white border border-gray-200 rounded-xl px-5 py-4 flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-medium text-gray-900">Explore show timelines & entry budgets</p>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    View submission deadlines, prep phase windows, and ROI estimates for any show.
-                  </p>
-                </div>
-                <div className="flex gap-2 shrink-0">
-                  <button
-                    onClick={() => openShowsDrawer('calendar')}
-                    className="text-xs font-medium text-gray-700 border border-gray-200 hover:border-gray-400 hover:text-gray-900 px-4 py-2 rounded-lg transition-colors"
-                  >
-                    📅 Timeline
-                  </button>
-                  <button
-                    onClick={() => openShowsDrawer('budget')}
-                    className="text-xs font-medium bg-green-800 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
-                  >
-                    📊 Budget & ROI
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
@@ -1973,30 +1789,6 @@ export default function ProjectPage() {
             {evaluateError && (
               <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
                 <p className="text-red-600 text-sm">{evaluateError}</p>
-              </div>
-            )}
-
-            {/* Budget Planner CTA — always shown in Entries tab when directions exist */}
-            {directions.length > 0 && (
-              <div className="mb-5 bg-white border border-gray-200 rounded-xl px-5 py-3 flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-medium text-gray-900">Plan your entry budget</p>
-                  <p className="text-xs text-gray-400 mt-0.5">See costs, deadlines and a budget summary across all directions.</p>
-                </div>
-                <div className="flex gap-2 shrink-0">
-                  <button
-                    onClick={() => openShowsDrawer('calendar')}
-                    className="text-xs font-medium text-gray-700 border border-gray-200 hover:border-gray-400 hover:text-gray-900 px-3 py-2 rounded-lg transition-colors"
-                  >
-                    📅 Timeline
-                  </button>
-                  <button
-                    onClick={() => openShowsDrawer('budget')}
-                    className="text-xs font-medium bg-green-800 hover:bg-green-700 text-white px-3 py-2 rounded-lg transition-colors"
-                  >
-                    📋 Budget Planner
-                  </button>
-                </div>
               </div>
             )}
 
@@ -2050,11 +1842,6 @@ export default function ProjectPage() {
                         <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between gap-4">
                           <div>
                             <h3 className="font-medium text-gray-900">{dirName}</h3>
-                            {dirOutcome[dirId] && (
-                              <span className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full border mt-1 ${outcomeBadgeClass(dirOutcome[dirId]!)}`}>
-                                {outcomeLabel(dirOutcome[dirId]!)}
-                              </span>
-                            )}
                             {dirShow && (
                               <p className="text-green-700 text-xs mt-0.5">
                                 {dirShow} · <span className="text-gray-400">{dirCategory}</span>
@@ -2097,16 +1884,6 @@ export default function ProjectPage() {
                                 ↓ Download
                               </button>
                             )}
-                            {/* Budget Planner shortcut — highlights this direction's show */}
-                            {dirShow && resolveWinRateKey(dirShow) && (
-                              <button
-                                onClick={() => openShowsDrawer('budget', dirShow)}
-                                className="text-xs text-gray-500 hover:text-green-700 border border-gray-200 hover:border-green-300 px-3 py-2 rounded-lg transition-colors"
-                                title="Open Budget Planner for this direction"
-                              >
-                                📋 Plan budget
-                              </button>
-                            )}
                             <button
                               onClick={() => setTab('directions')}
                               className="text-xs text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5"
@@ -2125,43 +1902,6 @@ export default function ProjectPage() {
                               ) : 'Regenerate draft'}
                             </button>
                           </div>
-                        </div>
-
-                        {/* Phase 5A: Submission tracking */}
-                        <div className="px-5 py-2.5 bg-gray-50 border-b border-gray-100 flex items-center gap-3 flex-wrap">
-                          {!dirSubmitted[dirId] ? (
-                            <button
-                              onClick={() => markSubmitted(dirId)}
-                              className="text-xs text-gray-400 hover:text-gray-700 border border-gray-200 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
-                            >
-                              <span>📤</span>
-                              <span>Mark as submitted</span>
-                            </button>
-                          ) : (
-                            <>
-                              <span className="text-xs text-gray-500 font-medium flex items-center gap-1.5">
-                                <span>📤</span>
-                                <span>Submitted</span>
-                              </span>
-                              <span className="text-gray-200 text-xs">·</span>
-                              <span className="text-xs text-gray-400">Outcome:</span>
-                              <div className="flex items-center gap-1.5">
-                                {(['shortlisted', 'finalist', 'winner', 'no_place'] as const).map(o => (
-                                  <button
-                                    key={o}
-                                    onClick={() => recordOutcome(dirId, o)}
-                                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                                      dirOutcome[dirId] === o
-                                        ? outcomeBadgeClass(o) + ' font-medium'
-                                        : 'border-gray-200 text-gray-400 hover:border-gray-400 hover:text-gray-600'
-                                    }`}
-                                  >
-                                    {outcomeLabel(o)}
-                                  </button>
-                                ))}
-                              </div>
-                            </>
-                          )}
                         </div>
 
                         {isGeneratingThis && (
@@ -2289,35 +2029,135 @@ export default function ProjectPage() {
                               })()}
                             </div>
 
-                            <div className="grid grid-cols-2 gap-5 mb-5">
-                              <div>
-                                <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-3">Strengths</p>
-                                <ul className="space-y-2.5">
-                                  {evaluation.strengths.map((s, i) => (
-                                    <li key={i} className="text-sm text-gray-700 leading-relaxed flex gap-2">
-                                      <span className="text-green-700 flex-shrink-0 mt-0.5">✓</span>
-                                      <span>{s}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                              <div>
-                                <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-3">Gaps</p>
-                                <ul className="space-y-2.5">
-                                  {evaluation.gaps.map((g, i) => (
-                                    <li key={i} className="text-sm text-gray-700 leading-relaxed flex gap-2">
-                                      <span className="text-red-600 flex-shrink-0 mt-0.5">✗</span>
-                                      <span>{g}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            </div>
+                            {/* ── v3 output: mode-specific display ─────────────────────── */}
+                            {evaluation.output ? (
+                              <>
+                                {evaluation.evaluation_mode === 'judge' ? (
+                                  /* ── Judge mode: talks_up / kills_it / recommendations ── */
+                                  (() => {
+                                    const o = evaluation.output as JudgeOutput
+                                    return (
+                                      <>
+                                        {/* What Jurors Will Talk Up */}
+                                        {o.talks_up && o.talks_up.length > 0 && (
+                                          <div className="mb-5">
+                                            <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-3">What Jurors Will Talk Up</p>
+                                            <div className="space-y-2.5">
+                                              {o.talks_up.map((s, i) => (
+                                                <div key={i} className="bg-green-50 border-l-4 border-green-500 rounded-r-lg px-4 py-3">
+                                                  <p className="text-sm text-gray-800 leading-relaxed italic">&ldquo;{s}&rdquo;</p>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
 
-                            <div>
-                              <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">Recommendations</p>
-                              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{evaluation.recommendations}</p>
-                            </div>
+                                        {/* Where Jurors Will Kill Your Entry */}
+                                        {o.kills_it && o.kills_it.length > 0 && (
+                                          <div className="mb-5">
+                                            <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-3">Where Jurors Will Kill Your Entry</p>
+                                            <div className="space-y-2.5">
+                                              {o.kills_it.map((g, i) => (
+                                                <div key={i} className="bg-red-50 border-l-4 border-red-400 rounded-r-lg px-4 py-3">
+                                                  <p className="text-sm text-gray-800 leading-relaxed italic">&ldquo;{g}&rdquo;</p>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+
+                                        {/* Recommendations */}
+                                        {o.recommendations && (
+                                          <div>
+                                            <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">Recommendations to Help Your Chances</p>
+                                            <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{o.recommendations}</p>
+                                          </div>
+                                        )}
+                                      </>
+                                    )
+                                  })()
+                                ) : (
+                                  /* ── Coach mode: focus_point / priority_fixes / cuts ── */
+                                  (() => {
+                                    const o = evaluation.output as CoachOutput
+                                    return (
+                                      <>
+                                        {/* Strongest Asset */}
+                                        {o.focus_point && (
+                                          <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-5">
+                                            <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-2">✦ Your Entry&apos;s Strongest Asset</p>
+                                            <p className="text-sm text-gray-800 leading-relaxed">{o.focus_point}</p>
+                                          </div>
+                                        )}
+
+                                        {/* Priority Fixes */}
+                                        {o.priority_fixes && o.priority_fixes.length > 0 && (
+                                          <div className="mb-5">
+                                            <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">Priority Fixes — Biggest Impact First</p>
+                                            <div className="space-y-3">
+                                              {o.priority_fixes.map((pf, i) => (
+                                                <div key={i} className="border border-gray-200 rounded-xl p-4">
+                                                  <p className="text-sm font-semibold text-gray-900 mb-1.5">{i + 1}. {pf.fix}</p>
+                                                  <p className="text-xs text-gray-600 mb-1"><span className="font-medium">Why: </span>{pf.why}</p>
+                                                  <p className="text-xs text-green-700"><span className="font-medium">How: </span>{pf.action}</p>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+
+                                        {/* What to Cut */}
+                                        {o.cuts && o.cuts.length > 0 && (
+                                          <div>
+                                            <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-3">What to Cut</p>
+                                            <ul className="space-y-2.5">
+                                              {o.cuts.map((c, i) => (
+                                                <li key={i} className="text-sm text-gray-700 leading-relaxed flex gap-2">
+                                                  <span className="text-red-500 flex-shrink-0 mt-0.5">✗</span>
+                                                  <span>{c}</span>
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          </div>
+                                        )}
+                                      </>
+                                    )
+                                  })()
+                                )}
+                              </>
+                            ) : (
+                              /* ── Legacy display (v1/v2 evaluations — strengths/gaps/recommendations) ── */
+                              <>
+                                <div className="grid grid-cols-2 gap-5 mb-5">
+                                  <div>
+                                    <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-3">Strengths</p>
+                                    <ul className="space-y-2.5">
+                                      {evaluation.strengths.map((s, i) => (
+                                        <li key={i} className="text-sm text-gray-700 leading-relaxed flex gap-2">
+                                          <span className="text-green-700 flex-shrink-0 mt-0.5">✓</span>
+                                          <span>{s}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-3">Gaps</p>
+                                    <ul className="space-y-2.5">
+                                      {evaluation.gaps.map((g, i) => (
+                                        <li key={i} className="text-sm text-gray-700 leading-relaxed flex gap-2">
+                                          <span className="text-red-600 flex-shrink-0 mt-0.5">✗</span>
+                                          <span>{g}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                </div>
+                                <div>
+                                  <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">Recommendations</p>
+                                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{evaluation.recommendations}</p>
+                                </div>
+                              </>
+                            )}
 
                             {/* Notable changes — shown when a changes_analysis is present (comparison re-evaluation) */}
                             {evaluation.changes_analysis && (
@@ -2659,30 +2499,6 @@ export default function ProjectPage() {
         {tab === 'script' && (
           <div className="max-w-3xl">
 
-            {/* Budget Planner CTA */}
-            {directions.length > 0 && (
-              <div className="mb-5 bg-white border border-gray-200 rounded-xl px-5 py-3 flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-medium text-gray-900">Plan your entry budget</p>
-                  <p className="text-xs text-gray-400 mt-0.5">See entry costs and deadlines across all directions for this project.</p>
-                </div>
-                <div className="flex gap-2 shrink-0">
-                  <button
-                    onClick={() => openShowsDrawer('calendar')}
-                    className="text-xs font-medium text-gray-700 border border-gray-200 hover:border-gray-400 hover:text-gray-900 px-3 py-2 rounded-lg transition-colors"
-                  >
-                    📅 Timeline
-                  </button>
-                  <button
-                    onClick={() => openShowsDrawer('budget')}
-                    className="text-xs font-medium bg-green-800 hover:bg-green-700 text-white px-3 py-2 rounded-lg transition-colors"
-                  >
-                    📋 Budget Planner
-                  </button>
-                </div>
-              </div>
-            )}
-
             {/* Mode toggle */}
             <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl p-1 w-fit mb-6">
               {(['generate', 'review'] as const).map(m => (
@@ -2944,7 +2760,7 @@ export default function ProjectPage() {
             </button>
             {generatingScript && (
               <div className="mb-6 -mt-4">
-                <GeneratingBar isGenerating={generatingScript} estimatedDuration={70000} statements={scriptMode === 'review' ? SCRIPT_REVIEW_STATEMENTS : SCRIPT_GENERATE_STATEMENTS} />
+                <GeneratingBar isGenerating={generatingScript} estimatedDuration={70000} />
               </div>
             )}
 
@@ -3187,16 +3003,6 @@ export default function ProjectPage() {
           </div>
         </div>
       )}
-
-      {/* ── Show Intelligence Drawer — Timeline & Budget ──────────────────── */}
-      <ShowsDrawer
-        open={showsDrawerOpen}
-        onClose={() => setShowsDrawerOpen(false)}
-        initialTab={drawerInitialTab}
-        directions={directions}
-        orgId={orgId}
-        prefilledShow={drawerPrefilledShow}
-      />
 
     </div>
   )
