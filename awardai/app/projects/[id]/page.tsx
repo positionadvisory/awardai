@@ -339,6 +339,7 @@ type JudgeOutput = {
   talks_up: string[]
   kills_it: string[]
   recommendations: string
+  campaign_name_note?: string
 }
 type PriorityFix = { fix: string; why: string; action: string }
 type CoachOutput = {
@@ -442,6 +443,11 @@ export default function ProjectPage() {
   const [evalHistoryOpen, setEvalHistoryOpen] = useState<Record<number, boolean>>({})
   const [tab, setTab] = useState<Tab>('brief')
   const [fetching, setFetching] = useState(true)
+
+  // Project rename
+  const [editingName, setEditingName] = useState(false)
+  const [nameEditValue, setNameEditValue] = useState('')
+  const [savingName, setSavingName] = useState(false)
 
   // Brief
   const [briefEdit, setBriefEdit] = useState(false)
@@ -747,6 +753,27 @@ export default function ProjectPage() {
       console.error('Show request submit error:', e)
     } finally {
       setShowRequestSubmitting(false)
+    }
+  }
+
+  const handleRenameProject = async () => {
+    const trimmed = nameEditValue.trim()
+    if (!trimmed || !project || trimmed === project.campaign_name) {
+      setEditingName(false)
+      return
+    }
+    setSavingName(true)
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .update({ campaign_name: trimmed })
+        .eq('id', project.id)
+      if (!error) {
+        setProject(p => p ? { ...p, campaign_name: trimmed } : p)
+        setEditingName(false)
+      }
+    } finally {
+      setSavingName(false)
     }
   }
 
@@ -1574,7 +1601,38 @@ export default function ProjectPage() {
             </button>
             <span className="text-gray-300 shrink-0">|</span>
             <div className="min-w-0">
-              <h1 className="font-semibold text-gray-900 leading-tight truncate">{project.campaign_name}</h1>
+              {editingName ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    autoFocus
+                    type="text"
+                    value={nameEditValue}
+                    onChange={e => setNameEditValue(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') handleRenameProject()
+                      if (e.key === 'Escape') setEditingName(false)
+                    }}
+                    onBlur={handleRenameProject}
+                    disabled={savingName}
+                    className="text-sm font-semibold text-gray-900 bg-white border border-gray-300 rounded-md px-2 py-0.5 focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent min-w-0 w-48 sm:w-64 disabled:opacity-50"
+                  />
+                  {savingName && (
+                    <svg className="animate-spin h-3.5 w-3.5 text-gray-400 shrink-0" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                    </svg>
+                  )}
+                </div>
+              ) : (
+                <button
+                  onClick={() => { setNameEditValue(project.campaign_name); setEditingName(true) }}
+                  className="group flex items-center gap-1.5 text-left"
+                  title="Click to rename"
+                >
+                  <h1 className="font-semibold text-gray-900 leading-tight truncate">{project.campaign_name}</h1>
+                  <span className="text-gray-300 group-hover:text-gray-500 transition-colors shrink-0 text-xs">✎</span>
+                </button>
+              )}
               {project.client_name && <p className="text-gray-500 text-xs truncate">{project.client_name}</p>}
             </div>
           </div>
@@ -2327,9 +2385,17 @@ export default function ProjectPage() {
 
                                         {/* Recommendations */}
                                         {o.recommendations && (
-                                          <div>
+                                          <div className="mb-5">
                                             <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">Recommendations to Help Your Chances</p>
                                             <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{o.recommendations}</p>
+                                          </div>
+                                        )}
+
+                                        {/* Campaign name note */}
+                                        {o.campaign_name_note && (
+                                          <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
+                                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">On the Campaign Name</p>
+                                            <p className="text-sm text-gray-700 leading-relaxed">{o.campaign_name_note}</p>
                                           </div>
                                         )}
                                       </>
