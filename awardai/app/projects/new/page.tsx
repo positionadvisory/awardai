@@ -1,15 +1,28 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
 
-const AWARD_SHOWS = [
+// Canonical list — base set always shown even before KB loads
+const CANONICAL_SHOWS = [
   'Cannes Lions', 'D&AD', 'Clio Awards', 'One Show', 'Effies',
   'Spikes Asia', 'Dubai Lynx', 'London International Awards',
   'WARC Awards', 'AdFest', 'AWARD Awards', 'Webby Awards',
   'Creative Circle', 'Campaign Big Awards', 'Epica Awards',
-  'New York Festivals', 'Eurobest',
+  'New York Festivals', 'Eurobest', 'WARC Effectiveness Awards',
+  'Shorty Awards', 'The Drum Awards', 'Festival of Media',
+  'MMA Smarties', 'Anthem Awards', 'PR Week Awards', 'ADMA Awards',
+  'Mumbrella Awards', 'B&T Awards', 'Campaign Asia Awards',
+  'AdFest', 'Asian Marketing Effectiveness Awards',
+  'Asia Pacific Effie Awards', 'Global Effie Awards',
+  'Australian Effies', 'IAB Mixx Awards', 'Caples Awards',
+  'Gerety Awards', 'Andy Awards', 'Communication Arts Awards',
+  'Transform Awards', 'World PR Awards', 'PRCA Awards',
+  'SABRE Awards', 'Holmes Report SABRE', 'PRovoke Awards',
+  'Cannes Lions PR Lions', 'INMA Awards', 'WAN-IFRA Awards',
+  'Social Media Marketing Awards', 'Content Marketing Awards',
+  'Digital Communication Awards',
 ]
 
 const currentYear = new Date().getFullYear()
@@ -28,14 +41,106 @@ export default function NewProjectPage() {
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [kbShows, setKbShows] = useState<string[]>(CANONICAL_SHOWS)
+  const [dropdownValue, setDropdownValue] = useState('')
+  // Custom show + request flow
+  const [customShowInput, setCustomShowInput] = useState('')
+  const [showRequestModal, setShowRequestModal] = useState(false)
+  const [showRequestName, setShowRequestName] = useState('')
+  const [showRequestUrl, setShowRequestUrl] = useState('')
+  const [showRequestMarket, setShowRequestMarket] = useState('')
+  const [showRequestKitUrl, setShowRequestKitUrl] = useState('')
+  const [showRequestSubmitting, setShowRequestSubmitting] = useState(false)
+  const [showRequestDone, setShowRequestDone] = useState(false)
+  const [showRequestNoKit, setShowRequestNoKit] = useState(false)
 
-  const toggleShow = (show: string) => {
+  // Fetch KB shows on mount and merge with canonical list
+  useEffect(() => {
+    supabase
+      .from('campaigns')
+      .select('show_raw')
+      .not('show_raw', 'is', null)
+      .then(({ data }) => {
+        if (!data) return
+        const baseNames = data
+          .map(row => (row.show_raw as string).replace(/\s+\d{4}$/, '').trim())
+          .filter(Boolean)
+        const unique = Array.from(new Set([...CANONICAL_SHOWS, ...baseNames])).sort()
+        setKbShows(unique)
+      })
+  }, [])
+
+  const handleDropdownAdd = (val: string) => {
+    if (!val) return
+    if (val === '__request__') {
+      setCustomShowInput('')
+      setShowRequestModal(true)
+      setDropdownValue('')
+      return
+    }
     setForm(f => ({
       ...f,
-      target_shows: f.target_shows.includes(show)
-        ? f.target_shows.filter(s => s !== show)
-        : [...f.target_shows, show],
+      target_shows: f.target_shows.includes(val) ? f.target_shows : [...f.target_shows, val],
     }))
+    setDropdownValue('')
+  }
+
+  const handleCustomShowAdd = (val: string) => {
+    if (!val.trim()) return
+    const isKnown = kbShows.some(s => s.toLowerCase() === val.trim().toLowerCase())
+    if (isKnown) {
+      const canonical = kbShows.find(s => s.toLowerCase() === val.trim().toLowerCase()) ?? val.trim()
+      setForm(f => ({
+        ...f,
+        target_shows: f.target_shows.includes(canonical) ? f.target_shows : [...f.target_shows, canonical],
+      }))
+      setCustomShowInput('')
+    } else {
+      setShowRequestName(val.trim())
+      setShowRequestUrl('')
+      setShowRequestMarket('')
+      setShowRequestKitUrl('')
+      setShowRequestDone(false)
+      setShowRequestNoKit(false)
+      setCustomShowInput('')
+      setShowRequestModal(true)
+    }
+  }
+
+  const submitShowRequest = async () => {
+    if (!showRequestName.trim()) return
+    setShowRequestSubmitting(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const accessToken = session?.access_token ?? ''
+      if (!accessToken) return
+      const res = await fetch('/api/shows/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+        body: JSON.stringify({
+          show_name:     showRequestName.trim(),
+          show_url:      showRequestUrl.trim() || null,
+          market:        showRequestMarket.trim() || null,
+          entry_kit_url: showRequestKitUrl.trim() || null,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        setForm(f => ({
+          ...f,
+          target_shows: f.target_shows.includes(showRequestName.trim())
+            ? f.target_shows
+            : [...f.target_shows, showRequestName.trim()],
+        }))
+        setCustomShowInput('')
+        setShowRequestDone(true)
+        setShowRequestNoKit(!showRequestKitUrl.trim())
+      }
+    } catch (e) {
+      console.error('Show request error:', e)
+    } finally {
+      setShowRequestSubmitting(false)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -171,22 +276,38 @@ export default function NewProjectPage() {
               Target award shows
               <span className="text-gray-400 font-normal ml-2">— select all that apply</span>
             </label>
-            <div className="flex flex-wrap gap-2">
-              {AWARD_SHOWS.map(show => (
-                <button
-                  key={show}
-                  type="button"
-                  onClick={() => toggleShow(show)}
-                  className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                    form.target_shows.includes(show)
-                      ? 'bg-green-800 border-green-700 text-white'
-                      : 'bg-white border-gray-300 text-gray-500 hover:border-green-600 hover:text-green-700'
-                  }`}
-                >
-                  {show}
-                </button>
-              ))}
-            </div>
+
+            {/* Dropdown selector */}
+            <select
+              value={dropdownValue}
+              onChange={e => handleDropdownAdd(e.target.value)}
+              className="w-full bg-white border border-gray-300 rounded-lg px-4 py-3 text-gray-900 focus:outline-none focus:border-green-600 transition-colors mb-3"
+            >
+              <option value="">Add an award show…</option>
+              {kbShows
+                .filter(s => !form.target_shows.includes(s))
+                .map(show => (
+                  <option key={show} value={show}>{show}</option>
+                ))
+              }
+              <option value="__request__">✦ Request a show not in the list…</option>
+            </select>
+
+            {/* Selected shows as removable chips */}
+            {form.target_shows.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {form.target_shows.map(show => (
+                  <button
+                    key={show}
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, target_shows: f.target_shows.filter(s => s !== show) }))}
+                    className="text-xs px-3 py-1.5 rounded-full border bg-green-800 border-green-700 text-white flex items-center gap-1.5 hover:bg-green-700 transition-colors"
+                  >
+                    {show} <span className="opacity-70">×</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {error && (
@@ -213,6 +334,68 @@ export default function NewProjectPage() {
           </div>
         </form>
       </main>
+
+      {/* Show Request Modal */}
+      {showRequestModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="px-6 pt-6 pb-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-1">Request a new show</h2>
+              {!showRequestDone ? (
+                <>
+                  <p className="text-sm text-gray-500 mb-4">
+                    <span className="font-medium text-gray-800">{showRequestName}</span> isn't in our system yet. Give us a few details and we'll add it shortly.
+                  </p>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Show website</label>
+                      <input type="url" value={showRequestUrl} onChange={e => setShowRequestUrl(e.target.value)} placeholder="https://example.com"
+                        className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Primary market</label>
+                      <input type="text" value={showRequestMarket} onChange={e => setShowRequestMarket(e.target.value)} placeholder="e.g. Global, APAC, Australia…"
+                        className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Entry kit URL <span className="text-gray-400 font-normal">(optional but helpful)</span></label>
+                      <input type="url" value={showRequestKitUrl} onChange={e => setShowRequestKitUrl(e.target.value)} placeholder="https://example.com/entry-kit"
+                        className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors" />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-5">
+                    <button onClick={submitShowRequest} disabled={showRequestSubmitting}
+                      className="flex-1 bg-green-800 hover:bg-green-700 disabled:opacity-40 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-colors">
+                      {showRequestSubmitting ? 'Sending…' : 'Send request'}
+                    </button>
+                    <button onClick={() => { setShowRequestModal(false); setCustomShowInput('') }} disabled={showRequestSubmitting}
+                      className="px-4 py-2.5 text-sm text-gray-500 hover:text-gray-900 disabled:opacity-40 transition-colors">
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="py-4 text-center">
+                    <div className="text-3xl mb-3">✓</div>
+                    <p className="text-sm font-medium text-gray-900 mb-1">Request sent for <span className="text-green-800">{showRequestName}</span></p>
+                    <p className="text-sm text-gray-500 mb-1">We'll add it to the system shortly.</p>
+                    {showRequestNoKit && (
+                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">
+                        No entry kit provided — we'll track one down, but it may take a little longer.
+                      </p>
+                    )}
+                  </div>
+                  <button onClick={() => setShowRequestModal(false)}
+                    className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium px-4 py-2.5 rounded-xl transition-colors">
+                    Done
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
