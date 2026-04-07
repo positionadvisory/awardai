@@ -121,6 +121,28 @@ export default function DashboardPage() {
         return
       }
 
+      // Super-admin: fetch all orgs via service-role API route
+      if (user.email === 'ben@positionadvisory.com') {
+        const { data: { session } } = await supabase.auth.getSession()
+        const token = session?.access_token ?? ''
+        const res = await fetch('/api/admin/dashboard-data', {
+          headers: { 'Authorization': `Bearer ${token}` },
+        })
+        if (res.ok) {
+          const d = await res.json()
+          setProjects(d.projects ?? [])
+          setDirections(d.directions ?? [])
+          setEvaluations(d.evaluations ?? [])
+          setMonthlyUsage(d.monthlyUsage ?? [])
+          setProfiles(d.profiles ?? [])
+          setUsageLogs(d.usageLogs ?? [])
+          setEntryDrafts(d.entryDrafts ?? [])
+        }
+        setFetching(false)
+        return
+      }
+
+      // Standard org-scoped fetch for other admins
       if (!orgId) { setFetching(false); return }
 
       const now = new Date()
