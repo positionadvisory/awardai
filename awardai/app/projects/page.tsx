@@ -254,9 +254,11 @@ export default function ProjectsPage() {
             <span className="font-semibold text-gray-900">Shortlist</span>
           </div>
           <div className="flex items-center gap-4 shrink-0">
-            <Link href="/campaigns" className="text-sm text-gray-500 hover:text-gray-900 transition-colors">
-              Winning Campaigns
-            </Link>
+            {user?.email === 'ben@positionadvisory.com' && (
+              <Link href="/campaigns" className="text-sm text-gray-500 hover:text-gray-900 transition-colors">
+                Winning Campaigns
+              </Link>
+            )}
             {userRole === 'admin' && (
               <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900 transition-colors">
                 Dashboard
