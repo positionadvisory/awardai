@@ -76,6 +76,8 @@ export default function ProjectsPage() {
   const [credentialsInputMode, setCredentialsInputMode] = useState<'pdf' | 'url'>('pdf')
   const [credentialsUrl, setCredentialsUrl] = useState('')
   const [isDragging, setIsDragging] = useState(false)
+  const [removingProfile, setRemovingProfile] = useState(false)
+  const [confirmRemove, setConfirmRemove] = useState(false)
   const credentialsInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -223,6 +225,21 @@ export default function ProjectsPage() {
     }
   }
 
+  const handleRemoveProfile = async () => {
+    if (!orgId) return
+    setRemovingProfile(true)
+    try {
+      await supabase.from('agency_profiles').delete().eq('org_id', orgId)
+      setAgencyProfile(null)
+      setConfirmRemove(false)
+      setProfileOpen(false)
+    } catch {
+      // silent — UI will still show profile if delete failed
+    } finally {
+      setRemovingProfile(false)
+    }
+  }
+
   // ── Derived data ───────────────────────────────────────────────────────────
 
   const allYears = Array.from(
@@ -362,9 +379,36 @@ export default function ProjectsPage() {
                       Extracted {new Date(agencyProfile.generated_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </p>
                   )}
-                  {/* Re-extract */}
+                  {/* Re-extract + Remove */}
                   <div className="pt-4 border-t border-gray-100 space-y-3">
-                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Re-extract from</p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Update profile</p>
+                      {!confirmRemove ? (
+                        <button
+                          onClick={() => setConfirmRemove(true)}
+                          className="text-xs text-red-500 hover:text-red-700 transition-colors"
+                        >
+                          Remove profile
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500">Remove agency profile?</span>
+                          <button
+                            onClick={handleRemoveProfile}
+                            disabled={removingProfile}
+                            className="text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-40 transition-colors"
+                          >
+                            {removingProfile ? 'Removing…' : 'Yes, remove'}
+                          </button>
+                          <button
+                            onClick={() => setConfirmRemove(false)}
+                            className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      )}
+                    </div>
                     {/* Mode toggle */}
                     <div className="flex gap-1 p-1 bg-gray-100 rounded-lg w-fit">
                       <button type="button" onClick={() => { setCredentialsInputMode('pdf'); setCredentialsError('') }}
