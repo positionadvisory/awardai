@@ -340,6 +340,7 @@ type Project = {
   status: string
   script_text: string | null
   script_analysis: ScriptAnalysis | null
+  tonal_brief: TonalBrief | null
 }
 
 type Direction = {
@@ -550,6 +551,20 @@ export default function ProjectPage() {
   const [tonalBriefData, setTonalBriefData] = useState<TonalBrief | null>(null)
   const [tonalBriefError, setTonalBriefError] = useState('')
 
+  // Script editor chat
+  const [scriptChatOpen, setScriptChatOpen] = useState(false)
+  const [scriptChatInput, setScriptChatInput] = useState('')
+  const [scriptChatting, setScriptChatting] = useState(false)
+  const [scriptChatHistory, setScriptChatHistory] = useState<ChatMessage[]>([])
+  const [scriptChatError, setScriptChatError] = useState('')
+
+  // Brief editor chat
+  const [briefChatOpen, setBriefChatOpen] = useState(false)
+  const [briefChatInput, setBriefChatInput] = useState('')
+  const [briefChatting, setBriefChatting] = useState(false)
+  const [briefChatHistory, setBriefChatHistory] = useState<ChatMessage[]>([])
+  const [briefChatError, setBriefChatError] = useState('')
+
   // Opener suggestions (generate-hooks)
   const [hooksLoading, setHooksLoading] = useState<Record<number, boolean>>({})
   const [hooksOpen, setHooksOpen] = useState<Record<number, boolean>>({})
@@ -680,6 +695,7 @@ export default function ProjectPage() {
         setTargetShows(proj.target_shows || [])
         if (proj.script_text) setScriptText(proj.script_text)
         if (proj.script_analysis) setScriptAnalysis(proj.script_analysis)
+        if (proj.tonal_brief) setTonalBriefData(proj.tonal_brief as TonalBrief)
       }
       if (dirs) setDirections(dirs)
 
@@ -819,6 +835,78 @@ export default function ProjectPage() {
       setTonalBriefError(formatError({ message: 'Network error — check your connection and try again.', retryable: true, code: 'TONAL-NET' }))
     } finally {
       setTonalBriefLoading(false)
+    }
+  }
+
+  // Script editor chat — sends targeted edit instruction, receives updated script + confirmation
+  const sendScriptChat = async () => {
+    if (!project || !scriptChatInput.trim() || scriptChatting) return
+    const message = scriptChatInput.trim()
+    setScriptChatInput('')
+    setScriptChatting(true)
+    setScriptChatError('')
+    const newHistory: ChatMessage[] = [...scriptChatHistory, { role: 'user', content: message }]
+    setScriptChatHistory(newHistory)
+    try {
+      const accessToken = await getToken()
+      if (!accessToken) return
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat-script`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}`, 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
+          body: JSON.stringify({ project_id: project.id, message, target: 'script', chat_history: scriptChatHistory }),
+        }
+      )
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        setScriptChatError(formatError(appErrorFromResponse(data, res.status, 'CHAT-SCRIPT')))
+        setScriptChatHistory(prev => prev.slice(0, -1))
+        return
+      }
+      if (data.script) setScriptText(data.script)
+      setScriptChatHistory([...newHistory, { role: 'assistant', content: data.reply || 'Script updated.' }])
+    } catch (err) {
+      setScriptChatError(formatError({ message: 'Network error — check your connection and try again.', retryable: true, code: 'CHAT-SCRIPT-NET' }))
+      setScriptChatHistory(prev => prev.slice(0, -1))
+    } finally {
+      setScriptChatting(false)
+    }
+  }
+
+  // Brief editor chat — sends targeted edit instruction, receives updated brief + confirmation
+  const sendBriefChat = async () => {
+    if (!project || !briefChatInput.trim() || briefChatting) return
+    const message = briefChatInput.trim()
+    setBriefChatInput('')
+    setBriefChatting(true)
+    setBriefChatError('')
+    const newHistory: ChatMessage[] = [...briefChatHistory, { role: 'user', content: message }]
+    setBriefChatHistory(newHistory)
+    try {
+      const accessToken = await getToken()
+      if (!accessToken) return
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat-script`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}`, 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
+          body: JSON.stringify({ project_id: project.id, message, target: 'brief', chat_history: briefChatHistory }),
+        }
+      )
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        setBriefChatError(formatError(appErrorFromResponse(data, res.status, 'CHAT-BRIEF')))
+        setBriefChatHistory(prev => prev.slice(0, -1))
+        return
+      }
+      if (data.brief) setTonalBriefData(data.brief as TonalBrief)
+      setBriefChatHistory([...newHistory, { role: 'assistant', content: data.reply || 'Brief updated.' }])
+    } catch (err) {
+      setBriefChatError(formatError({ message: 'Network error — check your connection and try again.', retryable: true, code: 'CHAT-BRIEF-NET' }))
+      setBriefChatHistory(prev => prev.slice(0, -1))
+    } finally {
+      setBriefChatting(false)
     }
   }
 
@@ -1754,8 +1842,10 @@ export default function ProjectPage() {
         script_analysis: data.analysis || p.script_analysis,
       } : p)
 
-      // Auto-generate production brief alongside the script
+      // Auto-generate production brief alongside the script — clear any prior chat histories
       if (data.script) {
+        setScriptChatHistory([])
+        setBriefChatHistory([])
         generateTonalBrief(data.script)
       }
     } catch (err) {
@@ -3816,6 +3906,102 @@ export default function ProjectPage() {
                   <div className="px-5 py-5">
                     <pre className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap font-mono">{scriptText}</pre>
                   </div>
+
+                  {/* ── Script editor chat ─────────────────────────────────────── */}
+                  <div className="px-5 py-4 border-t border-gray-100">
+                    <button
+                      onClick={() => setScriptChatOpen(v => !v)}
+                      className="flex items-center gap-2 text-sm font-medium text-green-700 hover:text-green-600 transition-colors"
+                    >
+                      <span>✦ Refine with feedback</span>
+                      <span className="text-gray-400 text-xs">{scriptChatOpen ? '↑' : '↓'}</span>
+                      {scriptChatHistory.length > 0 && !scriptChatOpen && (
+                        <span className="bg-green-100 text-green-800 text-xs px-1.5 py-0.5 rounded-full leading-none ml-1">
+                          {Math.floor(scriptChatHistory.length / 2)} edit{Math.floor(scriptChatHistory.length / 2) !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </button>
+
+                    {scriptChatOpen && (
+                      <div className="mt-4">
+                        {scriptChatHistory.length === 0 ? (
+                          <div className="mb-4">
+                            <p className="text-xs text-gray-400 mb-3">Tell me what to change — a specific scene, the VO tone, the close. I'll apply the edit and leave everything else untouched.</p>
+                            <div className="flex flex-wrap gap-2">
+                              {[
+                                'Make the hook snappier',
+                                'The VO is too formal — loosen it',
+                                'Cut Scene 4, it\'s too long',
+                                'Rewrite the close to land harder',
+                              ].map(prompt => (
+                                <button
+                                  key={prompt}
+                                  onClick={() => setScriptChatInput(prompt)}
+                                  className="text-xs text-green-700 border border-green-200 hover:bg-green-50 px-3 py-1.5 rounded-lg transition-colors"
+                                >
+                                  {prompt}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-3 mb-4 max-h-80 overflow-y-auto pr-1">
+                            {scriptChatHistory.map((msg, i) => (
+                              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                <div className={`max-w-[85%] rounded-xl px-3.5 py-2.5 text-sm leading-relaxed ${
+                                  msg.role === 'user'
+                                    ? 'bg-green-800 text-white'
+                                    : 'bg-gray-50 border border-gray-200 text-gray-700'
+                                }`}>
+                                  <span className="whitespace-pre-wrap">{msg.content}</span>
+                                </div>
+                              </div>
+                            ))}
+                            {scriptChatting && (
+                              <div className="flex justify-start">
+                                <div className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 flex items-center gap-1.5">
+                                  <svg className="animate-spin h-3.5 w-3.5 text-green-700" viewBox="0 0 24 24" fill="none">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                                  </svg>
+                                  <span className="text-xs text-gray-400">Editing script…</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {scriptChatError && (
+                          <div className="mb-3">
+                            <ErrorBanner error={scriptChatError} />
+                          </div>
+                        )}
+
+                        <div className="flex gap-2">
+                          <input
+                            value={scriptChatInput}
+                            onChange={e => setScriptChatInput(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter' && !e.shiftKey && !scriptChatting) {
+                                e.preventDefault()
+                                sendScriptChat()
+                              }
+                            }}
+                            placeholder="What would you like to change? e.g. 'Scene 2 VO is too long — cut it by half'"
+                            className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
+                            disabled={scriptChatting}
+                          />
+                          <button
+                            onClick={sendScriptChat}
+                            disabled={scriptChatting || !scriptChatInput.trim()}
+                            className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors flex-shrink-0"
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* ── Production Brief (Feature 6) ─────────────────────────────── */}
@@ -3968,6 +4154,104 @@ export default function ProjectPage() {
                           <p className="text-sm text-gray-700 leading-relaxed">{tonalBriefData.brand_notes}</p>
                         </div>
 
+                      </div>
+                    )}
+
+                    {/* ── Brief editor chat ──────────────────────────────────── */}
+                    {!tonalBriefLoading && tonalBriefData && (
+                      <div className="px-5 py-4 border-t border-gray-100">
+                        <button
+                          onClick={() => setBriefChatOpen(v => !v)}
+                          className="flex items-center gap-2 text-sm font-medium text-green-700 hover:text-green-600 transition-colors"
+                        >
+                          <span>✦ Refine with feedback</span>
+                          <span className="text-gray-400 text-xs">{briefChatOpen ? '↑' : '↓'}</span>
+                          {briefChatHistory.length > 0 && !briefChatOpen && (
+                            <span className="bg-green-100 text-green-800 text-xs px-1.5 py-0.5 rounded-full leading-none ml-1">
+                              {Math.floor(briefChatHistory.length / 2)} edit{Math.floor(briefChatHistory.length / 2) !== 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </button>
+
+                        {briefChatOpen && (
+                          <div className="mt-4">
+                            {briefChatHistory.length === 0 ? (
+                              <div className="mb-4">
+                                <p className="text-xs text-gray-400 mb-3">Tell me what to adjust — a specific field or the whole direction. Everything else stays the same.</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {[
+                                    'Make the palette more muted',
+                                    'The VO style is too formal',
+                                    'Suggest a different music direction',
+                                    'Make the typography more contemporary',
+                                  ].map(prompt => (
+                                    <button
+                                      key={prompt}
+                                      onClick={() => setBriefChatInput(prompt)}
+                                      className="text-xs text-green-700 border border-green-200 hover:bg-green-50 px-3 py-1.5 rounded-lg transition-colors"
+                                    >
+                                      {prompt}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="space-y-3 mb-4 max-h-80 overflow-y-auto pr-1">
+                                {briefChatHistory.map((msg, i) => (
+                                  <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                    <div className={`max-w-[85%] rounded-xl px-3.5 py-2.5 text-sm leading-relaxed ${
+                                      msg.role === 'user'
+                                        ? 'bg-green-800 text-white'
+                                        : 'bg-gray-50 border border-gray-200 text-gray-700'
+                                    }`}>
+                                      <span className="whitespace-pre-wrap">{msg.content}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                                {briefChatting && (
+                                  <div className="flex justify-start">
+                                    <div className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 flex items-center gap-1.5">
+                                      <svg className="animate-spin h-3.5 w-3.5 text-green-700" viewBox="0 0 24 24" fill="none">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                                      </svg>
+                                      <span className="text-xs text-gray-400">Updating brief…</span>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {briefChatError && (
+                              <div className="mb-3">
+                                <ErrorBanner error={briefChatError} />
+                              </div>
+                            )}
+
+                            <div className="flex gap-2">
+                              <input
+                                value={briefChatInput}
+                                onChange={e => setBriefChatInput(e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter' && !e.shiftKey && !briefChatting) {
+                                    e.preventDefault()
+                                    sendBriefChat()
+                                  }
+                                }}
+                                placeholder="What would you like to change? e.g. 'Swap the green for a warm amber'"
+                                className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
+                                disabled={briefChatting}
+                              />
+                              <button
+                                onClick={sendBriefChat}
+                                disabled={briefChatting || !briefChatInput.trim()}
+                                className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors flex-shrink-0"
+                              >
+                                Edit
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
