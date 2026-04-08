@@ -275,16 +275,21 @@ const REGIONAL_SHOW_CONSTRAINTS: Record<string, { market: string; requiredKeywor
   'Campaign Asia Awards': { market: 'Asia Pacific', requiredKeywords: ['asia', 'asian', 'pacific', 'china', 'chinese', 'japan', 'japanese', 'korea', 'korean', 'india', 'indian', 'thailand', 'singapore', 'hong kong', 'taiwan', 'philippines', 'indonesia', 'malaysia', 'vietnam', 'australia', 'australian', 'new zealand'], conflictKeywords: ['united states', 'america', 'uk', 'britain', 'france', 'germany', 'brazil'] },
 }
 
-function detectGeoWarnings(targetShows: string[], briefText: string): { show: string; market: string }[] {
-  const lowerBrief = briefText.toLowerCase()
+function detectGeoWarnings(
+  targetShows: string[],
+  briefText: string,
+  materialTexts: string[]
+): { show: string; market: string }[] {
+  // Combine brief + all material extracted text into a single corpus to check against
+  const corpus = [briefText, ...materialTexts].join(' ').toLowerCase()
   const warnings: { show: string; market: string }[] = []
   for (const show of targetShows) {
     const constraint = REGIONAL_SHOW_CONSTRAINTS[show]
     if (!constraint) continue
-    const hasRequired = constraint.requiredKeywords.some(kw => lowerBrief.includes(kw))
-    const hasConflict = constraint.conflictKeywords.some(kw => lowerBrief.includes(kw))
-    // Flag if: no required market signals AND there are conflict signals (or no brief at all)
-    if (!hasRequired && (hasConflict || lowerBrief.trim().length < 20)) {
+    const hasRequired = constraint.requiredKeywords.some(kw => corpus.includes(kw))
+    const hasConflict = constraint.conflictKeywords.some(kw => corpus.includes(kw))
+    // Flag if: no required market signals AND there are conflict signals (or no content at all)
+    if (!hasRequired && (hasConflict || corpus.trim().length < 20)) {
       warnings.push({ show, market: constraint.market })
     }
   }
@@ -1080,7 +1085,10 @@ export default function ProjectPage() {
 
     // ── Pre-check 1: geographic eligibility ───────────────────────────────────
     if (!skipChecks) {
-      const warnings = detectGeoWarnings(targetShows, project.combined_text || '')
+      const materialTexts = (project.materials || [])
+        .map((m: { extracted_text?: string }) => m.extracted_text || '')
+        .filter(Boolean)
+      const warnings = detectGeoWarnings(targetShows, project.combined_text || '', materialTexts)
       if (warnings.length > 0) {
         setGeoWarnings(warnings)
         setShowGeoWarningModal(true)
@@ -1168,7 +1176,7 @@ export default function ProjectPage() {
         setTab('directions')
       }
     } catch (err) {
-      setSmartDirectionsError(prev => ({ ...prev, [directionId]: err instanceof Error ? err.message : 'Network error.' }))
+      setSmartDirectionsError(prev => ({ ...prev, [directionId]: formatError({ message: 'Network error — check your connection and try again.', retryable: true, code: 'DIR-NET' }) }))
     } finally {
       setSmartDirectionsLoading(prev => { const n = { ...prev }; delete n[directionId]; return n })
     }
@@ -1234,7 +1242,7 @@ export default function ProjectPage() {
       }
       setTab('entries')
     } catch (err) {
-      setGenerateDraftError(err instanceof Error ? err.message : 'Network error.')
+      setGenerateDraftError(formatError({ message: 'Network error — check your connection and try again.', retryable: true, code: 'DRAFT-NET' }))
     } finally { setGeneratingDraft(false); setGeneratingForDirectionId(null) }
   }
 
@@ -1290,7 +1298,7 @@ export default function ProjectPage() {
         setEvalChatOpen(prev => { const next = { ...prev }; delete next[directionId]; return next })
       }
     } catch (err) {
-      setEvaluateError(err instanceof Error ? err.message : 'Network error.')
+      setEvaluateError(formatError({ message: 'Network error — check your connection and try again.', retryable: true, code: 'EVAL-NET' }))
     } finally {
       setEvaluating(false)
       setEvaluatingForDirectionId(null)
