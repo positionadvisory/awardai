@@ -264,36 +264,29 @@ function calculateWinLikelihood(show: string | null, evalScore?: number): number
 // Geographic eligibility constraints for regionally-restricted award shows.
 // requiredKeywords: at least one must appear in the brief for the campaign to be eligible.
 // conflictKeywords: if these appear WITHOUT any requiredKeywords, flag a mismatch.
-const REGIONAL_SHOW_CONSTRAINTS: Record<string, { market: string; requiredKeywords: string[]; conflictKeywords: string[] }> = {
-  'Australian Effies':  { market: 'Australia', requiredKeywords: ['australia', 'australian'], conflictKeywords: ['china', 'chinese', 'uk', 'united kingdom', 'britain', 'british', 'india', 'indian', 'united states', 'america', 'american', 'japan', 'japanese', 'korea', 'korean', 'france', 'french', 'germany', 'german', 'brazil', 'brazil'] },
-  'AWARD Awards':       { market: 'Australia / New Zealand', requiredKeywords: ['australia', 'australian', 'new zealand', 'nz'], conflictKeywords: ['china', 'chinese', 'uk', 'britain', 'india', 'united states', 'america', 'japan', 'korea', 'france', 'germany'] },
-  'B&T Awards':         { market: 'Australia', requiredKeywords: ['australia', 'australian'], conflictKeywords: ['china', 'chinese', 'uk', 'britain', 'india', 'united states', 'america', 'japan', 'korea'] },
-  'Mumbrella Awards':   { market: 'Australia', requiredKeywords: ['australia', 'australian'], conflictKeywords: ['china', 'chinese', 'uk', 'britain', 'india', 'united states', 'america', 'japan', 'korea'] },
-  'Dubai Lynx':         { market: 'Middle East & North Africa', requiredKeywords: ['dubai', 'uae', 'middle east', 'mena', 'arab', 'saudi', 'qatar', 'egypt', 'jordan', 'kuwait', 'bahrain', 'oman', 'lebanon', 'morocco'], conflictKeywords: ['australia', 'china', 'uk', 'united states', 'america', 'india', 'japan', 'korea', 'france', 'germany'] },
-  'AdFest':             { market: 'Asia Pacific', requiredKeywords: ['asia', 'asian', 'pacific', 'china', 'chinese', 'japan', 'japanese', 'korea', 'korean', 'india', 'indian', 'thailand', 'singapore', 'hong kong', 'taiwan', 'philippines', 'indonesia', 'malaysia', 'vietnam', 'australia', 'australian', 'new zealand'], conflictKeywords: ['united states', 'america', 'uk', 'britain', 'france', 'germany', 'brazil'] },
-  'Spikes Asia':        { market: 'Asia Pacific', requiredKeywords: ['asia', 'asian', 'pacific', 'china', 'chinese', 'japan', 'japanese', 'korea', 'korean', 'india', 'indian', 'thailand', 'singapore', 'hong kong', 'taiwan', 'philippines', 'indonesia', 'malaysia', 'vietnam', 'australia', 'australian', 'new zealand'], conflictKeywords: ['united states', 'america', 'uk', 'britain', 'france', 'germany', 'brazil'] },
-  'Campaign Asia Awards': { market: 'Asia Pacific', requiredKeywords: ['asia', 'asian', 'pacific', 'china', 'chinese', 'japan', 'japanese', 'korea', 'korean', 'india', 'indian', 'thailand', 'singapore', 'hong kong', 'taiwan', 'philippines', 'indonesia', 'malaysia', 'vietnam', 'australia', 'australian', 'new zealand'], conflictKeywords: ['united states', 'america', 'uk', 'britain', 'france', 'germany', 'brazil'] },
+// Regional shows with geographic entry restrictions.
+// ANY time one of these shows is targeted, the user MUST confirm eligibility before generating.
+// No keyword detection — always prompt. Keyword detection was unreliable because global brand
+// materials frequently mention multiple markets, causing false negatives.
+const REGIONAL_SHOWS: Record<string, { market: string; rule: string }> = {
+  'Australian Effies':    { market: 'Australia', rule: 'Open to campaigns that ran in the Australian market only.' },
+  'AWARD Awards':         { market: 'Australia / New Zealand', rule: 'Open to work created by agencies based in Australia or New Zealand.' },
+  'B&T Awards':           { market: 'Australia', rule: 'Open to campaigns and agencies operating in the Australian market.' },
+  'Mumbrella Awards':     { market: 'Australia', rule: 'Open to campaigns that ran in the Australian market only.' },
+  'Campaign Big Awards':  { market: 'United Kingdom', rule: 'Open to campaigns that ran in the UK market only.' },
+  'Dubai Lynx':           { market: 'Middle East & North Africa', rule: 'Open to campaigns that ran in the MENA region only.' },
+  'AdFest':               { market: 'Asia Pacific', rule: 'Open to agencies and campaigns from the Asia Pacific region only.' },
+  'Spikes Asia':          { market: 'Asia Pacific', rule: 'Open to campaigns that ran in the Asia Pacific region only.' },
+  'Campaign Asia Awards': { market: 'Asia Pacific', rule: 'Open to agencies and brands operating in the Asia Pacific region.' },
+  'Effie Awards India':   { market: 'India', rule: 'Open to campaigns that ran in the Indian market only.' },
+  'Effie Awards China':   { market: 'China', rule: 'Open to campaigns that ran in the Chinese market only.' },
+  'MMA Smarties':         { market: 'Regional — check entry kit', rule: 'Regional chapters have specific market eligibility requirements.' },
 }
 
-function detectGeoWarnings(
-  targetShows: string[],
-  briefText: string,
-  materialTexts: string[]
-): { show: string; market: string }[] {
-  // Combine brief + all material extracted text into a single corpus to check against
-  const corpus = [briefText, ...materialTexts].join(' ').toLowerCase()
-  const warnings: { show: string; market: string }[] = []
-  for (const show of targetShows) {
-    const constraint = REGIONAL_SHOW_CONSTRAINTS[show]
-    if (!constraint) continue
-    const hasRequired = constraint.requiredKeywords.some(kw => corpus.includes(kw))
-    const hasConflict = constraint.conflictKeywords.some(kw => corpus.includes(kw))
-    // Flag if: no required market signals AND there are conflict signals (or no content at all)
-    if (!hasRequired && (hasConflict || corpus.trim().length < 20)) {
-      warnings.push({ show, market: constraint.market })
-    }
-  }
-  return warnings
+function getRegionalShowWarnings(targetShows: string[]): { show: string; market: string; rule: string }[] {
+  return targetShows
+    .filter(show => REGIONAL_SHOWS[show])
+    .map(show => ({ show, ...REGIONAL_SHOWS[show] }))
 }
 
 type Material = {
@@ -531,7 +524,7 @@ export default function ProjectPage() {
   // Directions generation
   const [generating, setGenerating] = useState(false)
   const [generateError, setGenerateError] = useState('')
-  const [geoWarnings, setGeoWarnings] = useState<{ show: string; market: string }[]>([])
+  const [geoWarnings, setGeoWarnings] = useState<{ show: string; market: string; rule: string }[]>([])
   const [showGeoWarningModal, setShowGeoWarningModal] = useState(false)
   const [confirmRegenerateDirections, setConfirmRegenerateDirections] = useState(false)
   const [smartDirectionsLoading, setSmartDirectionsLoading] = useState<Record<number, 'alternatives' | 'other_shows' | null>>({})
@@ -1084,11 +1077,10 @@ export default function ProjectPage() {
     if (!project) return
 
     // ── Pre-check 1: geographic eligibility ───────────────────────────────────
+    // Always prompt for any regionally-restricted show — no keyword detection,
+    // which was unreliable (global brand materials mention multiple markets).
     if (!skipChecks) {
-      const materialTexts = (project.materials || [])
-        .map((m: { extracted_text?: string }) => m.extracted_text || '')
-        .filter(Boolean)
-      const warnings = detectGeoWarnings(targetShows, project.combined_text || '', materialTexts)
+      const warnings = getRegionalShowWarnings(targetShows)
       if (warnings.length > 0) {
         setGeoWarnings(warnings)
         setShowGeoWarningModal(true)
@@ -3801,28 +3793,43 @@ export default function ProjectPage() {
       {/* ── GEOGRAPHIC ELIGIBILITY WARNING MODAL ── */}
       {showGeoWarningModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
-          <div className="bg-white border border-gray-200 rounded-2xl p-6 w-full max-w-md shadow-2xl">
-            <h3 className="font-semibold text-gray-900 mb-2">Eligibility check</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Based on your brief, the following shows may require campaigns that ran in a specific market:
-            </p>
+          <div className="bg-white border border-gray-200 rounded-2xl p-6 w-full max-w-lg shadow-2xl">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-9 h-9 rounded-full bg-red-50 border border-red-200 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-red-500 text-base">⚠</span>
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Eligibility warning</h3>
+                <p className="text-sm text-gray-500 mt-0.5">The following shows have geographic entry restrictions. Generating directions for an ineligible campaign wastes your submission budget.</p>
+              </div>
+            </div>
             <div className="space-y-2 mb-5">
               {geoWarnings.map(w => (
-                <div key={w.show} className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-                  <span className="text-amber-500 mt-0.5 flex-shrink-0">⚠</span>
-                  <div>
-                    <p className="text-sm font-medium text-amber-800">{w.show}</p>
-                    <p className="text-xs text-amber-700 mt-0.5">Open to campaigns that ran in the <strong>{w.market}</strong> market only.</p>
-                  </div>
+                <div key={w.show} className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                  <p className="text-sm font-semibold text-red-800">{w.show}</p>
+                  <p className="text-xs text-red-700 mt-0.5">{w.rule}</p>
                 </div>
               ))}
             </div>
-            <p className="text-xs text-gray-400 mb-5">You can still proceed — eligibility rules vary and some categories accept global work. Check the show's entry kit to confirm.</p>
+            <label className="flex items-start gap-3 cursor-pointer mb-5 p-3 bg-gray-50 border border-gray-200 rounded-xl">
+              <input
+                type="checkbox"
+                id="geoConfirm"
+                className="mt-0.5 flex-shrink-0 accent-green-700"
+                onChange={e => {
+                  const btn = document.getElementById('geoConfirmBtn') as HTMLButtonElement | null
+                  if (btn) btn.disabled = !e.target.checked
+                }}
+              />
+              <span className="text-sm text-gray-700">I confirm this campaign is eligible for the show{geoWarnings.length > 1 ? 's' : ''} listed above and understand that entering an ineligible campaign will result in disqualification without refund.</span>
+            </label>
             <div className="flex gap-3">
               <button
+                id="geoConfirmBtn"
+                disabled
                 onClick={() => { setShowGeoWarningModal(false); generateDirections(true) }}
-                className="flex-1 bg-green-800 hover:bg-green-700 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-colors">
-                Proceed anyway
+                className="flex-1 bg-green-800 hover:bg-green-700 disabled:opacity-30 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-colors">
+                Confirmed — generate directions
               </button>
               <button
                 onClick={() => { setShowGeoWarningModal(false); setGeoWarnings([]) }}
