@@ -1158,6 +1158,8 @@ export default function ProjectPage() {
       if (!accessToken) return
       const body: Record<string, unknown> = { project_id: project.id, direction_id: directionId }
       if (evaluationId) body.evaluation_id = evaluationId
+      const focusItems = draftFocusItems[directionId] || []
+      if (focusItems.length > 0) body.focus_items = focusItems
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-draft`,
         {
@@ -2719,6 +2721,46 @@ export default function ProjectPage() {
                                 <p className="text-sm text-gray-700 leading-relaxed">{evaluation.changes_analysis}</p>
                               </div>
                             )}
+
+                            {/* Fix-this chips — user selects which issues to prioritise */}
+                            {(() => {
+                              const o = evaluation.output as EvaluationOutput | null
+                              const judgeOutput = evaluation.evaluation_mode === 'judge' ? o as JudgeOutput | null : null
+                              const coachOutput = evaluation.evaluation_mode === 'coach' ? o as CoachOutput | null : null
+                              const chipItems: string[] =
+                                judgeOutput?.kills_it?.length ? judgeOutput.kills_it :
+                                coachOutput?.priority_fixes?.length ? coachOutput.priority_fixes.map(pf => pf.fix) :
+                                evaluation.gaps?.length ? evaluation.gaps : []
+                              if (chipItems.length === 0) return null
+                              const selected = draftFocusItems[dirId] || []
+                              return (
+                                <div className="mt-5 pt-4 border-t border-gray-200">
+                                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Focus the next draft on…</p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {chipItems.map((item, i) => {
+                                      const active = selected.includes(item)
+                                      return (
+                                        <button
+                                          key={i}
+                                          type="button"
+                                          onClick={() => toggleFocusItem(dirId, item)}
+                                          className={`text-xs px-3 py-1.5 rounded-full border transition-colors text-left ${
+                                            active
+                                              ? 'bg-green-800 text-white border-green-800'
+                                              : 'bg-white text-gray-600 border-gray-300 hover:border-green-600 hover:text-green-700'
+                                          }`}
+                                        >
+                                          {active ? '✓ ' : ''}{item.length > 60 ? item.slice(0, 57) + '…' : item}
+                                        </button>
+                                      )
+                                    })}
+                                  </div>
+                                  {selected.length > 0 && (
+                                    <p className="text-xs text-green-700 mt-2">{selected.length} issue{selected.length > 1 ? 's' : ''} selected — the draft will prioritise these above all others.</p>
+                                  )}
+                                </div>
+                              )
+                            })()}
 
                             {/* Generate Improved Draft — prominent CTA anchored to this evaluation */}
                             <div className="mt-5 pt-4 border-t border-gray-200">
