@@ -504,7 +504,7 @@ export default function ProjectPage() {
   const [savingShows, setSavingShows] = useState(false)
   const [editingShowsInline, setEditingShowsInline] = useState(false)
   const [showsChangedWarning, setShowsChangedWarning] = useState(false)
-  const [kbShows, setKbShows] = useState<string[]>([])
+  const [kbShows, setKbShows] = useState<string[]>([...CANONICAL_SHOWS].sort((a, b) => a.localeCompare(b)))
   const [customShowInput, setCustomShowInput] = useState('')
   // Show request flow
   const [showRequestModal, setShowRequestModal] = useState(false)
@@ -650,7 +650,9 @@ export default function ProjectPage() {
             }
           }
         }
-        setKbShows([...CANONICAL_SHOWS, ...extra.sort()])
+        // Merge canonical + KB shows, de-dupe, sort alphabetically
+        const allShows = Array.from(new Set([...CANONICAL_SHOWS, ...extra]))
+        setKbShows(allShows.sort((a, b) => a.localeCompare(b)))
       })
 
     Promise.all([
@@ -3365,57 +3367,72 @@ export default function ProjectPage() {
             <div className="bg-white border border-gray-200 rounded-xl p-5 mb-5 space-y-4">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Target Award Show &amp; Category <span className="text-gray-400 font-normal normal-case">(optional — focuses the script)</span></p>
 
-              {/* Award Show dropdown */}
+              {/* Award Show + Category dropdowns */}
               <div className="grid grid-cols-2 gap-4">
+                {/* Award Show */}
                 <div>
                   <label className="block text-xs text-gray-500 mb-1.5">Award Show</label>
-                  <select
-                    value={scriptShow}
-                    onChange={e => {
-                      if (e.target.value === '__request__') {
-                        setShowRequestName('')
-                        setShowRequestUrl('')
-                        setShowRequestMarket('')
-                        setShowRequestKitUrl('')
-                        setShowRequestDone(false)
-                        setShowRequestNoKit(false)
-                        setShowRequestModal(true)
-                        return
-                      }
-                      setScriptShow(e.target.value)
-                      setScriptCategory('')
-                      setCategorySuggestions([])
-                      setSuggestCategoryError('')
-                    }}
-                    className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-green-600 transition-colors"
-                  >
-                    <option value="">No specific show</option>
-                    {kbShows.map(show => (
-                      <option key={show} value={show}>{show}</option>
-                    ))}
-                    <option value="__request__" className="text-gray-400">✦ Request a show…</option>
-                  </select>
-                </div>
-
-                {/* Category dropdown */}
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1.5">Category</label>
-                  {availableCategories.length > 0 ? (
+                  <div className="relative">
                     <select
-                      value={scriptCategory}
+                      value={scriptShow}
                       onChange={e => {
-                        setScriptCategory(e.target.value)
+                        if (e.target.value === '__request__') {
+                          setShowRequestName('')
+                          setShowRequestUrl('')
+                          setShowRequestMarket('')
+                          setShowRequestKitUrl('')
+                          setShowRequestDone(false)
+                          setShowRequestNoKit(false)
+                          setShowRequestModal(true)
+                          return
+                        }
+                        setScriptShow(e.target.value)
+                        setScriptCategory('')
                         setCategorySuggestions([])
                         setSuggestCategoryError('')
                       }}
-                      className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-green-600 transition-colors"
+                      className="w-full appearance-none bg-white border border-gray-300 rounded-xl px-3 py-2 pr-8 text-sm text-gray-900 focus:outline-none focus:border-green-600 transition-colors cursor-pointer"
                     >
-                      <option value="">No specific category</option>
-                      <option value="suggest">✦ Suggest Best Fits (AI)</option>
-                      {availableCategories.map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
+                      <option value="">No specific show</option>
+                      {kbShows.map(show => (
+                        <option key={show} value={show}>{show}</option>
                       ))}
+                      <option value="__request__">✦ Request a show…</option>
                     </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2.5">
+                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Category */}
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1.5">Category</label>
+                  {availableCategories.length > 0 ? (
+                    <div className="relative">
+                      <select
+                        value={scriptCategory}
+                        onChange={e => {
+                          setScriptCategory(e.target.value)
+                          setCategorySuggestions([])
+                          setSuggestCategoryError('')
+                        }}
+                        className="w-full appearance-none bg-white border border-gray-300 rounded-xl px-3 py-2 pr-8 text-sm text-gray-900 focus:outline-none focus:border-green-600 transition-colors cursor-pointer"
+                      >
+                        <option value="">No specific category</option>
+                        <option value="suggest">✦ Suggest Best Fits (AI)</option>
+                        {availableCategories.map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2.5">
+                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </div>
                   ) : scriptShow ? (
                     // Show not in SHOW_CATEGORIES map — free-text input
                     <input
@@ -3423,12 +3440,19 @@ export default function ProjectPage() {
                       value={customScriptCategory}
                       onChange={e => setCustomScriptCategory(e.target.value)}
                       placeholder="Type category…"
-                      className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
+                      className="w-full bg-white border border-gray-300 rounded-xl px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
                     />
                   ) : (
-                    <select disabled className="w-full bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-400 cursor-not-allowed">
-                      <option>Select a show first</option>
-                    </select>
+                    <div className="relative">
+                      <select disabled className="w-full appearance-none bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 pr-8 text-sm text-gray-400 cursor-not-allowed">
+                        <option>Select a show first</option>
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2.5">
+                        <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
