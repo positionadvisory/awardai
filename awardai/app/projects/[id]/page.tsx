@@ -5,6 +5,22 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
 import GeneratingBar from '@/components/GeneratingBar'
 import { MATERIALS_EVAL_STATEMENTS, JURY_EVAL_STATEMENTS, COACH_REVIEW_STATEMENTS } from '@/lib/generatingStatements'
+import { appErrorFromResponse, formatError, parseErrorString } from '@/lib/errorMessages'
+
+// ── ErrorBanner — renders a friendly message with a small diagnostic code ────
+// Expects error strings in "message [CODE]" format from formatError().
+// Falls back gracefully for plain strings.
+function ErrorBanner({ error }: { error: string }) {
+  const { message, code } = parseErrorString(error)
+  return (
+    <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+      <p className="text-red-600 text-sm">{message}</p>
+      {code && (
+        <p className="text-red-300 text-xs font-mono mt-1 select-all">{code}</p>
+      )}
+    </div>
+  )
+}
 
 // Canonical list of award shows — displayed in the Brief tab selector
 const CANONICAL_SHOWS = [
@@ -456,6 +472,7 @@ export default function ProjectPage() {
   const [targetShows, setTargetShows] = useState<string[]>([])
   const [editingShows, setEditingShows] = useState(false)
   const [savingShows, setSavingShows] = useState(false)
+  const [showsChangedWarning, setShowsChangedWarning] = useState(false)
   const [kbShows, setKbShows] = useState<string[]>([])
   const [customShowInput, setCustomShowInput] = useState('')
   // Show request flow
@@ -688,6 +705,7 @@ export default function ProjectPage() {
       .update({ target_shows: targetShows, updated_at: new Date().toISOString() })
       .eq('id', projectId)
     setProject(p => p ? { ...p, target_shows: targetShows } : p)
+    if (directions.length > 0) setShowsChangedWarning(true)
     setEditingShows(false)
     setSavingShows(false)
   }
@@ -981,10 +999,13 @@ export default function ProjectPage() {
         }
       )
       const data = await res.json()
-      if (!res.ok || data.error) { setGenerateError(data.error || data.message || `Error ${res.status}`); return }
+      if (!res.ok || data.error) {
+        setGenerateError(formatError(appErrorFromResponse(data, res.status, 'DIR')))
+        return
+      }
       setDirections(data.directions || [])
     } catch (err) {
-      setGenerateError(err instanceof Error ? err.message : 'Network error.')
+      setGenerateError(formatError({ message: 'Network error — check your connection and try again.', retryable: true, code: 'DIR-NET' }))
     } finally { setGenerating(false) }
   }
 
@@ -1048,7 +1069,10 @@ export default function ProjectPage() {
         }
       )
       const data = await res.json()
-      if (!res.ok || data.error) { setGenerateDraftError(data.error || `Error ${res.status}`); return }
+      if (!res.ok || data.error) {
+        setGenerateDraftError(formatError(appErrorFromResponse(data, res.status, 'DRAFT')))
+        return
+      }
       if (data.entry_drafts?.length) {
         // Append new generation — old drafts remain in state for history display
         setEntries(prev => [...prev, ...data.entry_drafts])
@@ -1080,7 +1104,10 @@ export default function ProjectPage() {
         }
       )
       const data = await res.json()
-      if (!res.ok || data.error) { setEvaluateError(data.error || `Error ${res.status}`); return }
+      if (!res.ok || data.error) {
+        setEvaluateError(formatError(appErrorFromResponse(data, res.status, 'EVAL')))
+        return
+      }
       if (data.evaluation) {
         const newEval: Evaluation = data.evaluation
         const evalMode: 'judge' | 'coach' = newEval.evaluation_mode === 'coach' ? 'coach' : 'judge'
@@ -1792,6 +1819,18 @@ export default function ProjectPage() {
               )}
             </div>
 
+            {/* Shows changed warning */}
+            {showsChangedWarning && (
+              <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mt-4">
+                <span className="text-amber-500 text-base mt-0.5">⚠️</span>
+                <div className="flex-1">
+                  <p className="text-sm text-amber-800 font-medium">Target shows updated</p>
+                  <p className="text-xs text-amber-700 mt-0.5">Your existing directions still reference the previous shows. Go to the Directions tab and regenerate to align them with your new selection.</p>
+                </div>
+                <button onClick={() => setShowsChangedWarning(false)} className="text-amber-400 hover:text-amber-600 text-lg leading-none flex-shrink-0">×</button>
+              </div>
+            )}
+
           </div>
         )}
 
@@ -1940,8 +1979,8 @@ export default function ProjectPage() {
               )
             })()}
 
-            {generateError && <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3"><p className="text-red-600 text-sm">{generateError}</p></div>}
-            {generateDraftError && <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3"><p className="text-red-600 text-sm">{generateDraftError}</p></div>}
+            {generateError && <ErrorBanner error={generateError} />}
+            {generateDraftError && <ErrorBanner error={generateDraftError} />}
 
             {!project.combined_text && !(project.materials || []).some(m => m.extracted_text) && directions.length === 0 && (
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
@@ -2015,7 +2054,7 @@ export default function ProjectPage() {
                                 return (
                                   <>
                                     <p className={`text-base font-semibold tabular-nums ${winPct >= 20 ? 'text-green-700' : winPct >= 10 ? 'text-amber-700' : 'text-red-600'}`}>~{winPct}%</p>
-                                    <p className="text-gray-400 text-xs">win likelihood{!evalScore ? '*' : ''}</p>
+                                    <p className="text-gray-400 text-xs">chance of medal{!evalScore ? '*' : ''}</p>
                                   </>
                                 )
                               })()}
@@ -2029,7 +2068,7 @@ export default function ProjectPage() {
               </div>
             )}
             {directions.some(d => d.win_likelihood !== null && !(evaluations[d.id]?.judge ?? evaluations[d.id]?.coach)) && (
-              <p className="text-xs text-gray-400 mt-4">* Win likelihood based on show base rate only — evaluate an entry to factor in content quality.</p>
+              <p className="text-xs text-gray-400 mt-4">* Chance of Medal based on show base rate only — evaluate an entry to factor in content quality.</p>
             )}
           </div>
         )}
@@ -2037,11 +2076,7 @@ export default function ProjectPage() {
         {/* ── ENTRIES ── */}
         {tab === 'entries' && (
           <div>
-            {evaluateError && (
-              <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
-                <p className="text-red-600 text-sm">{evaluateError}</p>
-              </div>
-            )}
+            {evaluateError && <ErrorBanner error={evaluateError} />}
 
             {entries.length === 0 ? (
               <div className="max-w-lg">
