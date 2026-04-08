@@ -891,7 +891,7 @@ export default function ProjectPage() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}`, 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
-          body: JSON.stringify({ project_id: project.id, message, target: 'brief', chat_history: briefChatHistory }),
+          body: JSON.stringify({ project_id: project.id, message, target: 'brief', chat_history: briefChatHistory, current_brief: tonalBriefData }),
         }
       )
       const data = await res.json()
