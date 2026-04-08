@@ -1716,6 +1716,20 @@ export default function ProjectPage() {
     ? (customScriptCategory || 'Suggest Best Fits')
     : scriptCategory
 
+  // Shows strip — target shows reference bar shown at the top of Directions, Entries, and Video Script tabs
+  const showsStrip = (
+    <div className="flex flex-wrap items-center gap-2 mb-5 pb-4 border-b border-gray-200">
+      <span className="text-xs text-gray-400 flex-shrink-0">Targeting:</span>
+      {targetShows.length > 0
+        ? targetShows.map(show => (
+            <span key={show} className="text-xs bg-green-50 text-green-700 border border-green-200 px-2.5 py-1 rounded-full">{show}</span>
+          ))
+        : <span className="text-xs text-gray-400 italic">No shows set</span>
+      }
+      <button onClick={() => setTab('brief')} className="text-xs text-gray-400 hover:text-green-700 transition-colors ml-auto flex-shrink-0">Edit in Brief</button>
+    </div>
+  )
+
   return (
     <div className="min-h-screen bg-gray-100 text-gray-900">
 
@@ -2046,6 +2060,7 @@ export default function ProjectPage() {
         {/* ── DIRECTIONS ── */}
         {tab === 'directions' && (
           <div>
+            {showsStrip}
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-sm font-medium text-gray-700">Award Directions</h2>
@@ -2271,6 +2286,7 @@ export default function ProjectPage() {
         {/* ── ENTRIES ── */}
         {tab === 'entries' && (
           <div>
+            {showsStrip}
             {evaluateError && <ErrorBanner error={evaluateError} />}
 
             {entries.length === 0 ? (
@@ -3156,6 +3172,7 @@ export default function ProjectPage() {
         {/* ── VIDEO SCRIPT ── */}
         {tab === 'script' && (
           <div className="max-w-3xl">
+            {showsStrip}
 
             {/* Mode toggle */}
             <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl p-1 w-fit mb-6">
