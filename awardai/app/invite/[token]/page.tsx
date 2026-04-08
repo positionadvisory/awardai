@@ -99,7 +99,7 @@ export default function InvitePage() {
         {state === 'ready' && (
           <>
             <h1 style={{ fontSize: 22, fontWeight: 700, color: '#111827', marginBottom: 8 }}>
-              You've been invited to AwardAI
+              You've been invited to Shortlist
             </h1>
             <p style={{ color: '#6b7280', fontSize: 15, marginBottom: 32, lineHeight: 1.6 }}>
               You're signed in as <strong>{user?.email}</strong>.<br />
