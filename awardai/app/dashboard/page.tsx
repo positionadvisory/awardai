@@ -337,9 +337,9 @@ export default function DashboardPage() {
       <header className="border-b border-gray-200 bg-white px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-7 h-7 rounded-lg bg-green-800 flex items-center justify-center">
-            <span className="text-xs font-bold text-white">A</span>
+            <span className="text-xs font-bold text-white">S</span>
           </div>
-          <span className="font-semibold text-gray-900">AwardAI</span>
+          <span className="font-semibold text-gray-900">Shortlist</span>
         </div>
         <div className="flex items-center gap-4">
           <Link href="/projects" className="text-sm text-gray-500 hover:text-gray-900 transition-colors">
