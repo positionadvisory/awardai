@@ -1806,15 +1806,15 @@ export default function ProjectPage() {
               {briefEdit ? (
                 <div>
                   {/* Mode toggle */}
-                  <div className="flex gap-1 mb-4 p-1 bg-gray-100 rounded-lg w-fit">
+                  <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl p-1 w-fit mb-5">
                     <button
                       onClick={() => setBriefMode('guided')}
-                      className={`text-xs px-3 py-1.5 rounded-md font-medium transition-colors ${briefMode === 'guided' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${briefMode === 'guided' ? 'bg-green-800 text-white' : 'text-gray-500 hover:text-gray-900'}`}>
                       ✦ Guided
                     </button>
                     <button
                       onClick={() => setBriefMode('freeform')}
-                      className={`text-xs px-3 py-1.5 rounded-md font-medium transition-colors ${briefMode === 'freeform' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${briefMode === 'freeform' ? 'bg-green-800 text-white' : 'text-gray-500 hover:text-gray-900'}`}>
                       Freeform
                     </button>
                   </div>
