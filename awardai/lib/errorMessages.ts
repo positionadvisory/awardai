@@ -87,11 +87,11 @@ export function appErrorFromCode(code: string): AppError {
  * Reads `data.code` if present, otherwise falls back to `data.error` string.
  */
 export function appErrorFromResponse(
-  data: { error?: string; code?: string; status?: number },
+  data: { error?: string; code?: string | number; status?: number },
   httpStatus: number,
   functionPrefix: string
 ): AppError {
-  if (data.code) {
+  if (data.code && typeof data.code === 'string') {
     return appErrorFromCode(data.code)
   }
   // No structured code — try to infer from HTTP status
