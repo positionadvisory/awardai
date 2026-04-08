@@ -22,6 +22,18 @@ function ErrorBanner({ error }: { error: string }) {
   )
 }
 
+// ── TonalBrief — structured production brief returned by generate-tonal-brief ─
+type ColorSwatch = { hex: string; name: string; role: string }
+type TonalBrief = {
+  summary: string
+  mood: string
+  color_palette: ColorSwatch[]
+  typography: string
+  vo_style: string
+  music_style: string
+  brand_notes: string
+}
+
 // Canonical list of award shows — displayed in the Brief tab selector
 const CANONICAL_SHOWS = [
   'Cannes Lions',
@@ -535,8 +547,7 @@ export default function ProjectPage() {
 
   // Tonal brief (Feature 6)
   const [tonalBriefLoading, setTonalBriefLoading] = useState(false)
-  const [tonalBriefText, setTonalBriefText] = useState('')
-  const [tonalBriefOpen, setTonalBriefOpen] = useState(false)
+  const [tonalBriefData, setTonalBriefData] = useState<TonalBrief | null>(null)
   const [tonalBriefError, setTonalBriefError] = useState('')
 
   // Opener suggestions (generate-hooks)
@@ -781,11 +792,12 @@ export default function ProjectPage() {
   }
 
   // Feature 6 — generate tonal / creative direction brief
-  const generateTonalBrief = async () => {
+  // scriptText: freshly generated script text (passed from generateScript so we don't wait for DB write)
+  const generateTonalBrief = async (scriptText?: string) => {
     if (!project) return
     setTonalBriefLoading(true)
     setTonalBriefError('')
-    setTonalBriefOpen(true)
+    setTonalBriefData(null)
     try {
       const accessToken = await getToken()
       if (!accessToken) return
@@ -794,7 +806,7 @@ export default function ProjectPage() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}`, 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
-          body: JSON.stringify({ project_id: project.id }),
+          body: JSON.stringify({ project_id: project.id, ...(scriptText ? { script_text: scriptText } : {}) }),
         }
       )
       const data = await res.json()
@@ -802,7 +814,7 @@ export default function ProjectPage() {
         setTonalBriefError(formatError(appErrorFromResponse(data, res.status, 'TONAL')))
         return
       }
-      setTonalBriefText(data.brief || '')
+      if (data.brief) setTonalBriefData(data.brief as TonalBrief)
     } catch (err) {
       setTonalBriefError(formatError({ message: 'Network error — check your connection and try again.', retryable: true, code: 'TONAL-NET' }))
     } finally {
@@ -1741,6 +1753,11 @@ export default function ProjectPage() {
         script_text: data.script || p.script_text,
         script_analysis: data.analysis || p.script_analysis,
       } : p)
+
+      // Auto-generate production brief alongside the script
+      if (data.script) {
+        generateTonalBrief(data.script)
+      }
     } catch (err) {
       setScriptError(err instanceof Error ? err.message : 'Network error.')
     } finally {
@@ -3800,6 +3817,161 @@ export default function ProjectPage() {
                     <pre className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap font-mono">{scriptText}</pre>
                   </div>
                 </div>
+
+                {/* ── Production Brief (Feature 6) ─────────────────────────────── */}
+                {(tonalBriefLoading || tonalBriefData || tonalBriefError) && (
+                  <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                    {/* Header */}
+                    <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-900">Production Brief</h3>
+                        <p className="text-xs text-gray-400 mt-0.5">Creative direction for your production team — colour, tone, type, voice, and music.</p>
+                      </div>
+                      {tonalBriefData && (
+                        <button
+                          onClick={() => {
+                            if (!tonalBriefData) return
+                            const lines: string[] = [
+                              `PRODUCTION BRIEF — ${project.campaign_name || 'Campaign'}`,
+                              '═'.repeat(60),
+                              '',
+                              'OVERVIEW',
+                              tonalBriefData.summary,
+                              '',
+                              'MOOD & TONE',
+                              tonalBriefData.mood,
+                              '',
+                              'COLOUR PALETTE',
+                              ...tonalBriefData.color_palette.map(c => `  ${c.hex}  ${c.name} — ${c.role}`),
+                              '',
+                              'TYPOGRAPHY & SUPERS',
+                              tonalBriefData.typography,
+                              '',
+                              'VOICE OVER DIRECTION',
+                              tonalBriefData.vo_style,
+                              '',
+                              'MUSIC & SOUND',
+                              tonalBriefData.music_style,
+                              '',
+                              'BRAND VISUAL ALIGNMENT',
+                              tonalBriefData.brand_notes,
+                            ]
+                            const blob = new Blob([lines.join('\n')], { type: 'text/plain' })
+                            const url = URL.createObjectURL(blob)
+                            const a = document.createElement('a')
+                            a.href = url
+                            a.download = `${(project.campaign_name || 'brief').replace(/[^a-z0-9]/gi, '-').toLowerCase()}-production-brief.txt`
+                            a.click()
+                            URL.revokeObjectURL(url)
+                          }}
+                          className="text-xs text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors"
+                        >
+                          ↓ Download
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Loading state */}
+                    {tonalBriefLoading && (
+                      <div className="px-5 py-8 flex items-center gap-3 text-gray-400">
+                        <svg className="animate-spin h-4 w-4 flex-shrink-0" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                        </svg>
+                        <span className="text-sm">Generating production brief…</span>
+                      </div>
+                    )}
+
+                    {/* Error state */}
+                    {!tonalBriefLoading && tonalBriefError && (
+                      <div className="px-5 py-5">
+                        <ErrorBanner error={tonalBriefError} />
+                        <button
+                          onClick={() => generateTonalBrief(scriptText)}
+                          className="text-sm text-green-700 hover:text-green-900 font-medium"
+                        >
+                          Try again
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Brief content */}
+                    {!tonalBriefLoading && tonalBriefData && (
+                      <div className="px-5 py-6 space-y-7">
+
+                        {/* Summary */}
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Overview</p>
+                          <p className="text-sm text-gray-700 leading-relaxed">{tonalBriefData.summary}</p>
+                        </div>
+
+                        {/* Mood */}
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Mood &amp; Tone</p>
+                          <p className="text-sm text-gray-700 leading-relaxed">{tonalBriefData.mood}</p>
+                        </div>
+
+                        {/* Colour palette */}
+                        {tonalBriefData.color_palette.length > 0 && (
+                          <div>
+                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Colour Palette</p>
+                            <div className="flex gap-3 flex-wrap">
+                              {tonalBriefData.color_palette.map((swatch, i) => (
+                                <div key={i} className="flex flex-col items-center gap-1.5 min-w-[72px]">
+                                  <div
+                                    className="w-14 h-14 rounded-xl border border-black/10 shadow-sm flex-shrink-0"
+                                    style={{ backgroundColor: swatch.hex }}
+                                    title={swatch.name}
+                                  />
+                                  <span className="text-xs font-mono text-gray-500 select-all">{swatch.hex.toUpperCase()}</span>
+                                  <span className="text-xs text-gray-600 text-center leading-snug max-w-[80px]">{swatch.name}</span>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="mt-4 space-y-2">
+                              {tonalBriefData.color_palette.map((swatch, i) => (
+                                <div key={i} className="flex items-start gap-2.5">
+                                  <div
+                                    className="w-3 h-3 rounded-sm flex-shrink-0 mt-0.5 border border-black/10"
+                                    style={{ backgroundColor: swatch.hex }}
+                                  />
+                                  <p className="text-xs text-gray-600 leading-snug">
+                                    <span className="font-medium text-gray-700">{swatch.name}</span> — {swatch.role}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Typography */}
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Typography &amp; Supers</p>
+                          <p className="text-sm text-gray-700 leading-relaxed">{tonalBriefData.typography}</p>
+                        </div>
+
+                        {/* VO Style */}
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Voice Over Direction</p>
+                          <p className="text-sm text-gray-700 leading-relaxed">{tonalBriefData.vo_style}</p>
+                        </div>
+
+                        {/* Music */}
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Music &amp; Sound</p>
+                          <p className="text-sm text-gray-700 leading-relaxed">{tonalBriefData.music_style}</p>
+                        </div>
+
+                        {/* Brand notes */}
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Brand Visual Alignment</p>
+                          <p className="text-sm text-gray-700 leading-relaxed">{tonalBriefData.brand_notes}</p>
+                        </div>
+
+                      </div>
+                    )}
+                  </div>
+                )}
 
               </div>
             )}
