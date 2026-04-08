@@ -97,74 +97,37 @@ export default function UserDetailPage() {
     if (!user) return
 
     const load = async () => {
-      // Admin guard — same pattern as dashboard
-      const [{ data: orgId }, { data: profileData }] = await Promise.all([
-        supabase.rpc('get_my_org_id'),
-        supabase.from('profiles').select('role').eq('id', user.id).single(),
-      ])
+      // Get session token to pass to the API route
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) { setFetching(false); return }
 
-      if (profileData?.role !== 'admin') {
+      // Use the service-role API route — works across all orgs.
+      // The route is gated to ben@positionadvisory.com server-side.
+      const res = await fetch(`/api/admin/user-detail?userId=${encodeURIComponent(targetUserId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (res.status === 403) {
         setAccessDenied(true)
         setFetching(false)
         return
       }
 
-      if (!orgId) { setFetching(false); return }
-
-      // Verify target user belongs to same org
-      const { data: targetProfile } = await supabase
-        .from('profiles')
-        .select('id, full_name, email, role, created_at')
-        .eq('id', targetUserId)
-        .eq('org_id', orgId)
-        .single()
-
-      if (!targetProfile) {
+      if (res.status === 404 || !res.ok) {
         setNotFound(true)
         setFetching(false)
         return
       }
 
-      // Fetch all data for this user in parallel
-      const [
-        { data: projectsData },
-        { data: directionsData },
-        { data: draftsData },
-        { data: evalsData },
-        { data: logsData },
-      ] = await Promise.all([
-        supabase.from('projects')
-          .select('id, campaign_name, client_name, target_shows, status, created_at')
-          .eq('user_id', targetUserId)
-          .eq('org_id', orgId)
-          .order('created_at', { ascending: false }),
-        supabase.from('directions')
-          .select('id, project_id, created_at')
-          .eq('created_by', targetUserId)
-          .eq('org_id', orgId),
-        supabase.from('entry_drafts')
-          .select('id, direction_id, created_at')
-          .eq('created_by', targetUserId)
-          .eq('org_id', orgId),
-        supabase.from('evaluations')
-          .select('id, project_id, overall_score, created_at')
-          .eq('created_by', targetUserId)
-          .eq('org_id', orgId)
-          .order('created_at', { ascending: false }),
-        supabase.from('usage_logs')
-          .select('id, action, model, input_tokens, output_tokens, created_at')
-          .eq('user_id', targetUserId)
-          .eq('org_id', orgId)
-          .order('created_at', { ascending: false })
-          .limit(200),
-      ])
+      const data = await res.json()
 
-      setProfileDetail(targetProfile)
-      setUserProjects(projectsData ?? [])
-      setUserDirections(directionsData ?? [])
-      setUserDrafts(draftsData ?? [])
-      setUserEvals(evalsData ?? [])
-      setUserLogs(logsData ?? [])
+      setProfileDetail(data.profile)
+      setUserProjects(data.projects ?? [])
+      setUserDirections(data.directions ?? [])
+      setUserDrafts(data.drafts ?? [])
+      setUserEvals(data.evaluations ?? [])
+      setUserLogs(data.logs ?? [])
       setFetching(false)
     }
 
