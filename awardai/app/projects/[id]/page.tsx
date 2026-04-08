@@ -496,6 +496,13 @@ export default function ProjectPage() {
   const [smartDirectionsLoading, setSmartDirectionsLoading] = useState<Record<number, 'alternatives' | 'other_shows' | null>>({})
   const [smartDirectionsError, setSmartDirectionsError] = useState<Record<number, string>>({})
 
+  // Opener suggestions (generate-hooks)
+  const [hooksLoading, setHooksLoading] = useState<Record<number, boolean>>({})
+  const [hooksOpen, setHooksOpen] = useState<Record<number, boolean>>({})
+  const [hooksOptions, setHooksOptions] = useState<Record<number, string[]>>({})
+  const [hooksError, setHooksError] = useState<Record<number, string>>({})
+  const [hooksCopied, setHooksCopied] = useState<Record<number, number | null>>({})
+
   // Draft generation
   const [generatingDraft, setGeneratingDraft] = useState(false)
   const [generateDraftError, setGenerateDraftError] = useState('')
@@ -1047,6 +1054,34 @@ export default function ProjectPage() {
       setSmartDirectionsError(prev => ({ ...prev, [directionId]: err instanceof Error ? err.message : 'Network error.' }))
     } finally {
       setSmartDirectionsLoading(prev => { const n = { ...prev }; delete n[directionId]; return n })
+    }
+  }
+
+  const generateHooks = async (directionId: number) => {
+    setHooksLoading(prev => ({ ...prev, [directionId]: true }))
+    setHooksError(prev => ({ ...prev, [directionId]: '' }))
+    setHooksOpen(prev => ({ ...prev, [directionId]: true }))
+    try {
+      const accessToken = await getToken()
+      if (!accessToken) return
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-hooks`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}`, 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
+          body: JSON.stringify({ direction_id: directionId }),
+        }
+      )
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        setHooksError(prev => ({ ...prev, [directionId]: formatError(appErrorFromResponse(data, res.status, 'HOOKS')) }))
+        return
+      }
+      setHooksOptions(prev => ({ ...prev, [directionId]: data.hooks || [] }))
+    } catch (err) {
+      setHooksError(prev => ({ ...prev, [directionId]: formatError({ message: 'Network error — check your connection and try again.', retryable: true, code: 'HOOKS-NET' }) }))
+    } finally {
+      setHooksLoading(prev => ({ ...prev, [directionId]: false }))
     }
   }
 
@@ -2016,6 +2051,64 @@ export default function ProjectPage() {
                           </div>
                           {d.best_show && <p className="text-green-700 text-sm mt-0.5">{d.best_show} · <span className="text-gray-500">{d.best_category}</span></p>}
                           {d.hook && <p className="text-gray-700 text-sm mt-2 italic">"{d.hook}"</p>}
+
+                          {/* ── More Openers ── */}
+                          <div className="mt-1.5">
+                            <button
+                              onClick={() => hooksOptions[d.id]?.length
+                                ? setHooksOpen(prev => ({ ...prev, [d.id]: !prev[d.id] }))
+                                : generateHooks(d.id)
+                              }
+                              disabled={hooksLoading[d.id]}
+                              className="text-xs text-green-700 hover:text-green-600 transition-colors flex items-center gap-1 disabled:opacity-50"
+                            >
+                              {hooksLoading[d.id]
+                                ? <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Generating openers…</>
+                                : hooksOptions[d.id]?.length
+                                  ? hooksOpen[d.id] ? '↑ Hide openers' : `✦ ${hooksOptions[d.id].length} openers — show`
+                                  : '✦ More openers'
+                              }
+                            </button>
+
+                            {hooksOpen[d.id] && hooksOptions[d.id]?.length > 0 && (
+                              <div className="mt-2 bg-gray-50 border border-gray-200 rounded-xl p-3 space-y-2">
+                                {hooksOptions[d.id].map((hook, i) => (
+                                  <div key={i} className="flex items-start gap-2">
+                                    <p className="text-sm text-gray-700 italic flex-1 leading-snug">"{hook}"</p>
+                                    <button
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(hook)
+                                        setHooksCopied(prev => ({ ...prev, [d.id]: i }))
+                                        setTimeout(() => setHooksCopied(prev => ({ ...prev, [d.id]: null })), 1500)
+                                      }}
+                                      className="text-gray-300 hover:text-green-700 transition-colors flex-shrink-0 text-sm leading-none mt-0.5"
+                                      title="Copy to clipboard"
+                                    >
+                                      {hooksCopied[d.id] === i ? '✓' : '⎘'}
+                                    </button>
+                                  </div>
+                                ))}
+                                <div className="pt-2 border-t border-gray-200 flex justify-between items-center">
+                                  <button
+                                    onClick={() => generateHooks(d.id)}
+                                    disabled={hooksLoading[d.id]}
+                                    className="text-xs text-gray-400 hover:text-green-700 transition-colors disabled:opacity-40"
+                                  >
+                                    ↻ Regenerate
+                                  </button>
+                                  <button
+                                    onClick={() => setHooksOpen(prev => ({ ...prev, [d.id]: false }))}
+                                    className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                                  >
+                                    Close
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {hooksError[d.id] && <div className="mt-1"><ErrorBanner error={hooksError[d.id]} /></div>}
+                          </div>
+
                           {d.angle && <p className="text-gray-500 text-sm mt-2">{d.angle}</p>}
                           {d.likelihood_rationale && <p className="text-gray-400 text-xs mt-2">{d.likelihood_rationale}</p>}
                           <div className="flex gap-4 mt-3">
