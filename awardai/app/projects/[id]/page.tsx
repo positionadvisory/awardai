@@ -469,6 +469,8 @@ export default function ProjectPage() {
   const [briefEdit, setBriefEdit] = useState(false)
   const [briefText, setBriefText] = useState('')
   const [savingBrief, setSavingBrief] = useState(false)
+  const [briefMode, setBriefMode] = useState<'guided' | 'freeform'>('freeform')
+  const [briefSections, setBriefSections] = useState({ idea: '', execution: '', results: '', intentions: '' })
   const [targetShows, setTargetShows] = useState<string[]>([])
   const [editingShows, setEditingShows] = useState(false)
   const [savingShows, setSavingShows] = useState(false)
@@ -495,6 +497,15 @@ export default function ProjectPage() {
   const [generateError, setGenerateError] = useState('')
   const [smartDirectionsLoading, setSmartDirectionsLoading] = useState<Record<number, 'alternatives' | 'other_shows' | null>>({})
   const [smartDirectionsError, setSmartDirectionsError] = useState<Record<number, string>>({})
+
+  // Draft focus items (Feature 4 — Fix-this chips)
+  const [draftFocusItems, setDraftFocusItems] = useState<Record<number, string[]>>({})
+
+  // Tonal brief (Feature 6)
+  const [tonalBriefLoading, setTonalBriefLoading] = useState(false)
+  const [tonalBriefText, setTonalBriefText] = useState('')
+  const [tonalBriefOpen, setTonalBriefOpen] = useState(false)
+  const [tonalBriefError, setTonalBriefError] = useState('')
 
   // Opener suggestions (generate-hooks)
   const [hooksLoading, setHooksLoading] = useState<Record<number, boolean>>({})
@@ -692,16 +703,68 @@ export default function ProjectPage() {
     supabase.rpc('get_my_org_id').then(({ data }) => { if (data) setOrgId(data) })
   }, [user, projectId])
 
+  // Concatenate guided brief sections into a single string for storage
+  const briefFromSections = (s: typeof briefSections) => [
+    s.idea.trim()       && `Campaign idea & insight:\n${s.idea.trim()}`,
+    s.execution.trim()  && `Execution:\n${s.execution.trim()}`,
+    s.results.trim()    && `Results & impact:\n${s.results.trim()}`,
+    s.intentions.trim() && `Entry intentions:\n${s.intentions.trim()}`,
+  ].filter(Boolean).join('\n\n')
+
   const saveBrief = async () => {
     if (!project) return
     setSavingBrief(true)
+    const textToSave = briefMode === 'guided'
+      ? briefFromSections(briefSections)
+      : briefText.trim()
     await supabase
       .from('projects')
-      .update({ combined_text: briefText, updated_at: new Date().toISOString() })
+      .update({ combined_text: textToSave, updated_at: new Date().toISOString() })
       .eq('id', projectId)
-    setProject(p => p ? { ...p, combined_text: briefText } : p)
+    setProject(p => p ? { ...p, combined_text: textToSave } : p)
     setBriefEdit(false)
     setSavingBrief(false)
+  }
+
+  // Feature 4 — toggle a focus item chip on/off for a direction
+  const toggleFocusItem = (dirId: number, item: string) => {
+    setDraftFocusItems(prev => {
+      const current = prev[dirId] || []
+      return {
+        ...prev,
+        [dirId]: current.includes(item) ? current.filter(i => i !== item) : [...current, item],
+      }
+    })
+  }
+
+  // Feature 6 — generate tonal / creative direction brief
+  const generateTonalBrief = async () => {
+    if (!project) return
+    setTonalBriefLoading(true)
+    setTonalBriefError('')
+    setTonalBriefOpen(true)
+    try {
+      const accessToken = await getToken()
+      if (!accessToken) return
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-tonal-brief`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}`, 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
+          body: JSON.stringify({ project_id: project.id }),
+        }
+      )
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        setTonalBriefError(formatError(appErrorFromResponse(data, res.status, 'TONAL')))
+        return
+      }
+      setTonalBriefText(data.brief || '')
+    } catch (err) {
+      setTonalBriefError(formatError({ message: 'Network error — check your connection and try again.', retryable: true, code: 'TONAL-NET' }))
+    } finally {
+      setTonalBriefLoading(false)
+    }
   }
 
   const saveShows = async () => {
@@ -1742,15 +1805,52 @@ export default function ProjectPage() {
               </div>
               {briefEdit ? (
                 <div>
-                  <textarea value={briefText} onChange={e => setBriefText(e.target.value)} rows={10}
-                    className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors resize-none text-sm leading-relaxed"
-                    placeholder={`Example:\n\nCampaign: [Name of campaign]\nClient: [Client name]\nWhat it was: [Short description of what the campaign did]\nResults: [Key metrics — reach, sales, engagement, etc.]\nWhy you're entering: [Which aspects do you think are strongest? What do you want the AI to focus on when evaluating and drafting?]`} />
+                  {/* Mode toggle */}
+                  <div className="flex gap-1 mb-4 p-1 bg-gray-100 rounded-lg w-fit">
+                    <button
+                      onClick={() => setBriefMode('guided')}
+                      className={`text-xs px-3 py-1.5 rounded-md font-medium transition-colors ${briefMode === 'guided' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                      ✦ Guided
+                    </button>
+                    <button
+                      onClick={() => setBriefMode('freeform')}
+                      className={`text-xs px-3 py-1.5 rounded-md font-medium transition-colors ${briefMode === 'freeform' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                      Freeform
+                    </button>
+                  </div>
+
+                  {briefMode === 'guided' ? (
+                    <div className="space-y-4">
+                      {([
+                        { key: 'idea',       label: 'The idea & insight',       placeholder: 'What was the core campaign idea? What human insight or tension did it tap into?' },
+                        { key: 'execution',  label: 'How it was executed',      placeholder: 'How was the idea brought to life? What channels, formats, or activations were used?' },
+                        { key: 'results',    label: 'Results & impact',         placeholder: 'What were the measurable outcomes? Include key metrics — reach, sales, engagement, awards, etc.' },
+                        { key: 'intentions', label: 'Why you\'re entering',     placeholder: 'Which aspects are strongest? What should the AI focus on when evaluating and writing your entries?' },
+                      ] as const).map(({ key, label, placeholder }) => (
+                        <div key={key}>
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">{label}</label>
+                          <textarea
+                            value={briefSections[key]}
+                            onChange={e => setBriefSections(s => ({ ...s, [key]: e.target.value }))}
+                            rows={3}
+                            className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors resize-none text-sm leading-relaxed"
+                            placeholder={placeholder}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <textarea value={briefText} onChange={e => setBriefText(e.target.value)} rows={10}
+                      className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors resize-none text-sm leading-relaxed"
+                      placeholder={`Campaign: [Name of campaign]\nClient: [Client name]\nWhat it was: [Short description of what the campaign did]\nResults: [Key metrics — reach, sales, engagement, etc.]\nWhy you're entering: [Which aspects do you think are strongest? What do you want the AI to focus on when evaluating and drafting?]`} />
+                  )}
+
                   <div className="flex gap-3 mt-3">
                     <button onClick={saveBrief} disabled={savingBrief}
                       className="bg-green-800 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
                       {savingBrief ? 'Saving…' : 'Save'}
                     </button>
-                    <button onClick={() => { setBriefEdit(false); setBriefText(project.combined_text || '') }}
+                    <button onClick={() => { setBriefEdit(false); setBriefText(project.combined_text || ''); setBriefSections({ idea: '', execution: '', results: '', intentions: '' }) }}
                       className="text-gray-500 hover:text-gray-900 text-sm px-4 py-2 transition-colors">Cancel</button>
                   </div>
                 </div>
