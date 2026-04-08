@@ -474,6 +474,7 @@ export default function ProjectPage() {
   const [targetShows, setTargetShows] = useState<string[]>([])
   const [editingShows, setEditingShows] = useState(false)
   const [savingShows, setSavingShows] = useState(false)
+  const [editingShowsInline, setEditingShowsInline] = useState(false)
   const [showsChangedWarning, setShowsChangedWarning] = useState(false)
   const [kbShows, setKbShows] = useState<string[]>([])
   const [customShowInput, setCustomShowInput] = useState('')
@@ -777,6 +778,7 @@ export default function ProjectPage() {
     setProject(p => p ? { ...p, target_shows: targetShows } : p)
     if (directions.length > 0) setShowsChangedWarning(true)
     setEditingShows(false)
+    setEditingShowsInline(false)
     setSavingShows(false)
   }
 
@@ -1718,15 +1720,64 @@ export default function ProjectPage() {
 
   // Shows strip — target shows reference bar shown at the top of Directions, Entries, and Video Script tabs
   const showsStrip = (
-    <div className="flex flex-wrap items-center gap-2 mb-5 pb-4 border-b border-gray-200">
-      <span className="text-xs text-gray-400 flex-shrink-0">Targeting:</span>
-      {targetShows.length > 0
-        ? targetShows.map(show => (
-            <span key={show} className="text-xs bg-green-50 text-green-700 border border-green-200 px-2.5 py-1 rounded-full">{show}</span>
-          ))
-        : <span className="text-xs text-gray-400 italic">No shows set</span>
-      }
-      <button onClick={() => setTab('brief')} className="text-xs text-gray-400 hover:text-green-700 transition-colors ml-auto flex-shrink-0">Edit in Brief</button>
+    <div className="mb-5 pb-4 border-b border-gray-200">
+      {!editingShowsInline ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-gray-400 flex-shrink-0">Targeting:</span>
+          {targetShows.length > 0
+            ? targetShows.map(show => (
+                <span key={show} className="text-xs bg-green-50 text-green-700 border border-green-200 px-2.5 py-1 rounded-full">{show}</span>
+              ))
+            : <span className="text-xs text-gray-400 italic">No shows set yet</span>
+          }
+          <button
+            onClick={() => setEditingShowsInline(true)}
+            className="text-xs text-gray-400 hover:text-green-700 transition-colors ml-auto flex-shrink-0">
+            Edit shows
+          </button>
+        </div>
+      ) : (
+        <div>
+          {/* Selected shows as removable chips */}
+          {targetShows.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {targetShows.map(show => (
+                <button key={show} onClick={() => toggleShow(show)}
+                  className="flex items-center gap-1.5 text-xs bg-green-100 text-green-800 border border-green-300 px-3 py-1.5 rounded-full hover:bg-red-50 hover:text-red-600 hover:border-red-300 transition-colors">
+                  {show} <span>×</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {/* Show picker */}
+          <div className="bg-white border border-gray-200 rounded-xl p-4 mb-3">
+            <p className="text-xs text-gray-400 mb-3">Select from the list:</p>
+            <div className="flex flex-wrap gap-2">
+              {kbShows.map(show => {
+                const selected = targetShows.includes(show)
+                return (
+                  <button key={show} onClick={() => toggleShow(show)}
+                    className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                      selected
+                        ? 'bg-green-100 text-green-800 border-green-300'
+                        : 'bg-gray-100 text-gray-500 border-gray-300 hover:border-green-600 hover:text-green-700'
+                    }`}>
+                    {show}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <button onClick={saveShows} disabled={savingShows}
+              className="bg-green-800 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+              {savingShows ? 'Saving…' : 'Save'}
+            </button>
+            <button onClick={() => { setEditingShowsInline(false); setTargetShows(project.target_shows || []) }}
+              className="text-gray-500 hover:text-gray-900 text-sm px-4 py-2 transition-colors">Cancel</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 
