@@ -112,9 +112,9 @@ export async function POST(req: NextRequest) {
   // const { Resend } = await import('resend')
   // const resend = new Resend(process.env.RESEND_API_KEY)
   // await resend.emails.send({
-  //   from: 'AwardAI <hello@yourdomain.com>',
+  //   from: 'Shortlist <hello@shortlist.app>',
   //   to: email,
-  //   subject: `You've been invited to join ${profile.org_name} on AwardAI`,
+  //   subject: `You've been invited to join ${profile.org_name} on Shortlist`,
   //   html: `<p>Click <a href="${link}">here</a> to accept your invitation.</p>`,
   // })
 
