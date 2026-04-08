@@ -43,7 +43,7 @@ export default function NewProjectPage() {
   const [error, setError] = useState('')
   const [briefMode, setBriefMode] = useState<'guided' | 'freeform'>('freeform')
   const [briefSections, setBriefSections] = useState({ idea: '', execution: '', results: '', intentions: '' })
-  const [kbShows, setKbShows] = useState<string[]>(CANONICAL_SHOWS)
+  const [kbShows, setKbShows] = useState<string[]>([...CANONICAL_SHOWS].sort((a, b) => a.localeCompare(b)))
   const [dropdownValue, setDropdownValue] = useState('')
   // Custom show + request flow
   const [customShowInput, setCustomShowInput] = useState('')
