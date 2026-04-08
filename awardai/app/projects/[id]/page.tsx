@@ -2169,7 +2169,7 @@ export default function ProjectPage() {
                 <h2 className="text-sm font-medium text-gray-700">Award Directions</h2>
                 <p className="text-gray-400 text-xs mt-0.5">AI-recommended show and category combinations. Generate a draft from any direction, then evaluate it.</p>
               </div>
-              <button onClick={generateDirections} disabled={generating || (!project.combined_text && !(project.materials || []).some((m: { extracted_text?: string }) => m.extracted_text))}
+              <button onClick={() => generateDirections()} disabled={generating || (!project.combined_text && !(project.materials || []).some((m: { extracted_text?: string }) => m.extracted_text))}
                 title={(!project.combined_text && !(project.materials || []).some((m: { extracted_text?: string }) => m.extracted_text)) ? 'Add a brief or upload materials first' : ''}
                 className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
                 {generating ? (
