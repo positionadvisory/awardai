@@ -41,6 +41,8 @@ export default function NewProjectPage() {
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [briefMode, setBriefMode] = useState<'guided' | 'freeform'>('freeform')
+  const [briefSections, setBriefSections] = useState({ idea: '', execution: '', results: '', intentions: '' })
   const [kbShows, setKbShows] = useState<string[]>(CANONICAL_SHOWS)
   const [dropdownValue, setDropdownValue] = useState('')
   // Custom show + request flow
@@ -169,7 +171,14 @@ export default function NewProjectPage() {
       .insert({
         campaign_name: form.campaign_name.trim(),
         client_name: form.client_name.trim() || null,
-        combined_text: form.brief.trim() || null,
+        combined_text: briefMode === 'guided'
+          ? [
+              briefSections.idea.trim()       && `Campaign idea & insight:\n${briefSections.idea.trim()}`,
+              briefSections.execution.trim()  && `Execution:\n${briefSections.execution.trim()}`,
+              briefSections.results.trim()    && `Results & impact:\n${briefSections.results.trim()}`,
+              briefSections.intentions.trim() && `Entry intentions:\n${briefSections.intentions.trim()}`,
+            ].filter(Boolean).join('\n\n') || null
+          : form.brief.trim() || null,
         target_shows: form.target_shows,
         award_year: form.award_year,
         org_id: profile.org_id,
@@ -258,16 +267,53 @@ export default function NewProjectPage() {
 
           {/* Brief */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Campaign brief
-            </label>
-            <textarea
-              value={form.brief}
-              onChange={e => setForm(f => ({ ...f, brief: e.target.value }))}
-              rows={7}
-              placeholder="Describe the campaign — what it was, what it achieved, who it was for, and any standout results. You can upload supporting files after creating the project."
-              className="w-full bg-white border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors resize-none"
-            />
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-700">Campaign brief</label>
+              <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl p-1">
+                <button
+                  type="button"
+                  onClick={() => setBriefMode('guided')}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${briefMode === 'guided' ? 'bg-green-800 text-white' : 'text-gray-500 hover:text-gray-900'}`}>
+                  ✦ Guided
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBriefMode('freeform')}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${briefMode === 'freeform' ? 'bg-green-800 text-white' : 'text-gray-500 hover:text-gray-900'}`}>
+                  Freeform
+                </button>
+              </div>
+            </div>
+
+            {briefMode === 'guided' ? (
+              <div className="space-y-4">
+                {([
+                  { key: 'idea',       label: 'The idea & insight',   placeholder: 'What was the core campaign idea? What human insight or tension did it tap into?' },
+                  { key: 'execution',  label: 'How it was executed',   placeholder: 'How was the idea brought to life? What channels, formats, or activations were used?' },
+                  { key: 'results',    label: 'Results & impact',      placeholder: 'What were the measurable outcomes? Include key metrics — reach, sales, engagement, awards, etc.' },
+                  { key: 'intentions', label: 'Why you\'re entering',  placeholder: 'Which aspects are strongest? What should the AI focus on when evaluating and writing your entries?' },
+                ] as const).map(({ key, label, placeholder }) => (
+                  <div key={key}>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">{label}</label>
+                    <textarea
+                      value={briefSections[key]}
+                      onChange={e => setBriefSections(s => ({ ...s, [key]: e.target.value }))}
+                      rows={3}
+                      className="w-full bg-white border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors resize-none text-sm"
+                      placeholder={placeholder}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <textarea
+                value={form.brief}
+                onChange={e => setForm(f => ({ ...f, brief: e.target.value }))}
+                rows={7}
+                placeholder="Describe the campaign — what it was, what it achieved, who it was for, and any standout results. You can upload supporting files after creating the project."
+                className="w-full bg-white border border-gray-300 rounded-lg px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors resize-none"
+              />
+            )}
           </div>
 
           {/* Target shows */}
