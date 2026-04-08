@@ -623,12 +623,17 @@ export default function ProjectPage() {
   useEffect(() => {
     if (!user || !projectId) return
 
+    // Cancelled flag — prevents stale async callbacks from clobbering live state
+    // if this effect fires a second time (e.g. after a token refresh re-sets user).
+    let cancelled = false
+
     // Fetch total KB campaign count for the Script Analysis subheadline
     supabase.from('campaigns').select('*', { count: 'exact', head: true })
-      .then(({ count }) => { if (count !== null) setKbCount(count) })
+      .then(({ count }) => { if (!cancelled && count !== null) setKbCount(count) })
 
     supabase.from('campaigns').select('show_raw').not('show_raw', 'is', null)
       .then(({ data }) => {
+        if (cancelled) return
         const extra: string[] = []
         if (data) {
           const normalise = (raw: string) =>
@@ -651,9 +656,11 @@ export default function ProjectPage() {
     Promise.all([
       supabase.from('projects').select('*').eq('id', projectId).single(),
       supabase.from('directions').select('*').eq('project_id', projectId).order('sort_order'),
-      supabase.from('entry_drafts').select('*').eq('project_id', projectId).order('sort_order'),
+      // Secondary sort by id ensures deterministic ordering across generations
+      supabase.from('entry_drafts').select('*').eq('project_id', projectId).order('sort_order').order('id'),
       supabase.from('evaluations').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
     ]).then(([{ data: proj }, { data: dirs }, { data: drafts }, { data: evals }]) => {
+      if (cancelled) return
       if (proj) {
         setProject(proj)
         setBriefText(proj.combined_text || '')
@@ -732,7 +739,9 @@ export default function ProjectPage() {
       setFetching(false)
     })
 
-    supabase.rpc('get_my_org_id').then(({ data }) => { if (data) setOrgId(data) })
+    supabase.rpc('get_my_org_id').then(({ data }) => { if (!cancelled && data) setOrgId(data) })
+
+    return () => { cancelled = true }
   }, [user, projectId])
 
   // Concatenate guided brief sections into a single string for storage
@@ -1066,11 +1075,12 @@ export default function ProjectPage() {
   }
 
   const getToken = async (): Promise<string | null> => {
-    const { data: refreshData } = await supabase.auth.refreshSession()
-    if (refreshData?.session?.access_token) return refreshData.session.access_token
+    // getSession() auto-refreshes if token is expired — don't call refreshSession()
+    // directly, as it always fires TOKEN_REFRESHED which re-triggers the data useEffect.
     const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.access_token) { window.location.href = '/login'; return null }
-    return session.access_token
+    if (session?.access_token) return session.access_token
+    window.location.href = '/login'
+    return null
   }
 
   const generateDirections = async (skipChecks = false) => {
