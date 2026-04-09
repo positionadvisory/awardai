@@ -105,7 +105,6 @@ function Nav({ loggedIn }: { loggedIn: boolean }) {
         {/* Desktop links */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.75rem', marginLeft: 'auto' }}
           className="hide-on-mobile">
-          <Link href="/about" style={{ color: '#5a6a77', fontSize: '14px', textDecoration: 'none' }}>About</Link>
           {loggedIn ? (
             <Link href="/projects" style={{
               background: '#1a6640', color: 'white', padding: '0.5rem 1.125rem',
@@ -143,7 +142,6 @@ function Nav({ loggedIn }: { loggedIn: boolean }) {
           background: '#f0eeeb', borderTop: '1px solid rgba(15,29,44,0.08)',
           padding: '1rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem',
         }}>
-          <Link href="/about" style={{ color: '#0f1d2c', fontSize: '15px', textDecoration: 'none' }} onClick={() => setMenuOpen(false)}>About</Link>
           {loggedIn ? (
             <Link href="/projects" style={{ color: '#1a6640', fontSize: '15px', fontWeight: 500, textDecoration: 'none' }}>Open Shortlist →</Link>
           ) : (
@@ -257,7 +255,7 @@ export default function LandingPage() {
             borderRadius: '100px', padding: '0.375rem 0.875rem', marginBottom: '2rem',
           }}>
             <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#3aad6f', display: 'inline-block' }} />
-            <span style={{ color: '#1a6640', fontSize: '12px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Alpha — Limited to 20 agencies</span>
+            <span style={{ color: '#1a6640', fontSize: '12px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Private Alpha Trial</span>
           </div>
 
           <h1 className="hero-headline" style={{
@@ -314,7 +312,7 @@ export default function LandingPage() {
       {/* ── Problem ───────────────────────────────────────────────────────── */}
       <section style={{ padding: '100px 1.5rem' }}>
         <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
-          <div style={{ maxWidth: '640px', marginBottom: '4rem' }}>
+          <div style={{ maxWidth: '720px', margin: '0 auto', textAlign: 'center', marginBottom: '4rem' }}>
             <span style={{ color: '#3aad6f', fontSize: '12px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>The problem</span>
             <h2 style={{ fontSize: '2.5rem', fontWeight: 700, letterSpacing: '-0.03em', marginTop: '0.75rem', lineHeight: 1.2, color: '#0f1d2c', fontFamily: serif }}>
               Great work loses to<br />great writing.
@@ -346,8 +344,7 @@ export default function LandingPage() {
                 flex: 1, background: '#ffffff', border: '1px solid #dedad4',
                 borderRadius: '16px', padding: '2rem',
               }}>
-                <span style={{ fontSize: '1.75rem', display: 'block', marginBottom: '1rem' }}>{card.icon}</span>
-                <h3 style={{ color: '#0f1d2c', fontSize: '1rem', fontWeight: 700, marginBottom: '0.75rem', fontFamily: serif }}>{card.title}</h3>
+                <h3 style={{ color: '#0f1d2c', fontSize: '2rem', fontWeight: 700, marginBottom: '0.75rem', fontFamily: serif, lineHeight: 1.2 }}>{card.title}</h3>
                 <p style={{ color: '#5a6a77', fontSize: '14px', lineHeight: 1.7, margin: 0 }}>{card.body}</p>
               </div>
             ))}
@@ -483,15 +480,11 @@ export default function LandingPage() {
             ].map(item => (
               <div key={item.title} style={{
                 flex: '1 1 calc(50% - 0.5rem)', minWidth: '260px',
-                display: 'flex', gap: '1rem', alignItems: 'flex-start',
                 background: '#ffffff', border: '1px solid #dedad4',
                 borderRadius: '12px', padding: '1.5rem',
               }}>
-                <span style={{ fontSize: '1.5rem', flexShrink: 0 }}>{item.icon}</span>
-                <div>
-                  <h3 style={{ color: '#0f1d2c', fontSize: '14px', fontWeight: 700, margin: '0 0 0.5rem', fontFamily: serif }}>{item.title}</h3>
-                  <p style={{ color: '#5a6a77', fontSize: '13px', lineHeight: 1.6, margin: 0 }}>{item.body}</p>
-                </div>
+                <h3 style={{ color: '#0f1d2c', fontSize: '1.75rem', fontWeight: 700, margin: '0 0 0.5rem', fontFamily: serif, lineHeight: 1.2 }}>{item.title}</h3>
+                <p style={{ color: '#5a6a77', fontSize: '13px', lineHeight: 1.6, margin: 0 }}>{item.body}</p>
               </div>
             ))}
           </div>
@@ -529,7 +522,7 @@ export default function LandingPage() {
             Request access →
           </Link>
           <p style={{ color: 'rgba(240,238,235,0.3)', fontSize: '13px', marginTop: '1.25rem' }}>
-            gotshortlisted.com · Limited to 20 agencies during alpha
+            gotshortlisted.com · Private alpha trial
           </p>
         </div>
       </section>
@@ -548,7 +541,6 @@ export default function LandingPage() {
             <span style={{ color: '#5a6a77', fontSize: '13px' }}>· gotshortlisted.com</span>
           </div>
           <div style={{ display: 'flex', gap: '2rem' }}>
-            <Link href="/about" style={{ color: '#5a6a77', fontSize: '13px', textDecoration: 'none' }}>About</Link>
             <Link href="/login" style={{ color: '#5a6a77', fontSize: '13px', textDecoration: 'none' }}>Sign in</Link>
           </div>
         </div>
