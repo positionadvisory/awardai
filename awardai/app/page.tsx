@@ -301,9 +301,9 @@ export default function LandingPage() {
             { stat: '>60%', label: 'Of entries fail to shortlist' },
             { stat: '0', label: 'Dedicated award writers at most agencies' },
           ].map(item => (
-            <div key={item.stat}>
+            <div key={item.stat} style={{ textAlign: 'center' }}>
               <p style={{ fontSize: '2.5rem', fontWeight: 700, color: '#3aad6f', letterSpacing: '-0.03em', margin: 0, fontFamily: serif }}>{item.stat}</p>
-              <p style={{ color: '#5a6a77', fontSize: '13px', marginTop: '0.5rem', maxWidth: '200px' }}>{item.label}</p>
+              <p style={{ color: '#5a6a77', fontSize: '13px', marginTop: '0.5rem', maxWidth: '200px', margin: '0.5rem auto 0' }}>{item.label}</p>
             </div>
           ))}
         </div>
