@@ -318,7 +318,7 @@ export default function LandingPage() {
               Great work loses to<br />great writing.
             </h2>
             <p style={{ color: '#5a6a77', fontSize: '1rem', lineHeight: 1.7, marginTop: '1rem' }}>
-              Award shows judge what you write, not just what you made. Most agencies — especially in Asia, where English is rarely the first language — are brilliant at the work and weak at explaining it to Western juries.
+              Award shows judge what you write, not just what you made. Most agencies - especially in Asia - are brilliant at the work, yet miss the mark at explaining critical cultural context to international juries.
             </p>
           </div>
 
@@ -337,7 +337,7 @@ export default function LandingPage() {
               {
                 icon: '🌏',
                 title: 'The language disadvantage',
-                body: 'Asian agencies consistently punch below their creative weight at global shows. The work is world-class. The framing for Western juries is where they fall short.',
+                body: 'Agencies in Asia have a track record of punching below their weight at global shows where juries are unfortunately often over indexed towards Western markets.',
               },
             ].map(card => (
               <div key={card.title} style={{
@@ -361,14 +361,14 @@ export default function LandingPage() {
               An awards intelligence system that also happens to write.
             </h2>
             <p style={{ color: '#5a6a77', fontSize: '1rem', lineHeight: 1.7, marginTop: '1rem' }}>
-              Shortlist is trained on how award juries actually think — built from professional experience and public award show guidance, not from your client work. It knows what Cannes wants differently from what D&AD wants.
+              Shortlist is trained on how award juries actually think, built from decades of professional experience and public award show guidance. It knows what juries at Cannes wants differently from an Effies.
             </p>
           </div>
 
           <div className="three-col" style={{ display: 'flex', gap: '1.5rem' }}>
             {[
               { label: 'Agency intelligence', body: 'Upload your brief and campaign materials. Shortlist reads everything and builds a complete picture of your work before writing a single word.' },
-              { label: 'Show calibration', body: 'Each entry direction is calibrated to the show and category it\'s targeting — not a generic template. Cannes strategy is different from D&AD strategy.' },
+              { label: 'Show calibration', body: 'Each entry direction is calibrated to the show and category it\'s targeting - not a generic template. Your strategy for Cannes will be fundamentally different to your strategy at Festival of Media.' },
               { label: 'Outcome tracking', body: 'Every evaluation, draft, and direction is stored. Over time, your agency builds a private intelligence layer that gets sharper with every entry.' },
             ].map(card => (
               <div key={card.label} style={{ flex: 1, textAlign: 'center', padding: '0 1rem' }}>
