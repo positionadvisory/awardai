@@ -4209,8 +4209,9 @@ export default function ProjectPage() {
                           </div>
                         )}
 
-                        {/* Evaluation Chat */}
-                        {evaluation && (
+                        {/* Evaluation Chat — gated on hasJudge || hasCoach, not on the active-mode evaluation,
+                             so the section stays mounted when the user switches between judge/coach tabs */}
+                        {(hasJudge || hasCoach) && (
                           <div className="px-5 py-4 border-b border-gray-200 bg-white">
                             <button
                               onClick={() => setEvalChatOpen(prev => ({ ...prev, [dirId]: !prev[dirId] }))}
@@ -4279,7 +4280,12 @@ export default function ProjectPage() {
                                   </div>
                                 )}
 
-                                {/* Input row */}
+                                {/* Input row — disabled if active mode has no evaluation yet */}
+                                {!evaluation ? (
+                                  <p className="text-xs text-gray-400 italic">
+                                    Run a {activeMode === 'judge' ? 'Jury Evaluation' : 'Coach Review'} to start chatting about this entry.
+                                  </p>
+                                ) : (
                                 <div className="flex gap-2">
                                   <input
                                     value={evalChatInput[dirId] || ''}
@@ -4302,6 +4308,7 @@ export default function ProjectPage() {
                                     Send
                                   </button>
                                 </div>
+                                )}
                               </div>
                             )}
                           </div>
