@@ -708,6 +708,11 @@ export default function ProjectPage() {
   const [refiningFieldId, setRefiningFieldId] = useState<number | null>(null)
   const [refineErrors, setRefineErrors] = useState<Record<number, string>>({})
 
+  // Feature #4 — inline field editing
+  const [editingFieldId, setEditingFieldId] = useState<number | null>(null)
+  const [fieldEditValue, setFieldEditValue] = useState('')
+  const [savingFieldEdit, setSavingFieldEdit] = useState(false)
+
   // Phase 3 — Video Script
   type ScriptMode = 'generate' | 'review'
   const [scriptMode, setScriptMode] = useState<ScriptMode>('generate')
@@ -738,6 +743,8 @@ export default function ProjectPage() {
   const [dirSourceType, setDirSourceType] = useState<'all' | 'material' | 'entry'>('all')
   const [dirSourceMaterialIdx, setDirSourceMaterialIdx] = useState<number>(-1)
   const [dirSourceEntryDirectionId, setDirSourceEntryDirectionId] = useState<number>(-1)
+  // Directions tab: sort key
+  const [dirSortKey, setDirSortKey] = useState<'default' | 'category_fit' | 'medal_chance'>('default')
   // KB awards count for Script Analysis subheadline
   const [kbCount, setKbCount] = useState<number>(0)
   // Script: asset mode + eval inclusion
@@ -2525,6 +2532,22 @@ export default function ProjectPage() {
     setEntries(prev => prev.map(e => e.id === fieldId ? { ...e, selected: version } : e))
   }
 
+  // Feature #4 — save inline field edit to entry_drafts.custom_text
+  const saveFieldEdit = async (fieldId: number, clear = false) => {
+    setSavingFieldEdit(true)
+    const trimmed = clear ? null : fieldEditValue.trim() || null
+    const { error } = await supabase
+      .from('entry_drafts')
+      .update({ custom_text: trimmed, updated_at: new Date().toISOString() })
+      .eq('id', fieldId)
+    if (!error) {
+      setEntries(prev => prev.map(e => e.id === fieldId ? { ...e, custom_text: trimmed } : e))
+      setEditingFieldId(null)
+      setFieldEditValue('')
+    }
+    setSavingFieldEdit(false)
+  }
+
   const refineField = async (field: EntryDraft, dirId: number) => {
     const msg = refineMessage[field.id]?.trim()
     if (!msg || !project) return
@@ -3485,8 +3508,40 @@ export default function ProjectPage() {
                 </p>
               </div>
             ) : (
+              <>
+                {/* Sort controls — only shown when there are directions */}
+                {directions.length > 1 && (
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="text-xs text-gray-400 flex-shrink-0">Sort by:</span>
+                    {(['default', 'category_fit', 'medal_chance'] as const).map(key => (
+                      <button
+                        key={key}
+                        onClick={() => setDirSortKey(key)}
+                        className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                          dirSortKey === key
+                            ? 'bg-green-800 border-green-700 text-white'
+                            : 'bg-white border-gray-300 text-gray-500 hover:border-gray-400 hover:text-gray-700'
+                        }`}
+                      >
+                        {key === 'default' ? 'Default' : key === 'category_fit' ? 'Category Fit ↓' : 'Medal Chance ↓'}
+                      </button>
+                    ))}
+                  </div>
+                )}
               <div className="grid gap-4">
-                {directions.map(d => {
+                {[...directions].sort((a, b) => {
+                  if (dirSortKey === 'category_fit') {
+                    return (b.win_likelihood ?? 0) - (a.win_likelihood ?? 0)
+                  }
+                  if (dirSortKey === 'medal_chance') {
+                    const aEval = evaluations[a.id]?.judge ?? evaluations[a.id]?.coach
+                    const bEval = evaluations[b.id]?.judge ?? evaluations[b.id]?.coach
+                    const aChance = calculateWinLikelihood(a.best_show, aEval?.overall_score)
+                    const bChance = calculateWinLikelihood(b.best_show, bEval?.overall_score)
+                    return bChance - aChance
+                  }
+                  return 0
+                }).map(d => {
                   const hasEntries = entries.some(e => e.direction_id === d.id)
                   const dirEvalBoth = evaluations[d.id] ?? {}
                   const dirBestEval = dirEvalBoth.judge ?? dirEvalBoth.coach ?? null
@@ -3612,6 +3667,7 @@ export default function ProjectPage() {
                   )
                 })}
               </div>
+              </>
             )}
             {directions.some(d => d.win_likelihood !== null && !(evaluations[d.id]?.judge ?? evaluations[d.id]?.coach)) && (
               <p className="text-xs text-gray-400 mt-4">* Chance of Medal based on show base rate only — evaluate an entry to factor in content quality.</p>
@@ -4359,10 +4415,10 @@ export default function ProjectPage() {
                         {/* Entry fields */}
                         <div className="divide-y divide-gray-100">
                           {fields.map(field => {
-                            const content = field.selected
-                              ? (field[`version_${field.selected}` as keyof EntryDraft] as string) ?? field.version_a
-                              : field.version_a
-                            const wordCount = content ? countWords(content) : 0
+                            const content = resolveFieldContent(field)
+                            const isEditingThis = editingFieldId === field.id
+                            const liveContent = isEditingThis ? fieldEditValue : content
+                            const wordCount = liveContent ? countWords(liveContent) : 0
                             const overLimit = !!(field.word_limit && wordCount > field.word_limit)
                             const isUploadedDoc = field.field_key === 'entry'
                             const isExpanded = expandedEntryFields[field.id] ?? false
@@ -4438,9 +4494,69 @@ export default function ProjectPage() {
                                   </div>
                                 </div>
 
-                                <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap mb-4">
-                                  {content || <span className="italic text-gray-400">Not yet generated</span>}
-                                </p>
+                                {isEditingThis ? (
+                                  <div className="mb-4">
+                                    <textarea
+                                      value={fieldEditValue}
+                                      onChange={e => setFieldEditValue(e.target.value)}
+                                      onKeyDown={e => {
+                                        if (e.key === 'Escape') {
+                                          setEditingFieldId(null)
+                                          setFieldEditValue('')
+                                        }
+                                        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                                          saveFieldEdit(field.id)
+                                        }
+                                      }}
+                                      rows={Math.max(5, (fieldEditValue.match(/\n/g) || []).length + 4)}
+                                      autoFocus
+                                      className="w-full bg-gray-50 border border-green-600 rounded-lg px-3 py-2.5 text-sm text-gray-900 leading-relaxed focus:outline-none resize-none"
+                                    />
+                                    <div className="flex items-center gap-2 mt-2">
+                                      <button
+                                        onClick={() => saveFieldEdit(field.id)}
+                                        disabled={savingFieldEdit}
+                                        className="text-xs bg-green-800 hover:bg-green-700 disabled:opacity-40 text-white px-3 py-1.5 rounded-lg transition-colors"
+                                      >
+                                        {savingFieldEdit ? 'Saving…' : 'Save'}
+                                      </button>
+                                      <button
+                                        onClick={() => { setEditingFieldId(null); setFieldEditValue('') }}
+                                        className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                                      >
+                                        Cancel
+                                      </button>
+                                      {field.custom_text?.trim() && (
+                                        <button
+                                          onClick={() => saveFieldEdit(field.id, true)}
+                                          disabled={savingFieldEdit}
+                                          className="text-xs text-amber-600 hover:text-amber-700 transition-colors ml-auto disabled:opacity-40"
+                                        >
+                                          Clear manual edit
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div
+                                    className="group relative cursor-text mb-4"
+                                    onClick={() => {
+                                      setEditingFieldId(field.id)
+                                      setFieldEditValue(content)
+                                    }}
+                                    title="Click to edit"
+                                  >
+                                    <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                                      {content || <span className="italic text-gray-400">Not yet generated</span>}
+                                    </p>
+                                    {field.custom_text?.trim() && (
+                                      <span className="text-xs text-blue-600 font-medium mt-0.5 block">✎ manually edited</span>
+                                    )}
+                                    <span className="absolute top-0 right-0 text-xs text-gray-300 group-hover:text-gray-500 transition-colors opacity-0 group-hover:opacity-100 pointer-events-none select-none">
+                                      ✎ edit
+                                    </span>
+                                  </div>
+                                )}
 
                                 {userHistory.length > 0 && (
                                   <div className="mb-3 space-y-1.5">
