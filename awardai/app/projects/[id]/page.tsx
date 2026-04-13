@@ -518,10 +518,9 @@ function scoreBg(score: number): string {
 
 // Coach mode shows UNTAPPED potential (10 - raw score). Lower = better.
 function coachScoreColor(untapped: number): string {
-  if (untapped <= 2) return 'text-green-700'   // ≤2 pts gap — most potential captured
+  if (untapped <= 2) return 'text-green-700'   // <=2 pts gap — most potential captured
   if (untapped <= 5) return 'text-amber-700'   // moderate gap
   return 'text-red-600'                         // significant potential not yet in draft
-}
 }
 
 function buildAnalysisText(
