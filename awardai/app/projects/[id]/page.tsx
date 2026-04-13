@@ -24,6 +24,33 @@ function ErrorBanner({ error }: { error: string }) {
 
 // ── TonalBrief — structured production brief returned by generate-tonal-brief ─
 type ColorSwatch = { hex: string; name: string; role: string }
+
+// ── Collaborator ──────────────────────────────────────────────────────────────
+type CollabType =
+  | 'lead_agency' | 'creative_agency' | 'media_agency'
+  | 'production_company' | 'pr_agency' | 'brand_team' | 'tech_partner' | 'other'
+
+const COLLAB_TYPE_LABELS: Record<CollabType, string> = {
+  lead_agency:        'Lead Agency',
+  creative_agency:    'Creative Agency',
+  media_agency:       'Media Agency',
+  production_company: 'Production Company',
+  pr_agency:          'PR Agency',
+  brand_team:         'Brand / Client Team',
+  tech_partner:       'Technology Partner',
+  other:              'Other',
+}
+
+type Collaborator = {
+  id: number
+  collaborator_name: string
+  collaborator_type: CollabType
+  contact_name: string | null
+  contact_email: string | null
+  website_url: string | null
+  is_lead_credit: boolean
+  credit_order: number
+}
 type TonalBrief = {
   summary: string
   mood: string
@@ -558,6 +585,23 @@ export default function ProjectPage() {
   const [scriptChatHistory, setScriptChatHistory] = useState<ChatMessage[]>([])
   const [scriptChatError, setScriptChatError] = useState('')
 
+  // Collaborators
+  const [collaborators, setCollaborators] = useState<Collaborator[]>([])
+  const [addCollabOpen, setAddCollabOpen] = useState(false)
+  const [savingCollab, setSavingCollab] = useState(false)
+  const [collabError, setCollabError] = useState('')
+  const [newCollab, setNewCollab] = useState<{
+    collaborator_name: string
+    collaborator_type: CollabType
+    contact_name: string
+    contact_email: string
+    website_url: string
+    is_lead_credit: boolean
+  }>({
+    collaborator_name: '', collaborator_type: 'creative_agency',
+    contact_name: '', contact_email: '', website_url: '', is_lead_credit: false,
+  })
+
   // Brief editor chat
   const [briefChatOpen, setBriefChatOpen] = useState(false)
   const [briefChatInput, setBriefChatInput] = useState('')
@@ -680,6 +724,14 @@ export default function ProjectPage() {
         const allShows = Array.from(new Set([...CANONICAL_SHOWS, ...extra]))
         setKbShows(allShows.sort((a, b) => a.localeCompare(b)))
       })
+
+    // Fetch collaborators independently (non-critical — does not block main data)
+    supabase
+      .from('project_collaborators')
+      .select('id, collaborator_name, collaborator_type, contact_name, contact_email, website_url, is_lead_credit, credit_order')
+      .eq('project_id', projectId)
+      .order('credit_order')
+      .then(({ data }) => { if (!cancelled && data) setCollaborators(data as Collaborator[]) })
 
     Promise.all([
       supabase.from('projects').select('*').eq('id', projectId).single(),
@@ -809,6 +861,41 @@ export default function ProjectPage() {
 
   // Feature 6 — generate tonal / creative direction brief
   // scriptText: freshly generated script text (passed from generateScript so we don't wait for DB write)
+  // ── Collaborator CRUD ─────────────────────────────────────────────────────
+
+  const handleAddCollaborator = async () => {
+    if (!project || !newCollab.collaborator_name.trim()) return
+    setSavingCollab(true)
+    setCollabError('')
+    // Get org_id from project
+    const nextOrder = collaborators.length
+    const { data, error } = await supabase
+      .from('project_collaborators')
+      .insert({
+        project_id:        project.id,
+        org_id:            project.org_id,
+        collaborator_name: newCollab.collaborator_name.trim(),
+        collaborator_type: newCollab.collaborator_type,
+        contact_name:      newCollab.contact_name.trim() || null,
+        contact_email:     newCollab.contact_email.trim() || null,
+        website_url:       newCollab.website_url.trim() || null,
+        is_lead_credit:    newCollab.is_lead_credit,
+        credit_order:      nextOrder,
+      })
+      .select()
+      .single()
+    if (error) { setCollabError(error.message); setSavingCollab(false); return }
+    if (data) setCollaborators(prev => [...prev, data as Collaborator])
+    setNewCollab({ collaborator_name: '', collaborator_type: 'creative_agency', contact_name: '', contact_email: '', website_url: '', is_lead_credit: false })
+    setAddCollabOpen(false)
+    setSavingCollab(false)
+  }
+
+  const handleRemoveCollaborator = async (id: number) => {
+    await supabase.from('project_collaborators').delete().eq('id', id)
+    setCollaborators(prev => prev.filter(c => c.id !== id))
+  }
+
   const generateTonalBrief = async (scriptText?: string) => {
     if (!project) return
     setTonalBriefLoading(true)
@@ -2205,6 +2292,149 @@ export default function ProjectPage() {
             )}
 
           </div>
+
+          {/* ── Credits & Collaborators ─────────────────────────────────────── */}
+          <div className="max-w-2xl mt-8">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h2 className="text-sm font-semibold text-gray-800">Credits &amp; Collaborators</h2>
+                <p className="text-xs text-gray-400 mt-0.5">All parties credited on this entry — agency partners, production companies, brand team, etc. Used in press kit and entry credit generation.</p>
+              </div>
+              {!addCollabOpen && (
+                <button
+                  onClick={() => { setAddCollabOpen(true); setCollabError('') }}
+                  className="text-xs text-green-700 hover:text-green-600 transition-colors flex-shrink-0 ml-4"
+                >
+                  + Add
+                </button>
+              )}
+            </div>
+
+            {/* Existing collaborators */}
+            {collaborators.length > 0 && (
+              <div className="space-y-2 mb-4">
+                {collaborators.map(c => (
+                  <div key={c.id} className="flex items-start justify-between gap-3 bg-white border border-gray-200 rounded-xl px-4 py-3">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <span className="text-xs bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full whitespace-nowrap mt-0.5">
+                        {COLLAB_TYPE_LABELS[c.collaborator_type]}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {c.collaborator_name}
+                          {c.is_lead_credit && <span className="ml-2 text-xs text-green-700 font-normal">Lead credit</span>}
+                        </p>
+                        {(c.contact_name || c.contact_email) && (
+                          <p className="text-xs text-gray-400 mt-0.5 truncate">
+                            {[c.contact_name, c.contact_email].filter(Boolean).join(' · ')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleRemoveCollaborator(c.id)}
+                      className="text-gray-300 hover:text-red-500 transition-colors text-lg leading-none flex-shrink-0"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add collaborator form */}
+            {addCollabOpen && (
+              <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs text-gray-500 mb-1">Organisation name *</label>
+                    <input
+                      type="text"
+                      value={newCollab.collaborator_name}
+                      onChange={e => setNewCollab(n => ({ ...n, collaborator_name: e.target.value }))}
+                      placeholder="e.g. Ogilvy Bangkok, MJZ, Edelman"
+                      className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Type</label>
+                    <select
+                      value={newCollab.collaborator_type}
+                      onChange={e => setNewCollab(n => ({ ...n, collaborator_type: e.target.value as CollabType }))}
+                      className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-green-600 transition-colors appearance-none"
+                    >
+                      {(Object.entries(COLLAB_TYPE_LABELS) as [CollabType, string][]).map(([val, label]) => (
+                        <option key={val} value={val}>{label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Contact name</label>
+                    <input
+                      type="text"
+                      value={newCollab.contact_name}
+                      onChange={e => setNewCollab(n => ({ ...n, contact_name: e.target.value }))}
+                      placeholder="Jane Smith"
+                      className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Contact email</label>
+                    <input
+                      type="email"
+                      value={newCollab.contact_email}
+                      onChange={e => setNewCollab(n => ({ ...n, contact_email: e.target.value }))}
+                      placeholder="jane@agency.com"
+                      className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Website (optional)</label>
+                    <input
+                      type="url"
+                      value={newCollab.website_url}
+                      onChange={e => setNewCollab(n => ({ ...n, website_url: e.target.value }))}
+                      placeholder="https://www.agency.com"
+                      className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 pt-4">
+                    <input
+                      type="checkbox"
+                      id="lead-credit"
+                      checked={newCollab.is_lead_credit}
+                      onChange={e => setNewCollab(n => ({ ...n, is_lead_credit: e.target.checked }))}
+                      className="w-4 h-4 accent-green-700"
+                    />
+                    <label htmlFor="lead-credit" className="text-xs text-gray-600 cursor-pointer">
+                      Lead credit (first in entry credits list)
+                    </label>
+                  </div>
+                </div>
+                {collabError && <p className="text-xs text-red-600">{collabError}</p>}
+                <div className="flex gap-3 pt-1">
+                  <button
+                    onClick={handleAddCollaborator}
+                    disabled={savingCollab || !newCollab.collaborator_name.trim()}
+                    className="bg-green-800 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                  >
+                    {savingCollab ? 'Adding…' : 'Add'}
+                  </button>
+                  <button
+                    onClick={() => { setAddCollabOpen(false); setCollabError('') }}
+                    className="text-gray-500 hover:text-gray-900 text-sm px-4 py-2 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {collaborators.length === 0 && !addCollabOpen && (
+              <p className="text-xs text-gray-400">No collaborators added. Use this to track all co-credited parties for entry submissions and press kit generation.</p>
+            )}
+          </div>
+
         )}
 
         {/* ── MATERIALS ── */}
