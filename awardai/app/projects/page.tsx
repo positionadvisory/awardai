@@ -50,6 +50,7 @@ type AgencyProfile = {
   typical_clients: string | null
   awards_heritage: string | null
   generated_at: string | null
+  logo_url: string | null
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -104,6 +105,9 @@ export default function ProjectsPage() {
 
   // Org type pre-selection (shown before credentials are uploaded)
   const [selectedOrgType, setSelectedOrgType] = useState<OrgType>('agency')
+
+  // Logo upload
+  const [logoUploading, setLogoUploading] = useState(false)
 
   // Contact / press kit details (manually editable, separate from credentials extraction)
   const [editingContact, setEditingContact] = useState(false)
@@ -274,6 +278,25 @@ export default function ProjectsPage() {
   }
 
   // ── Contact / press kit details ───────────────────────────────────────────
+
+  const handleLogoUpload = async (file: File) => {
+    if (!orgId) return
+    setLogoUploading(true)
+    try {
+      const ext = file.name.split('.').pop() || 'png'
+      const path = `${orgId}/${Date.now()}.${ext}`
+      const { error: uploadError } = await supabase.storage
+        .from('org-logos')
+        .upload(path, file, { upsert: true, contentType: file.type })
+      if (uploadError) throw uploadError
+      await supabase.from('agency_profiles').update({ logo_url: path }).eq('org_id', orgId)
+      setAgencyProfile(prev => prev ? { ...prev, logo_url: path } : prev)
+    } catch (err) {
+      console.error('Logo upload failed:', err)
+    } finally {
+      setLogoUploading(false)
+    }
+  }
 
   const startEditContact = () => {
     setContactDraft({
@@ -531,6 +554,34 @@ export default function ProjectsPage() {
                     ) : (
                       <p className="text-xs text-gray-400">No press contact set. Add details to enable full press kit generation.</p>
                     )}
+                  </div>
+
+                  {/* ── Logo ──────────────────────────────────────────────── */}
+                  <div className="pt-4 border-t border-gray-100">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Logo</p>
+                    </div>
+                    {agencyProfile.logo_url ? (
+                      <div className="flex items-center gap-4">
+                        <img
+                          src={supabase.storage.from('org-logos').getPublicUrl(agencyProfile.logo_url).data.publicUrl}
+                          alt="Organisation logo"
+                          className="h-10 max-w-[140px] object-contain rounded"
+                        />
+                        <label className={`cursor-pointer text-xs transition-colors ${logoUploading ? 'text-gray-400' : 'text-green-700 hover:text-green-600'}`}>
+                          {logoUploading ? 'Uploading…' : 'Change logo'}
+                          <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden" disabled={logoUploading}
+                            onChange={e => { if (e.target.files?.[0]) handleLogoUpload(e.target.files[0]) }} />
+                        </label>
+                      </div>
+                    ) : (
+                      <label className={`cursor-pointer inline-flex items-center gap-2 text-xs border border-dashed rounded-lg px-4 py-2.5 transition-colors ${logoUploading ? 'border-gray-200 text-gray-400' : 'border-gray-300 text-gray-500 hover:border-green-400 hover:text-green-700'}`}>
+                        {logoUploading ? 'Uploading…' : '+ Upload logo'}
+                        <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden" disabled={logoUploading}
+                          onChange={e => { if (e.target.files?.[0]) handleLogoUpload(e.target.files[0]) }} />
+                      </label>
+                    )}
+                    <p className="text-xs text-gray-400 mt-2">Used in PDF press kits. PNG or SVG preferred.</p>
                   </div>
 
                   {/* Re-extract + Remove */}
