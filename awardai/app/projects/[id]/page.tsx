@@ -632,6 +632,8 @@ export default function ProjectPage() {
   const [selectedPressKitDirs, setSelectedPressKitDirs] = useState<Set<number>>(new Set())
   const [pressKitOutputs, setPressKitOutputs] = useState<Record<number, string>>({}) // dirId → email HTML
   const [pressKitExtras, setPressKitExtras] = useState<Record<number, PressKitExtra>>({}) // dirId → extra sections
+  const [pressKitAiCopy, setPressKitAiCopy] = useState<Record<string, string>>({}) // key: `${dirId}-${field}`
+  const [pressKitAiLoading, setPressKitAiLoading] = useState<Record<string, boolean>>({})
   const [pressKitCopied, setPressKitCopied] = useState<Record<number, boolean>>({})
   const [pressKitCopiedExtra, setPressKitCopiedExtra] = useState<Record<string, boolean>>({}) // key: `${dirId}-${field}`
   const [pressKitGenerating, setPressKitGenerating] = useState(false)
@@ -1209,6 +1211,32 @@ export default function ProjectPage() {
     setTimeout(() => setPressKitCopiedExtra(prev => ({ ...prev, [key]: false })), 2500)
   }
 
+  // Generate AI-drafted social copy for one direction + format
+  const generateAiPressCopy = async (dirId: number, field: 'linkedinPost' | 'xPost' | 'instagramCaption') => {
+    const formatMap: Record<string, string> = { linkedinPost: 'linkedin', xPost: 'x', instagramCaption: 'instagram' }
+    const key = `${dirId}-${field}`
+    setPressKitAiLoading(prev => ({ ...prev, [key]: true }))
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-press-copy`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({ direction_id: dirId, format: formatMap[field], project_id: projectId }),
+        }
+      )
+      const data = await res.json()
+      if (data.copy) setPressKitAiCopy(prev => ({ ...prev, [key]: data.copy }))
+    } catch (err) {
+      console.error('AI press copy failed:', err)
+    } finally {
+      setPressKitAiLoading(prev => ({ ...prev, [key]: false }))
+    }
+  }
+
   // Copy formatted HTML to clipboard so it pastes as rich text in Outlook
   const copyPressKitToClipboard = async (dirId: number) => {
     const html = pressKitOutputs[dirId]
@@ -1261,6 +1289,7 @@ export default function ProjectPage() {
         line: (x1: number, y1: number, x2: number, y2: number) => void
         addPage: () => void
         save: (filename: string) => void
+        addImage: (data: string, format: string, x: number, y: number, w: number, h: number) => void
         internal: { pageSize: { getWidth: () => number; getHeight: () => number } }
       } }
 
@@ -1275,133 +1304,206 @@ export default function ProjectPage() {
         if (y + neededHeight > pageH - margin) { doc.addPage(); y = margin }
       }
 
-      // Header bar
-      doc.setFillColor(22, 101, 52) // green-800
-      doc.rect(0, 0, pageW, 18, 'F')
+      const rule = (gap = 8) => {
+        doc.setDrawColor(225, 225, 225)
+        doc.line(margin, y, pageW - margin, y)
+        y += gap
+      }
+
+      const sectionLabel = (text: string) => {
+        doc.setFontSize(7.5)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(22, 101, 52) // green-800
+        doc.text(text.toUpperCase(), margin, y)
+        y += 5
+      }
+
+      // ── Header bar ──
+      doc.setFillColor(22, 101, 52)
+      doc.rect(0, 0, pageW, 16, 'F')
       doc.setTextColor(255, 255, 255)
-      doc.setFontSize(8)
+      doc.setFontSize(7.5)
       doc.setFont('helvetica', 'bold')
-      const headerText = ['PRESS KIT', direction.best_show, direction.best_category].filter(Boolean).join('  ·  ')
-      doc.text(headerText, margin, 11)
-      y = 28
+      doc.text('PRESS KIT', margin, 10)
 
-      // Campaign name
-      doc.setTextColor(17, 17, 17)
-      doc.setFontSize(20)
+      // Show · Category badge (right-aligned in header)
+      if (direction.best_show || direction.best_category) {
+        const badge = [direction.best_show, direction.best_category].filter(Boolean).join('  ·  ')
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(7.5)
+        doc.text(badge, pageW - margin, 10, { align: 'right' } as Record<string, unknown>)
+      }
+
+      y = 24
+
+      // ── Logo (top-right, loaded async) ──
+      if (pr?.logo_url) {
+        try {
+          const { data: { publicUrl } } = supabase.storage.from('org-logos').getPublicUrl(pr.logo_url)
+          const logoDataUrl = await new Promise<string>((resolve, reject) => {
+            const img = new Image()
+            img.crossOrigin = 'anonymous'
+            img.onload = () => {
+              const canvas = document.createElement('canvas')
+              canvas.width = img.naturalWidth
+              canvas.height = img.naturalHeight
+              const ctx = canvas.getContext('2d')
+              if (!ctx) { reject(new Error('no ctx')); return }
+              ctx.drawImage(img, 0, 0)
+              resolve(canvas.toDataURL('image/png'))
+            }
+            img.onerror = reject
+            img.src = publicUrl
+          })
+          // Place logo top-right: max 32mm wide, max 14mm tall
+          const tmpImg = new Image()
+          tmpImg.src = logoDataUrl
+          const aspect = tmpImg.naturalWidth / (tmpImg.naturalHeight || 1)
+          const maxW = 32
+          const maxH = 14
+          const logoH = Math.min(maxH, maxW / (aspect || 1))
+          const logoW = logoH * (aspect || 1)
+          doc.addImage(logoDataUrl, 'PNG', pageW - margin - logoW, 18, logoW, logoH)
+          y = Math.max(y, 18 + logoH + 4)
+        } catch {
+          // Logo load failed — continue without it
+        }
+      }
+
+      // ── Campaign name ──
+      doc.setTextColor(15, 15, 15)
+      doc.setFontSize(22)
       doc.setFont('helvetica', 'bold')
-      const nameLines = doc.splitTextToSize(project.campaign_name, contentW)
-      nameLines.forEach((line: string) => { doc.text(line, margin, y); y += 8 })
-      y += 2
+      const nameLines = doc.splitTextToSize(project.campaign_name, contentW - (pr?.logo_url ? 36 : 0))
+      nameLines.forEach((line: string) => { doc.text(line, margin, y); y += 9 })
 
-      // Client
+      // ── Client ──
       if (project.client_name) {
         doc.setFontSize(11)
         doc.setFont('helvetica', 'normal')
-        doc.setTextColor(100, 100, 100)
+        doc.setTextColor(120, 120, 120)
         doc.text(`for ${project.client_name}`, margin, y)
         y += 7
       }
 
-      // Org name + tagline
+      // ── Org name + tagline ──
       if (orgName) {
-        doc.setFontSize(10)
+        doc.setFontSize(9.5)
         doc.setFont('helvetica', 'bold')
         doc.setTextColor(22, 101, 52)
-        doc.text(orgName + (pr?.tagline ? `  —  ${pr.tagline}` : ''), margin, y)
+        const orgLine = orgName + (pr?.tagline ? `  —  ${pr.tagline}` : '')
+        doc.text(orgLine, margin, y)
+        y += 7
+      }
+
+      // ── Hook ──
+      if (direction.hook) {
+        y += 3
+        // Green accent bar
+        doc.setFillColor(22, 101, 52)
+        doc.rect(margin, y - 3.5, 2.5, 0, 'F') // placeholder — draw after measuring
+        const hookLines = doc.splitTextToSize(direction.hook, contentW - 8)
+        const hookBlockH = hookLines.length * 6 + 2
+        checkPage(hookBlockH + 8)
+        doc.setFillColor(22, 101, 52)
+        doc.rect(margin, y - 3.5, 2.5, hookBlockH, 'F')
+        doc.setFontSize(12)
+        doc.setFont('helvetica', 'bolditalic')
+        doc.setTextColor(30, 30, 30)
+        hookLines.forEach((line: string) => { doc.text(line, margin + 6, y); y += 6 })
         y += 6
       }
 
-      // Hook
-      if (direction.hook) {
-        y += 4
-        doc.setDrawColor(200, 200, 200)
-        doc.line(margin, y, pageW - margin, y)
-        y += 7
-        doc.setFontSize(12)
-        doc.setFont('helvetica', 'bolditalic')
-        doc.setTextColor(34, 34, 34)
-        const hookLines = doc.splitTextToSize(`"${direction.hook}"`, contentW)
-        checkPage(hookLines.length * 6 + 10)
-        hookLines.forEach((line: string) => { doc.text(line, margin, y); y += 6 })
-        y += 4
-      }
+      y += 2
+      rule(10)
 
-      // Separator
-      doc.setDrawColor(220, 220, 220)
-      doc.line(margin, y, pageW - margin, y)
-      y += 8
-
-      // Entry fields
+      // ── Entry fields ──
       for (const f of fields) {
         const content = resolveFieldContent(f)
         if (!content) continue
-        checkPage(20)
-        doc.setFontSize(8)
-        doc.setFont('helvetica', 'bold')
-        doc.setTextColor(130, 130, 130)
-        doc.text(f.field_label.toUpperCase(), margin, y)
-        y += 5
+        checkPage(22)
+        sectionLabel(f.field_label)
         doc.setFontSize(11)
         doc.setFont('helvetica', 'normal')
-        doc.setTextColor(34, 34, 34)
+        doc.setTextColor(25, 25, 25)
         const contentLines = doc.splitTextToSize(content, contentW)
         for (const line of contentLines) {
           checkPage(6)
           doc.text(line, margin, y)
           y += 5.5
         }
-        y += 5
+        y += 7
       }
 
-      // Credits
+      // ── Credits ──
       const leadCollabs = collaborators.filter(c => c.is_lead_credit)
       const otherCollabs = collaborators.filter(c => !c.is_lead_credit)
       const allCredits = [...leadCollabs, ...otherCollabs]
       if (orgName || allCredits.length > 0) {
-        checkPage(20)
-        doc.setDrawColor(220, 220, 220)
-        doc.line(margin, y, pageW - margin, y)
-        y += 8
-        doc.setFontSize(8)
-        doc.setFont('helvetica', 'bold')
-        doc.setTextColor(130, 130, 130)
-        doc.text('CREDITS', margin, y)
-        y += 5
+        checkPage(22)
+        rule(8)
+        sectionLabel('Credits')
         doc.setFontSize(11)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(25, 25, 25)
+        if (orgName) {
+          doc.text(orgName, margin, y)
+          if (pr?.tagline) {
+            doc.setFont('helvetica', 'normal')
+            doc.setTextColor(120, 120, 120)
+            doc.setFontSize(9.5)
+            doc.text(pr.tagline, margin, y + 5)
+            y += 5
+          }
+          y += 6
+        }
+        doc.setFontSize(10.5)
         doc.setFont('helvetica', 'normal')
-        doc.setTextColor(34, 34, 34)
-        if (orgName) { doc.text(orgName, margin, y); y += 5.5 }
+        doc.setTextColor(60, 60, 60)
         for (const c of allCredits) {
           checkPage(6)
           doc.text(`${COLLAB_TYPE_LABELS[c.collaborator_type]}: ${c.collaborator_name}`, margin, y)
           y += 5.5
         }
-        y += 3
+        y += 4
       }
 
-      // Contact
+      // ── Press Contact ──
       if (pr?.pr_contact_name || pr?.pr_contact_email) {
-        checkPage(20)
-        doc.setDrawColor(220, 220, 220)
-        doc.line(margin, y, pageW - margin, y)
-        y += 8
-        doc.setFontSize(8)
-        doc.setFont('helvetica', 'bold')
-        doc.setTextColor(130, 130, 130)
-        doc.text('PRESS CONTACT', margin, y)
-        y += 5
+        checkPage(22)
+        rule(8)
+        sectionLabel('Press Contact')
         doc.setFontSize(11)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(25, 25, 25)
+        if (pr.pr_contact_name) { doc.text(pr.pr_contact_name, margin, y); y += 5.5 }
         doc.setFont('helvetica', 'normal')
-        doc.setTextColor(34, 34, 34)
-        const contactParts = [pr.pr_contact_name, pr.pr_contact_email, pr.pr_contact_phone, pr.website_url].filter(Boolean)
-        doc.text(contactParts.join('  ·  '), margin, y)
-        y += 5.5
+        doc.setFontSize(10.5)
+        doc.setTextColor(60, 60, 60)
+        const contactLine = [pr.pr_contact_email, pr.pr_contact_phone].filter(Boolean).join('  ·  ')
+        if (contactLine) { doc.text(contactLine, margin, y); y += 5 }
+        if (pr.website_url) {
+          doc.setTextColor(22, 101, 52)
+          doc.text(pr.website_url.replace(/^https?:\/\//, ''), margin, y)
+          y += 5
+        }
+        const social = [
+          pr.linkedin_url ? `LinkedIn: ${pr.linkedin_url.replace(/^https?:\/\/(www\.)?linkedin\.com\//, '').replace(/\/$/, '')}` : '',
+          pr.x_handle ? `X: @${pr.x_handle.replace(/^@/, '')}` : '',
+          pr.instagram_handle ? `IG: @${pr.instagram_handle.replace(/^@/, '')}` : '',
+        ].filter(Boolean).join('  ·  ')
+        if (social) {
+          doc.setTextColor(120, 120, 120)
+          doc.setFontSize(9.5)
+          doc.text(social, margin, y)
+          y += 5
+        }
       }
 
-      // Footer
+      // ── Footer ──
       doc.setFontSize(8)
       doc.setFont('helvetica', 'normal')
-      doc.setTextColor(170, 170, 170)
+      doc.setTextColor(180, 180, 180)
       const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
       doc.text(`Generated by Shortlist  ·  ${today}`, margin, pageH - 10)
 
@@ -1410,7 +1512,7 @@ export default function ProjectPage() {
       doc.save(`${safeCampaign}-${safeShow}-press-kit.pdf`)
     } catch (err) {
       console.error('Press kit PDF generation failed:', err)
-      alert('PDF generation failed. Make sure jspdf is installed: npm install jspdf')
+      alert('PDF generation failed. Make sure jspdf is installed.')
     }
   }
 
@@ -5058,6 +5160,24 @@ export default function ProjectPage() {
               </div>
             )}
 
+            {/* Logo display / nudge */}
+            {orgPressProfile && (
+              <div className="flex items-center gap-3 mb-5 px-4 py-3 bg-white border border-gray-200 rounded-xl">
+                {orgPressProfile.logo_url ? (
+                  <>
+                    <img
+                      src={supabase.storage.from('org-logos').getPublicUrl(orgPressProfile.logo_url).data.publicUrl}
+                      alt="Logo"
+                      className="h-8 max-w-[100px] object-contain"
+                    />
+                    <p className="text-xs text-gray-400">Logo will appear in PDF press kits. <button onClick={() => router.push('/projects')} className="text-green-700 hover:text-green-600 underline">Manage on Profile page.</button></p>
+                  </>
+                ) : (
+                  <p className="text-xs text-gray-400">No logo uploaded. <button onClick={() => router.push('/projects')} className="text-green-700 hover:text-green-600 underline">Add a logo on the Profile page</button> to include it in PDF press kits.</p>
+                )}
+              </div>
+            )}
+
             {/* Header + Select All */}
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -5163,10 +5283,15 @@ export default function ProjectPage() {
                     const extra = pressKitExtras[d.id]
                     const dirLabel = d.best_show && d.best_category ? `${d.best_show} — ${d.best_category}` : d.name
 
-                    // Helper to render a plain-text copyable section
+                    // Helper to render a plain-text copyable section (with optional AI generation)
+                    const aiFields = new Set<keyof PressKitExtra>(['linkedinPost', 'xPost', 'instagramCaption'])
                     const ExtraSection = ({ label, field, value, hint }: { label: string; field: keyof PressKitExtra; value: string; hint?: string }) => {
                       const key = `${d.id}-${field}`
                       const copied = pressKitCopiedExtra[key]
+                      const aiText = pressKitAiCopy[key]
+                      const aiLoading = pressKitAiLoading[key]
+                      const displayText = aiText || value
+                      const canAI = aiFields.has(field)
                       return (
                         <div className="border-t border-gray-100 px-4 py-4">
                           <div className="flex items-center justify-between gap-3 mb-2">
@@ -5174,16 +5299,30 @@ export default function ProjectPage() {
                               <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">{label}</p>
                               {hint && <p className="text-xs text-gray-400 mt-0.5">{hint}</p>}
                             </div>
-                            <button
-                              onClick={() => copyPressKitExtra(d.id, field)}
-                              className={`flex-shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
-                                copied ? 'bg-green-100 text-green-800' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                              }`}
-                            >
-                              {copied ? '✓ Copied!' : '📋 Copy'}
-                            </button>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              {canAI && (
+                                <button
+                                  onClick={() => generateAiPressCopy(d.id, field as 'linkedinPost' | 'xPost' | 'instagramCaption')}
+                                  disabled={aiLoading}
+                                  className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
+                                    aiLoading ? 'bg-gray-100 text-gray-400' : 'bg-green-50 hover:bg-green-100 text-green-800 border border-green-200'
+                                  }`}
+                                >
+                                  {aiLoading ? '…' : aiText ? '✦ Regenerate' : '✦ AI Draft'}
+                                </button>
+                              )}
+                              <button
+                                onClick={() => copyPressKitExtra(d.id, field)}
+                                className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
+                                  copied ? 'bg-green-100 text-green-800' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                                }`}
+                              >
+                                {copied ? '✓ Copied!' : '📋 Copy'}
+                              </button>
+                            </div>
                           </div>
-                          <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">{value}</p>
+                          <p className={`text-xs leading-relaxed whitespace-pre-wrap ${aiText ? 'text-gray-800' : 'text-gray-500'}`}>{displayText}</p>
+                          {aiText && <p className="text-xs text-green-700 mt-1.5 font-medium">✦ AI draft — edit before posting</p>}
                         </div>
                       )
                     }
