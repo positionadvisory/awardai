@@ -1329,7 +1329,7 @@ export default function ProjectPage() {
   const generatePressKits = () => {
     setPressKitGenerating(true)
     const outputs: Record<number, string> = {}
-    for (const dirId of selectedPressKitDirs) {
+    for (const dirId of Array.from(selectedPressKitDirs)) {
       const html = buildPressKitEmail(dirId)
       if (html) outputs[dirId] = html
     }
