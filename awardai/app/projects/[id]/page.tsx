@@ -420,7 +420,8 @@ type EntryDraft = {
   chat_history: ChatMessage[] | null
   award_show: string | null
   category: string | null
-  draft_generation: number       // which generation this draft belongs to (1 = first, 2 = first improvement, etc.)
+  draft_generation: number
+  sort_order?: number | null
   created_at?: string
 }
 
