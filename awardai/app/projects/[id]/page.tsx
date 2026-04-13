@@ -51,6 +51,22 @@ type Collaborator = {
   is_lead_credit: boolean
   credit_order: number
 }
+
+// ── Org press profile (lightweight subset of agency_profiles for press kit) ──
+type OrgPressProfile = {
+  org_type: string
+  agency_name: string | null
+  in_house_team_name: string | null
+  tagline: string | null
+  website_url: string | null
+  pr_contact_name: string | null
+  pr_contact_email: string | null
+  pr_contact_phone: string | null
+  linkedin_url: string | null
+  x_handle: string | null
+  instagram_handle: string | null
+  logo_url: string | null
+}
 type TonalBrief = {
   summary: string
   mood: string
@@ -450,7 +466,7 @@ type Evaluation = {
   output?: EvaluationOutput | null
 }
 
-type Tab = 'brief' | 'materials' | 'entries' | 'script' | 'directions'
+type Tab = 'brief' | 'materials' | 'entries' | 'script' | 'directions' | 'presskit'
 
 const SCORE_DIMENSIONS: { key: keyof EvaluationScores; label: string }[] = [
   { key: 'strategic_clarity', label: 'Strategic Clarity' },
@@ -602,6 +618,13 @@ export default function ProjectPage() {
     contact_name: '', contact_email: '', website_url: '', is_lead_credit: false,
   })
 
+  // Press Kit
+  const [orgPressProfile, setOrgPressProfile] = useState<OrgPressProfile | null>(null)
+  const [selectedPressKitDirs, setSelectedPressKitDirs] = useState<Set<number>>(new Set())
+  const [pressKitOutputs, setPressKitOutputs] = useState<Record<number, string>>({}) // dirId → email HTML
+  const [pressKitCopied, setPressKitCopied] = useState<Record<number, boolean>>({})
+  const [pressKitGenerating, setPressKitGenerating] = useState(false)
+
   // Brief editor chat
   const [briefChatOpen, setBriefChatOpen] = useState(false)
   const [briefChatInput, setBriefChatInput] = useState('')
@@ -732,6 +755,18 @@ export default function ProjectPage() {
       .eq('project_id', projectId)
       .order('credit_order')
       .then(({ data }) => { if (!cancelled && data) setCollaborators(data as Collaborator[]) })
+
+    // Fetch org press profile for press kit generation (non-critical — degrades gracefully)
+    supabase.rpc('get_my_org_id').then(({ data: oid }) => {
+      if (!cancelled && oid) {
+        supabase
+          .from('agency_profiles')
+          .select('org_type, agency_name, in_house_team_name, tagline, website_url, pr_contact_name, pr_contact_email, pr_contact_phone, linkedin_url, x_handle, instagram_handle, logo_url')
+          .eq('org_id', oid)
+          .maybeSingle()
+          .then(({ data }) => { if (!cancelled && data) setOrgPressProfile(data as OrgPressProfile) })
+      }
+    })
 
     Promise.all([
       supabase.from('projects').select('*').eq('id', projectId).single(),
@@ -894,6 +929,411 @@ export default function ProjectPage() {
   const handleRemoveCollaborator = async (id: number) => {
     await supabase.from('project_collaborators').delete().eq('id', id)
     setCollaborators(prev => prev.filter(c => c.id !== id))
+  }
+
+  // ── Press Kit helpers ─────────────────────────────────────────────────────
+
+  // Resolve the best content for a single entry draft field
+  const resolveFieldContent = (d: EntryDraft): string => {
+    if (d.custom_text?.trim()) return d.custom_text.trim()
+    if (d.selected === 'b' && d.version_b?.trim()) return d.version_b.trim()
+    if (d.selected === 'c' && d.version_c?.trim()) return d.version_c.trim()
+    return d.version_a?.trim() || ''
+  }
+
+  // Get current-generation fields for a direction, ordered by sort_order
+  const getCurrentDraftFields = (dirId: number): EntryDraft[] => {
+    const dirEntries = entries.filter(e => e.direction_id === dirId && e.field_key !== 'entry')
+    if (dirEntries.length === 0) return []
+    const maxGen = Math.max(...dirEntries.map(e => e.draft_generation ?? 0))
+    return dirEntries
+      .filter(e => (e.draft_generation ?? 0) === maxGen)
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+  }
+
+  // Display name for the submitting org
+  const getOrgDisplayName = (): string => {
+    if (!orgPressProfile) return ''
+    if (orgPressProfile.org_type === 'brand' && orgPressProfile.in_house_team_name) {
+      return orgPressProfile.in_house_team_name
+    }
+    return orgPressProfile.agency_name || ''
+  }
+
+  // Build Outlook-safe HTML press kit for one direction
+  const buildPressKitEmail = (dirId: number): string => {
+    const direction = directions.find(d => d.id === dirId)
+    if (!direction || !project) return ''
+    const fields = getCurrentDraftFields(dirId)
+    const orgName = getOrgDisplayName()
+    const pr = orgPressProfile
+
+    // Colours
+    const green = '#166534'
+    const darkGray = '#111111'
+    const midGray = '#555555'
+    const lightGray = '#888888'
+    const ruleColor = '#eeeeee'
+    const placeholderBg = '#f9fafb'
+    const placeholderBorder = '#d1d5db'
+
+    const rule = `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 20px 0;"><tr><td style="border-top: 1px solid ${ruleColor}; font-size: 0; line-height: 0;">&nbsp;</td></tr></table>`
+
+    // Build credits block
+    const leadCollabs = collaborators.filter(c => c.is_lead_credit)
+    const otherCollabs = collaborators.filter(c => !c.is_lead_credit)
+    const allCredits = [...leadCollabs, ...otherCollabs]
+    let creditsHtml = ''
+    if (orgName || allCredits.length > 0) {
+      const creditItems: string[] = []
+      if (orgName) {
+        creditItems.push(`<strong>${orgName}</strong>${pr?.tagline ? ` — ${pr.tagline}` : ''}`)
+      }
+      for (const c of allCredits) {
+        creditItems.push(`${COLLAB_TYPE_LABELS[c.collaborator_type]}: ${c.collaborator_name}`)
+      }
+      creditsHtml = `
+        <p style="margin: 0 0 6px 0; font-size: 11px; color: ${lightGray}; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">Credits</p>
+        ${creditItems.map(item => `<p style="margin: 0 0 4px 0; font-size: 13px; color: ${midGray};">${item}</p>`).join('')}
+        ${rule}`
+    }
+
+    // Build contact block
+    let contactHtml = ''
+    if (pr?.pr_contact_name || pr?.pr_contact_email) {
+      const contactParts: string[] = []
+      if (pr.pr_contact_name) contactParts.push(`<strong>${pr.pr_contact_name}</strong>`)
+      if (pr.pr_contact_email) contactParts.push(`<a href="mailto:${pr.pr_contact_email}" style="color: ${green}; text-decoration: none;">${pr.pr_contact_email}</a>`)
+      if (pr.pr_contact_phone) contactParts.push(pr.pr_contact_phone)
+      if (pr.website_url) contactParts.push(`<a href="${pr.website_url}" style="color: ${green}; text-decoration: none;">${pr.website_url.replace(/^https?:\/\//, '')}</a>`)
+      const socialParts: string[] = []
+      if (pr.linkedin_url) socialParts.push(`LinkedIn: ${pr.linkedin_url.replace(/^https?:\/\/(www\.)?linkedin\.com\//, '').replace(/\/$/, '')}`)
+      if (pr.x_handle) socialParts.push(`X: @${pr.x_handle.replace(/^@/, '')}`)
+      if (pr.instagram_handle) socialParts.push(`Instagram: @${pr.instagram_handle.replace(/^@/, '')}`)
+      contactHtml = `
+        <p style="margin: 0 0 6px 0; font-size: 11px; color: ${lightGray}; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">Press Contact</p>
+        <p style="margin: 0 0 4px 0; font-size: 13px; color: ${midGray}; line-height: 1.6;">${contactParts.join(' &nbsp;·&nbsp; ')}</p>
+        ${socialParts.length > 0 ? `<p style="margin: 0 0 4px 0; font-size: 12px; color: ${lightGray};">${socialParts.join(' &nbsp;·&nbsp; ')}</p>` : ''}
+        ${rule}`
+    }
+
+    // Entry field sections
+    const fieldsSections = fields.map(f => {
+      const content = resolveFieldContent(f)
+      if (!content) return ''
+      // Preserve line breaks in the content
+      const contentHtml = content.replace(/\n\n/g, '</p><p style="margin: 0 0 14px 0; font-size: 14px; line-height: 1.65; color: ' + darkGray + ';">').replace(/\n/g, '<br>')
+      return `
+        <p style="margin: 0 0 5px 0; font-size: 11px; color: ${lightGray}; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">${f.field_label}</p>
+        <p style="margin: 0 0 20px 0; font-size: 14px; line-height: 1.65; color: ${darkGray};">${contentHtml}</p>`
+    }).filter(Boolean).join('')
+
+    // Date
+    const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+
+    return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin: 0; padding: 0; background: #ffffff;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: #ffffff;">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; font-family: Arial, Helvetica, sans-serif;">
+
+  <!-- INTRO PLACEHOLDER -->
+  <tr><td style="padding: 28px 0 0 0;">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr><td style="padding: 14px 16px; background: ${placeholderBg}; border: 1px dashed ${placeholderBorder}; border-radius: 6px;">
+      <p style="margin: 0; font-size: 13px; color: ${lightGray}; font-style: italic; line-height: 1.5;">
+        [Add your personal introduction here &mdash; who you are, any shared context, and why you&rsquo;re sharing this work with them specifically.]
+      </p>
+    </td></tr>
+    </table>
+  </td></tr>
+
+  <!-- SHOW CONTEXT -->
+  <tr><td style="padding: 28px 0 0 0;">
+    <p style="margin: 0 0 8px 0; font-size: 11px; color: ${lightGray}; text-transform: uppercase; letter-spacing: 0.8px; font-weight: bold;">
+      ${direction.best_show || ''}${direction.best_category ? ' &nbsp;&middot;&nbsp; ' + direction.best_category : ''}
+    </p>
+
+    <!-- CAMPAIGN NAME -->
+    <p style="margin: 0 0 4px 0; font-size: 24px; font-weight: bold; color: ${darkGray}; line-height: 1.2;">
+      ${project.campaign_name}
+    </p>
+
+    <!-- CLIENT -->
+    ${project.client_name ? `<p style="margin: 0 0 24px 0; font-size: 14px; color: ${lightGray};">for ${project.client_name}</p>` : `<p style="margin: 0 0 24px 0;"></p>`}
+
+    ${direction.hook ? `
+    <!-- HOOK -->
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 24px;">
+    <tr>
+      <td width="3" style="background: ${green}; border-radius: 2px;">&nbsp;</td>
+      <td width="12">&nbsp;</td>
+      <td>
+        <p style="margin: 0; font-size: 15px; color: ${darkGray}; font-style: italic; line-height: 1.6;">${direction.hook}</p>
+      </td>
+    </tr>
+    </table>` : ''}
+  </td></tr>
+
+  ${rule}
+
+  <!-- ENTRY FIELDS -->
+  <tr><td>
+    ${fieldsSections || `<p style="font-size: 14px; color: ${lightGray}; font-style: italic;">Generate an entry draft to populate this section.</p>`}
+  </td></tr>
+
+  ${rule}
+
+  <!-- CREDITS -->
+  <tr><td>
+    ${creditsHtml}
+  </td></tr>
+
+  <!-- CONTACT -->
+  <tr><td>
+    ${contactHtml || ''}
+  </td></tr>
+
+  <!-- CLOSE PLACEHOLDER -->
+  <tr><td style="padding: 0 0 28px 0;">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr><td style="padding: 14px 16px; background: ${placeholderBg}; border: 1px dashed ${placeholderBorder}; border-radius: 6px;">
+      <p style="margin: 0; font-size: 13px; color: ${lightGray}; font-style: italic; line-height: 1.5;">
+        [Your personal sign-off &mdash; e.g. &ldquo;Happy to share assets or a full case film. Let me know if you&rsquo;d like to talk through the work. Best, [Name]&rdquo;]
+      </p>
+    </td></tr>
+    </table>
+  </td></tr>
+
+  <!-- FOOTER -->
+  <tr><td style="padding: 16px 0; border-top: 1px solid ${ruleColor};">
+    <p style="margin: 0; font-size: 11px; color: ${lightGray};">Generated by Shortlist &middot; ${today}</p>
+  </td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>`
+  }
+
+  // Copy formatted HTML to clipboard so it pastes as rich text in Outlook
+  const copyPressKitToClipboard = async (dirId: number) => {
+    const html = pressKitOutputs[dirId]
+    if (!html) return
+    try {
+      if (typeof ClipboardItem !== 'undefined') {
+        const blob = new Blob([html], { type: 'text/html' })
+        await navigator.clipboard.write([new ClipboardItem({ 'text/html': blob })])
+      } else {
+        // Fallback: create a temp div, select, copy via execCommand
+        const div = document.createElement('div')
+        div.innerHTML = html
+        div.style.position = 'fixed'
+        div.style.opacity = '0'
+        div.style.pointerEvents = 'none'
+        document.body.appendChild(div)
+        const range = document.createRange()
+        range.selectNode(div)
+        window.getSelection()?.removeAllRanges()
+        window.getSelection()?.addRange(range)
+        document.execCommand('copy')
+        window.getSelection()?.removeAllRanges()
+        document.body.removeChild(div)
+      }
+      setPressKitCopied(prev => ({ ...prev, [dirId]: true }))
+      setTimeout(() => setPressKitCopied(prev => ({ ...prev, [dirId]: false })), 2500)
+    } catch {
+      // Silent fail — clipboard access may be blocked in some contexts
+    }
+  }
+
+  // Download PDF via jsPDF (dynamic import to avoid SSR issues)
+  const downloadPressKitPDF = async (dirId: number) => {
+    const direction = directions.find(d => d.id === dirId)
+    if (!direction || !project) return
+    const fields = getCurrentDraftFields(dirId)
+    const orgName = getOrgDisplayName()
+    const pr = orgPressProfile
+
+    try {
+      const { jsPDF } = await import('jspdf' as never) as { jsPDF: new (o?: Record<string, unknown>) => {
+        setFillColor: (r: number, g: number, b: number) => void
+        rect: (x: number, y: number, w: number, h: number, style: string) => void
+        setTextColor: (r: number, g: number, b: number) => void
+        setFontSize: (size: number) => void
+        setFont: (font: string, style: string) => void
+        text: (text: string, x: number, y: number, opts?: Record<string, unknown>) => void
+        splitTextToSize: (text: string, maxWidth: number) => string[]
+        setDrawColor: (r: number, g: number, b: number) => void
+        line: (x1: number, y1: number, x2: number, y2: number) => void
+        addPage: () => void
+        save: (filename: string) => void
+        internal: { pageSize: { getWidth: () => number; getHeight: () => number } }
+      } }
+
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      const pageW = doc.internal.pageSize.getWidth()
+      const pageH = doc.internal.pageSize.getHeight()
+      const margin = 20
+      const contentW = pageW - margin * 2
+      let y = 0
+
+      const checkPage = (neededHeight: number) => {
+        if (y + neededHeight > pageH - margin) { doc.addPage(); y = margin }
+      }
+
+      // Header bar
+      doc.setFillColor(22, 101, 52) // green-800
+      doc.rect(0, 0, pageW, 18, 'F')
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(8)
+      doc.setFont('helvetica', 'bold')
+      const headerText = ['PRESS KIT', direction.best_show, direction.best_category].filter(Boolean).join('  ·  ')
+      doc.text(headerText, margin, 11)
+      y = 28
+
+      // Campaign name
+      doc.setTextColor(17, 17, 17)
+      doc.setFontSize(20)
+      doc.setFont('helvetica', 'bold')
+      const nameLines = doc.splitTextToSize(project.campaign_name, contentW)
+      nameLines.forEach((line: string) => { doc.text(line, margin, y); y += 8 })
+      y += 2
+
+      // Client
+      if (project.client_name) {
+        doc.setFontSize(11)
+        doc.setFont('helvetica', 'normal')
+        doc.setTextColor(100, 100, 100)
+        doc.text(`for ${project.client_name}`, margin, y)
+        y += 7
+      }
+
+      // Org name + tagline
+      if (orgName) {
+        doc.setFontSize(10)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(22, 101, 52)
+        doc.text(orgName + (pr?.tagline ? `  —  ${pr.tagline}` : ''), margin, y)
+        y += 6
+      }
+
+      // Hook
+      if (direction.hook) {
+        y += 4
+        doc.setDrawColor(200, 200, 200)
+        doc.line(margin, y, pageW - margin, y)
+        y += 7
+        doc.setFontSize(12)
+        doc.setFont('helvetica', 'bolditalic')
+        doc.setTextColor(34, 34, 34)
+        const hookLines = doc.splitTextToSize(`"${direction.hook}"`, contentW)
+        checkPage(hookLines.length * 6 + 10)
+        hookLines.forEach((line: string) => { doc.text(line, margin, y); y += 6 })
+        y += 4
+      }
+
+      // Separator
+      doc.setDrawColor(220, 220, 220)
+      doc.line(margin, y, pageW - margin, y)
+      y += 8
+
+      // Entry fields
+      for (const f of fields) {
+        const content = resolveFieldContent(f)
+        if (!content) continue
+        checkPage(20)
+        doc.setFontSize(8)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(130, 130, 130)
+        doc.text(f.field_label.toUpperCase(), margin, y)
+        y += 5
+        doc.setFontSize(11)
+        doc.setFont('helvetica', 'normal')
+        doc.setTextColor(34, 34, 34)
+        const contentLines = doc.splitTextToSize(content, contentW)
+        for (const line of contentLines) {
+          checkPage(6)
+          doc.text(line, margin, y)
+          y += 5.5
+        }
+        y += 5
+      }
+
+      // Credits
+      const leadCollabs = collaborators.filter(c => c.is_lead_credit)
+      const otherCollabs = collaborators.filter(c => !c.is_lead_credit)
+      const allCredits = [...leadCollabs, ...otherCollabs]
+      if (orgName || allCredits.length > 0) {
+        checkPage(20)
+        doc.setDrawColor(220, 220, 220)
+        doc.line(margin, y, pageW - margin, y)
+        y += 8
+        doc.setFontSize(8)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(130, 130, 130)
+        doc.text('CREDITS', margin, y)
+        y += 5
+        doc.setFontSize(11)
+        doc.setFont('helvetica', 'normal')
+        doc.setTextColor(34, 34, 34)
+        if (orgName) { doc.text(orgName, margin, y); y += 5.5 }
+        for (const c of allCredits) {
+          checkPage(6)
+          doc.text(`${COLLAB_TYPE_LABELS[c.collaborator_type]}: ${c.collaborator_name}`, margin, y)
+          y += 5.5
+        }
+        y += 3
+      }
+
+      // Contact
+      if (pr?.pr_contact_name || pr?.pr_contact_email) {
+        checkPage(20)
+        doc.setDrawColor(220, 220, 220)
+        doc.line(margin, y, pageW - margin, y)
+        y += 8
+        doc.setFontSize(8)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(130, 130, 130)
+        doc.text('PRESS CONTACT', margin, y)
+        y += 5
+        doc.setFontSize(11)
+        doc.setFont('helvetica', 'normal')
+        doc.setTextColor(34, 34, 34)
+        const contactParts = [pr.pr_contact_name, pr.pr_contact_email, pr.pr_contact_phone, pr.website_url].filter(Boolean)
+        doc.text(contactParts.join('  ·  '), margin, y)
+        y += 5.5
+      }
+
+      // Footer
+      doc.setFontSize(8)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(170, 170, 170)
+      const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+      doc.text(`Generated by Shortlist  ·  ${today}`, margin, pageH - 10)
+
+      const safeShow = (direction.best_show || 'show').replace(/[^a-z0-9]/gi, '-').toLowerCase()
+      const safeCampaign = project.campaign_name.replace(/[^a-z0-9]/gi, '-').toLowerCase()
+      doc.save(`${safeCampaign}-${safeShow}-press-kit.pdf`)
+    } catch (err) {
+      console.error('Press kit PDF generation failed:', err)
+      alert('PDF generation failed. Make sure jspdf is installed: npm install jspdf')
+    }
+  }
+
+  // Generate press kits for all selected directions
+  const generatePressKits = () => {
+    setPressKitGenerating(true)
+    const outputs: Record<number, string> = {}
+    for (const dirId of selectedPressKitDirs) {
+      const html = buildPressKitEmail(dirId)
+      if (html) outputs[dirId] = html
+    }
+    setPressKitOutputs(prev => ({ ...prev, ...outputs }))
+    setPressKitGenerating(false)
   }
 
   const generateTonalBrief = async (scriptText?: string) => {
@@ -1968,6 +2408,7 @@ export default function ProjectPage() {
     { key: 'materials', label: 'Materials', count: project.materials?.length || 0 },
     { key: 'directions', label: 'Directions', count: directions.length },
     { key: 'entries', label: 'Entries', count: uniqueDirectionsWithEntries.length },
+    { key: 'presskit', label: 'Press Kit' },
     { key: 'script', label: 'Video Script' },
   ]
 
@@ -4505,6 +4946,177 @@ export default function ProjectPage() {
                 </p>
               </div>
             )}
+
+          </div>
+        )}
+
+        {/* ── PRESS KIT ── */}
+        {tab === 'presskit' && (
+          <div className="max-w-2xl">
+
+            {/* Nudge: no press contact configured */}
+            {!orgPressProfile?.pr_contact_name && !orgPressProfile?.pr_contact_email && (
+              <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-6">
+                <span className="text-amber-500 text-base mt-0.5">⚠</span>
+                <div>
+                  <p className="text-sm text-amber-800 font-medium">Press contact not configured</p>
+                  <p className="text-xs text-amber-700 mt-0.5">Add your press contact details and agency profile on the <button onClick={() => window.open('/projects', '_self')} className="underline">Projects page</button> to include them in generated press kits.</p>
+                </div>
+              </div>
+            )}
+
+            {/* Header + Select All */}
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-sm font-semibold text-gray-800">Select Directions to Export</h2>
+                <p className="text-xs text-gray-400 mt-0.5">One press kit per direction. Directions without an entry draft are unavailable.</p>
+              </div>
+              {directions.length > 0 && (
+                <div className="flex gap-3 flex-shrink-0 ml-4">
+                  <button
+                    onClick={() => {
+                      const eligibleIds = directions.filter(d => getCurrentDraftFields(d.id).length > 0).map(d => d.id)
+                      setSelectedPressKitDirs(new Set(eligibleIds))
+                    }}
+                    className="text-xs text-green-700 hover:text-green-600 transition-colors"
+                  >Select all</button>
+                  <button
+                    onClick={() => setSelectedPressKitDirs(new Set())}
+                    className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
+                  >Clear</button>
+                </div>
+              )}
+            </div>
+
+            {/* Direction list */}
+            {directions.length === 0 ? (
+              <div className="bg-white border border-gray-200 rounded-xl p-8 text-center text-sm text-gray-400">
+                No directions yet. Generate directions first, then create entry drafts before producing press kits.
+              </div>
+            ) : (
+              <div className="space-y-2 mb-6">
+                {directions.map(d => {
+                  const hasFields = getCurrentDraftFields(d.id).length > 0
+                  const isSelected = selectedPressKitDirs.has(d.id)
+                  const isGenerated = !!pressKitOutputs[d.id]
+                  return (
+                    <div
+                      key={d.id}
+                      className={`bg-white border rounded-xl px-4 py-3 transition-colors ${
+                        isSelected ? 'border-green-400 bg-green-50/30' : 'border-gray-200'
+                      } ${!hasFields ? 'opacity-50' : ''}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          disabled={!hasFields}
+                          onChange={e => {
+                            setSelectedPressKitDirs(prev => {
+                              const next = new Set(prev)
+                              if (e.target.checked) next.add(d.id)
+                              else next.delete(d.id)
+                              return next
+                            })
+                          }}
+                          className="w-4 h-4 accent-green-700 flex-shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {d.best_show && d.best_category ? `${d.best_show} — ${d.best_category}` : d.name}
+                          </p>
+                          {d.hook && (
+                            <p className="text-xs text-gray-400 mt-0.5 truncate italic">{d.hook}</p>
+                          )}
+                          {!hasFields && (
+                            <p className="text-xs text-amber-600 mt-0.5">No entry draft — generate one first</p>
+                          )}
+                          {hasFields && (
+                            <p className="text-xs text-gray-400 mt-0.5">{getCurrentDraftFields(d.id).length} fields ready</p>
+                          )}
+                        </div>
+                        {isGenerated && (
+                          <span className="text-xs text-green-700 font-medium flex-shrink-0">✓ Ready</span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Generate button */}
+            {directions.length > 0 && (
+              <button
+                onClick={generatePressKits}
+                disabled={selectedPressKitDirs.size === 0 || pressKitGenerating}
+                className="w-full bg-green-800 hover:bg-green-700 disabled:opacity-40 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-colors mb-8"
+              >
+                {pressKitGenerating
+                  ? 'Generating…'
+                  : selectedPressKitDirs.size === 0
+                  ? 'Select at least one direction'
+                  : `Generate ${selectedPressKitDirs.size} Press Kit${selectedPressKitDirs.size > 1 ? 's' : ''}`}
+              </button>
+            )}
+
+            {/* Generated outputs */}
+            {Object.keys(pressKitOutputs).length > 0 && (
+              <div className="space-y-4">
+                <h2 className="text-sm font-semibold text-gray-800">Generated Press Kits</h2>
+                {directions
+                  .filter(d => pressKitOutputs[d.id])
+                  .map(d => (
+                    <div key={d.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {d.best_show && d.best_category ? `${d.best_show} — ${d.best_category}` : d.name}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-0.5">Press kit ready</p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {/* PDF download */}
+                          <button
+                            onClick={() => downloadPressKitPDF(d.id)}
+                            className="flex items-center gap-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium px-3 py-1.5 rounded-lg transition-colors"
+                          >
+                            ⬇ PDF
+                          </button>
+                          {/* Copy for Outlook */}
+                          <button
+                            onClick={() => copyPressKitToClipboard(d.id)}
+                            className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
+                              pressKitCopied[d.id]
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-green-800 hover:bg-green-700 text-white'
+                            }`}
+                          >
+                            {pressKitCopied[d.id] ? '✓ Copied!' : '📋 Copy for Outlook'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Preview (first 300 chars of visible text) */}
+                      <div className="px-4 py-3 bg-gray-50">
+                        <p className="text-xs text-gray-400 mb-2 font-medium uppercase tracking-wide">Preview</p>
+                        <div
+                          className="text-xs text-gray-600 leading-relaxed overflow-hidden"
+                          style={{ maxHeight: '120px', WebkitMaskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)' }}
+                          dangerouslySetInnerHTML={{ __html: pressKitOutputs[d.id] }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+
+            {/* Usage note */}
+            <div className="mt-8 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl">
+              <p className="text-xs text-gray-500 leading-relaxed">
+                <strong className="text-gray-700">How to use Copy for Outlook:</strong> Click the button, then open a new email in Outlook and paste (Cmd/Ctrl+V). The formatted content will paste with styling intact. The grey placeholder sections show you where to add your personal introduction and sign-off before sending.
+              </p>
+            </div>
 
           </div>
         )}
