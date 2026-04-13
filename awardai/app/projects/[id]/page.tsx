@@ -2210,7 +2210,7 @@ export default function ProjectPage() {
       }
       const newDirs: Direction[] = data.directions || []
       setDirections(prev => [...newDirs, ...prev])
-      setNewDirectionIds(prev => new Set([...prev, ...newDirs.map(d => d.id)]))
+      setNewDirectionIds(prev => new Set(Array.from(prev).concat(newDirs.map(d => d.id))))
     } catch (err) {
       setGenerateError(formatError({ message: 'Network error — check your connection and try again.', retryable: true, code: 'DIR-NET' }))
     } finally { setGenerating(false) }
@@ -2249,7 +2249,7 @@ export default function ProjectPage() {
       if (data.directions?.length) {
         const smartNewDirs: Direction[] = data.directions
         setDirections(prev => [...smartNewDirs, ...prev])
-        setNewDirectionIds(prev => new Set([...prev, ...smartNewDirs.map(d => d.id)]))
+        setNewDirectionIds(prev => new Set(Array.from(prev).concat(smartNewDirs.map(d => d.id))))
         setTab('directions')
       }
     } catch (err) {
