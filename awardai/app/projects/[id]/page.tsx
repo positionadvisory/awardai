@@ -67,6 +67,14 @@ type OrgPressProfile = {
   instagram_handle: string | null
   logo_url: string | null
 }
+type PressKitExtra = {
+  quickSummary: string
+  pressHook: string
+  linkedinPost: string
+  xPost: string
+  instagramCaption: string
+}
+
 type TonalBrief = {
   summary: string
   mood: string
@@ -420,8 +428,7 @@ type EntryDraft = {
   chat_history: ChatMessage[] | null
   award_show: string | null
   category: string | null
-  draft_generation: number
-  sort_order?: number | null
+  draft_generation: number       // which generation this draft belongs to (1 = first, 2 = first improvement, etc.)
   created_at?: string
 }
 
@@ -623,7 +630,9 @@ export default function ProjectPage() {
   const [orgPressProfile, setOrgPressProfile] = useState<OrgPressProfile | null>(null)
   const [selectedPressKitDirs, setSelectedPressKitDirs] = useState<Set<number>>(new Set())
   const [pressKitOutputs, setPressKitOutputs] = useState<Record<number, string>>({}) // dirId → email HTML
+  const [pressKitExtras, setPressKitExtras] = useState<Record<number, PressKitExtra>>({}) // dirId → extra sections
   const [pressKitCopied, setPressKitCopied] = useState<Record<number, boolean>>({})
+  const [pressKitCopiedExtra, setPressKitCopiedExtra] = useState<Record<string, boolean>>({}) // key: `${dirId}-${field}`
   const [pressKitGenerating, setPressKitGenerating] = useState(false)
 
   // Brief editor chat
@@ -1120,6 +1129,85 @@ export default function ProjectPage() {
 </html>`
   }
 
+  // Build social / summary extras for one direction
+  const buildPressKitExtra = (dirId: number): PressKitExtra => {
+    const direction = directions.find(d => d.id === dirId)
+    const empty: PressKitExtra = { quickSummary: '', pressHook: '', linkedinPost: '', xPost: '', instagramCaption: '' }
+    if (!direction || !project) return empty
+
+    const fields = getCurrentDraftFields(dirId)
+    const orgName = getOrgDisplayName()
+    const show = direction.best_show || ''
+    const category = direction.best_category || ''
+    const hook = direction.hook || direction.angle || ''
+    const campaign = project.campaign_name
+    const client = project.client_name || ''
+    const showCategory = [category, show].filter(Boolean).join(' at ')
+
+    // First entry field body (for LinkedIn/summary depth)
+    const firstField = fields[0] ? resolveFieldContent(fields[0]) : ''
+    const bodySnippet = firstField ? firstField.replace(/\n+/g, ' ').trim().slice(0, 220) + (firstField.length > 220 ? '…' : '') : ''
+
+    // ── Quick Summary (2–3 sentences for email intros / press release openers) ──
+    const summaryParts: string[] = []
+    summaryParts.push(`${campaign}${client ? ` for ${client}` : ''}${orgName ? ` by ${orgName}` : ''} is entered in ${showCategory || 'the show'}.`)
+    if (hook) summaryParts.push(hook)
+    if (bodySnippet && bodySnippet !== hook) summaryParts.push(bodySnippet)
+    const quickSummary = summaryParts.join(' ')
+
+    // ── Press Hook (single punchy line tailored to show/category) ──
+    const pressHook = hook
+      ? `${campaign}${client ? ` for ${client}` : ''}: ${hook}`
+      : `${campaign}${client ? ` for ${client}` : ''}${orgName ? `, by ${orgName}` : ''} — entered in ${showCategory || 'the show'}.`
+
+    // ── LinkedIn Post ──
+    const linkedinParts: string[] = []
+    linkedinParts.push(`We've entered ${campaign}${client ? ` for ${client}` : ''} in ${showCategory || 'the show'}.`)
+    if (hook) linkedinParts.push(`\n${hook}`)
+    if (bodySnippet) linkedinParts.push(`\n${bodySnippet}`)
+    if (orgName) linkedinParts.push(`\n— ${orgName}`)
+    const showTag = show ? `#${show.toLowerCase().replace(/[^a-z0-9]/g, '')}` : ''
+    const lgHashtags = ['#awards', showTag, '#advertising', '#creative'].filter(Boolean).join(' ')
+    linkedinParts.push(`\n\n${lgHashtags}`)
+    const linkedinPost = linkedinParts.join('\n')
+
+    // ── X / Twitter Post (≤ 280 chars) ──
+    const xCore = `${campaign}${client ? ` for ${client}` : ''}${showCategory ? ` — entered in ${showCategory}` : ''}. ${hook}`.trim()
+    const xPost = xCore.length > 277 ? xCore.slice(0, 274) + '…' : xCore
+
+    // ── Instagram Caption ──
+    const igParts: string[] = []
+    igParts.push(`${campaign}${client ? ` for ${client}` : ''} 🏆`)
+    if (hook) igParts.push(hook)
+    if (showCategory) igParts.push(`\nEntered in ${showCategory}.`)
+    if (orgName) igParts.push(`\n${orgName}`)
+    const igTag = show ? `#${show.toLowerCase().replace(/[^a-z0-9]/g, '')}` : ''
+    const igHashtags = ['#awards', igTag, '#advertising', '#creative', '#design'].filter(Boolean).join(' ')
+    igParts.push(`\n\n${igHashtags}`)
+    const instagramCaption = igParts.join('\n')
+
+    return { quickSummary, pressHook, linkedinPost, xPost, instagramCaption }
+  }
+
+  // Copy plain text extra section to clipboard
+  const copyPressKitExtra = async (dirId: number, field: keyof PressKitExtra) => {
+    const text = pressKitExtras[dirId]?.[field]
+    if (!text) return
+    const key = `${dirId}-${field}`
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const el = document.createElement('textarea')
+      el.value = text
+      document.body.appendChild(el)
+      el.select()
+      document.execCommand('copy')
+      document.body.removeChild(el)
+    }
+    setPressKitCopiedExtra(prev => ({ ...prev, [key]: true }))
+    setTimeout(() => setPressKitCopiedExtra(prev => ({ ...prev, [key]: false })), 2500)
+  }
+
   // Copy formatted HTML to clipboard so it pastes as rich text in Outlook
   const copyPressKitToClipboard = async (dirId: number) => {
     const html = pressKitOutputs[dirId]
@@ -1329,11 +1417,14 @@ export default function ProjectPage() {
   const generatePressKits = () => {
     setPressKitGenerating(true)
     const outputs: Record<number, string> = {}
+    const extras: Record<number, PressKitExtra> = {}
     for (const dirId of Array.from(selectedPressKitDirs)) {
       const html = buildPressKitEmail(dirId)
       if (html) outputs[dirId] = html
+      extras[dirId] = buildPressKitExtra(dirId)
     }
     setPressKitOutputs(prev => ({ ...prev, ...outputs }))
+    setPressKitExtras(prev => ({ ...prev, ...extras }))
     setPressKitGenerating(false)
   }
 
@@ -5063,59 +5154,138 @@ export default function ProjectPage() {
 
             {/* Generated outputs */}
             {Object.keys(pressKitOutputs).length > 0 && (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <h2 className="text-sm font-semibold text-gray-800">Generated Press Kits</h2>
                 {directions
                   .filter(d => pressKitOutputs[d.id])
-                  .map(d => (
-                    <div key={d.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">
-                            {d.best_show && d.best_category ? `${d.best_show} — ${d.best_category}` : d.name}
-                          </p>
-                          <p className="text-xs text-gray-400 mt-0.5">Press kit ready</p>
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          {/* PDF download */}
-                          <button
-                            onClick={() => downloadPressKitPDF(d.id)}
-                            className="flex items-center gap-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium px-3 py-1.5 rounded-lg transition-colors"
-                          >
-                            ⬇ PDF
-                          </button>
-                          {/* Copy for Outlook */}
-                          <button
-                            onClick={() => copyPressKitToClipboard(d.id)}
-                            className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
-                              pressKitCopied[d.id]
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-green-800 hover:bg-green-700 text-white'
-                            }`}
-                          >
-                            {pressKitCopied[d.id] ? '✓ Copied!' : '📋 Copy for Outlook'}
-                          </button>
-                        </div>
-                      </div>
+                  .map(d => {
+                    const extra = pressKitExtras[d.id]
+                    const dirLabel = d.best_show && d.best_category ? `${d.best_show} — ${d.best_category}` : d.name
 
-                      {/* Preview (first 300 chars of visible text) */}
-                      <div className="px-4 py-3 bg-gray-50">
-                        <p className="text-xs text-gray-400 mb-2 font-medium uppercase tracking-wide">Preview</p>
-                        <div
-                          className="text-xs text-gray-600 leading-relaxed overflow-hidden"
-                          style={{ maxHeight: '120px', WebkitMaskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)' }}
-                          dangerouslySetInnerHTML={{ __html: pressKitOutputs[d.id] }}
-                        />
+                    // Helper to render a plain-text copyable section
+                    const ExtraSection = ({ label, field, value, hint }: { label: string; field: keyof PressKitExtra; value: string; hint?: string }) => {
+                      const key = `${d.id}-${field}`
+                      const copied = pressKitCopiedExtra[key]
+                      return (
+                        <div className="border-t border-gray-100 px-4 py-4">
+                          <div className="flex items-center justify-between gap-3 mb-2">
+                            <div>
+                              <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">{label}</p>
+                              {hint && <p className="text-xs text-gray-400 mt-0.5">{hint}</p>}
+                            </div>
+                            <button
+                              onClick={() => copyPressKitExtra(d.id, field)}
+                              className={`flex-shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
+                                copied ? 'bg-green-100 text-green-800' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                              }`}
+                            >
+                              {copied ? '✓ Copied!' : '📋 Copy'}
+                            </button>
+                          </div>
+                          <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">{value}</p>
+                        </div>
+                      )
+                    }
+
+                    return (
+                      <div key={d.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+
+                        {/* Card header */}
+                        <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-gray-900 truncate">{dirLabel}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">{d.name}</p>
+                          </div>
+                        </div>
+
+                        {/* ── Outlook Email ── */}
+                        <div className="border-t border-gray-100 px-4 py-4">
+                          <div className="flex items-center justify-between gap-3 mb-3">
+                            <div>
+                              <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Outlook Email</p>
+                              <p className="text-xs text-gray-400 mt-0.5">Formatted press email — paste directly into Outlook</p>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <button
+                                onClick={() => downloadPressKitPDF(d.id)}
+                                className="flex items-center gap-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium px-3 py-1.5 rounded-lg transition-colors"
+                              >
+                                ⬇ PDF
+                              </button>
+                              <button
+                                onClick={() => copyPressKitToClipboard(d.id)}
+                                className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
+                                  pressKitCopied[d.id]
+                                    ? 'bg-green-100 text-green-800'
+                                    : 'bg-green-800 hover:bg-green-700 text-white'
+                                }`}
+                              >
+                                {pressKitCopied[d.id] ? '✓ Copied!' : '📋 Copy for Outlook'}
+                              </button>
+                            </div>
+                          </div>
+                          <div
+                            className="text-xs text-gray-600 leading-relaxed overflow-hidden bg-gray-50 rounded-lg px-3 py-2"
+                            style={{ maxHeight: '100px', WebkitMaskImage: 'linear-gradient(to bottom, black 50%, transparent 100%)' }}
+                            dangerouslySetInnerHTML={{ __html: pressKitOutputs[d.id] }}
+                          />
+                        </div>
+
+                        {/* ── Extra sections ── */}
+                        {extra && (
+                          <>
+                            {extra.quickSummary && (
+                              <ExtraSection
+                                label="Quick Summary"
+                                field="quickSummary"
+                                value={extra.quickSummary}
+                                hint="2–3 sentences for email intros or press release openers"
+                              />
+                            )}
+                            {extra.pressHook && (
+                              <ExtraSection
+                                label={`Press Hook — ${d.best_show || 'Show'}`}
+                                field="pressHook"
+                                value={extra.pressHook}
+                                hint="Single punchy line specific to this show and category"
+                              />
+                            )}
+                            {extra.linkedinPost && (
+                              <ExtraSection
+                                label="LinkedIn Post"
+                                field="linkedinPost"
+                                value={extra.linkedinPost}
+                                hint="Professional announcement — edit before posting"
+                              />
+                            )}
+                            {extra.xPost && (
+                              <ExtraSection
+                                label="X / Twitter Post"
+                                field="xPost"
+                                value={extra.xPost}
+                                hint={`${extra.xPost.length} / 280 characters`}
+                              />
+                            )}
+                            {extra.instagramCaption && (
+                              <ExtraSection
+                                label="Instagram Caption"
+                                field="instagramCaption"
+                                value={extra.instagramCaption}
+                                hint="Edit hashtags and emoji to suit your brand voice"
+                              />
+                            )}
+                          </>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
               </div>
             )}
 
             {/* Usage note */}
             <div className="mt-8 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl">
               <p className="text-xs text-gray-500 leading-relaxed">
-                <strong className="text-gray-700">How to use Copy for Outlook:</strong> Click the button, then open a new email in Outlook and paste (Cmd/Ctrl+V). The formatted content will paste with styling intact. The grey placeholder sections show you where to add your personal introduction and sign-off before sending.
+                <strong className="text-gray-700">How to use Copy for Outlook:</strong> Click the button, then open a new email in Outlook and paste (Cmd/Ctrl+V). The formatted content will paste with styling intact. The grey placeholder sections show you where to add your personal introduction and sign-off before sending. All other sections copy as plain text.
               </p>
             </div>
 
