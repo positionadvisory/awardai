@@ -632,8 +632,10 @@ export default function ProjectPage() {
   const [selectedPressKitDirs, setSelectedPressKitDirs] = useState<Set<number>>(new Set())
   const [pressKitOutputs, setPressKitOutputs] = useState<Record<number, string>>({}) // dirId → email HTML
   const [pressKitExtras, setPressKitExtras] = useState<Record<number, PressKitExtra>>({}) // dirId → extra sections
-  const [pressKitAiCopy, setPressKitAiCopy] = useState<Record<string, string>>({}) // key: `${dirId}-${field}`
+  const [pressKitAiCopy, setPressKitAiCopy] = useState<Record<string, string>>({}) // key: `${dirId}-${field}` or `${dirId}-pressHook-${target}`
   const [pressKitAiLoading, setPressKitAiLoading] = useState<Record<string, boolean>>({})
+  const [pressTargets, setPressTargets] = useState<Record<number, string[]>>({}) // dirId → selected press targets
+  const [pressHookCopied, setPressHookCopied] = useState<Record<string, boolean>>({})
   const [pressKitCopied, setPressKitCopied] = useState<Record<number, boolean>>({})
   const [pressKitCopiedExtra, setPressKitCopiedExtra] = useState<Record<string, boolean>>({}) // key: `${dirId}-${field}`
   const [pressKitGenerating, setPressKitGenerating] = useState(false)
@@ -1211,9 +1213,14 @@ export default function ProjectPage() {
     setTimeout(() => setPressKitCopiedExtra(prev => ({ ...prev, [key]: false })), 2500)
   }
 
-  // Generate AI-drafted social copy for one direction + format
-  const generateAiPressCopy = async (dirId: number, field: 'linkedinPost' | 'xPost' | 'instagramCaption') => {
-    const formatMap: Record<string, string> = { linkedinPost: 'linkedin', xPost: 'x', instagramCaption: 'instagram' }
+  // Generate AI-drafted copy for one direction + field (social + quick summary)
+  const generateAiPressCopy = async (dirId: number, field: 'linkedinPost' | 'xPost' | 'instagramCaption' | 'quickSummary') => {
+    const formatMap: Record<string, string> = {
+      linkedinPost: 'linkedin',
+      xPost: 'x',
+      instagramCaption: 'instagram',
+      quickSummary: 'quicksummary',
+    }
     const key = `${dirId}-${field}`
     setPressKitAiLoading(prev => ({ ...prev, [key]: true }))
     try {
@@ -1235,6 +1242,51 @@ export default function ProjectPage() {
     } finally {
       setPressKitAiLoading(prev => ({ ...prev, [key]: false }))
     }
+  }
+
+  // Generate AI press hooks for all selected press targets for a direction
+  const generateAiPressHooks = async (dirId: number) => {
+    const targets = pressTargets[dirId] ?? []
+    if (targets.length === 0) return
+    await Promise.all(targets.map(async (target) => {
+      const key = `${dirId}-pressHook-${target}`
+      setPressKitAiLoading(prev => ({ ...prev, [key]: true }))
+      try {
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-press-copy`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+            },
+            body: JSON.stringify({ direction_id: dirId, format: 'presshook', press_target: target, project_id: projectId }),
+          }
+        )
+        const data = await res.json()
+        if (data.copy) setPressKitAiCopy(prev => ({ ...prev, [key]: data.copy }))
+      } catch (err) {
+        console.error('AI press hook failed:', err)
+      } finally {
+        setPressKitAiLoading(prev => ({ ...prev, [key]: false }))
+      }
+    }))
+  }
+
+  // Copy a plain text string to clipboard with keyed confirmation
+  const copyTextWithConfirm = async (key: string, text: string, setter: React.Dispatch<React.SetStateAction<Record<string, boolean>>>) => {
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const el = document.createElement('textarea')
+      el.value = text
+      document.body.appendChild(el)
+      el.select()
+      document.execCommand('copy')
+      document.body.removeChild(el)
+    }
+    setter(prev => ({ ...prev, [key]: true }))
+    setTimeout(() => setter(prev => ({ ...prev, [key]: false })), 2500)
   }
 
   // Copy formatted HTML to clipboard so it pastes as rich text in Outlook
@@ -5283,8 +5335,13 @@ export default function ProjectPage() {
                     const extra = pressKitExtras[d.id]
                     const dirLabel = d.best_show && d.best_category ? `${d.best_show} — ${d.best_category}` : d.name
 
+                    // Press target options for press hook AI generation
+                    const PRESS_TARGET_OPTIONS = ['Local', 'Regional', 'Global', 'Trade / Industry', 'Consumer', 'Broadcast']
+                    const dirPressTargets = pressTargets[d.id] ?? []
+                    const anyPressHookLoading = PRESS_TARGET_OPTIONS.some(t => pressKitAiLoading[`${d.id}-pressHook-${t}`])
+
                     // Helper to render a plain-text copyable section (with optional AI generation)
-                    const aiFields = new Set<keyof PressKitExtra>(['linkedinPost', 'xPost', 'instagramCaption'])
+                    const aiFields = new Set<keyof PressKitExtra>(['quickSummary', 'linkedinPost', 'xPost', 'instagramCaption'])
                     const ExtraSection = ({ label, field, value, hint }: { label: string; field: keyof PressKitExtra; value: string; hint?: string }) => {
                       const key = `${d.id}-${field}`
                       const copied = pressKitCopiedExtra[key]
@@ -5302,7 +5359,7 @@ export default function ProjectPage() {
                             <div className="flex items-center gap-2 flex-shrink-0">
                               {canAI && (
                                 <button
-                                  onClick={() => generateAiPressCopy(d.id, field as 'linkedinPost' | 'xPost' | 'instagramCaption')}
+                                  onClick={() => generateAiPressCopy(d.id, field as 'linkedinPost' | 'xPost' | 'instagramCaption' | 'quickSummary')}
                                   disabled={aiLoading}
                                   className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
                                     aiLoading ? 'bg-gray-100 text-gray-400' : 'bg-green-50 hover:bg-green-100 text-green-800 border border-green-200'
@@ -5382,13 +5439,91 @@ export default function ProjectPage() {
                                 hint="2–3 sentences for email intros or press release openers"
                               />
                             )}
+                            {/* ── Press Hook — multi-target AI ── */}
                             {extra.pressHook && (
-                              <ExtraSection
-                                label={`Press Hook — ${d.best_show || 'Show'}`}
-                                field="pressHook"
-                                value={extra.pressHook}
-                                hint="Single punchy line specific to this show and category"
-                              />
+                              <div className="border-t border-gray-100 px-4 py-4">
+                                <div className="flex items-start justify-between gap-3 mb-3">
+                                  <div>
+                                    <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Press Hook</p>
+                                    <p className="text-xs text-gray-400 mt-0.5">Select target press types, then generate a tailored hook for each</p>
+                                  </div>
+                                  <button
+                                    onClick={() => generateAiPressHooks(d.id)}
+                                    disabled={dirPressTargets.length === 0 || anyPressHookLoading}
+                                    className={`flex-shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
+                                      dirPressTargets.length === 0 || anyPressHookLoading
+                                        ? 'bg-gray-50 text-gray-300 border-gray-200'
+                                        : 'bg-green-50 hover:bg-green-100 text-green-800 border-green-200'
+                                    }`}
+                                  >
+                                    {anyPressHookLoading ? '…' : '✦ AI Draft'}
+                                  </button>
+                                </div>
+
+                                {/* Press target checkboxes */}
+                                <div className="flex flex-wrap gap-x-4 gap-y-2 mb-4">
+                                  {PRESS_TARGET_OPTIONS.map(target => (
+                                    <label key={target} className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
+                                      <input
+                                        type="checkbox"
+                                        checked={dirPressTargets.includes(target)}
+                                        onChange={e => {
+                                          setPressTargets(prev => {
+                                            const current = prev[d.id] ?? []
+                                            return {
+                                              ...prev,
+                                              [d.id]: e.target.checked
+                                                ? [...current, target]
+                                                : current.filter(t => t !== target),
+                                            }
+                                          })
+                                        }}
+                                        className="rounded accent-green-700"
+                                      />
+                                      <span className="text-gray-600">{target}</span>
+                                    </label>
+                                  ))}
+                                </div>
+
+                                {/* Template hook (shown when no AI copies exist) */}
+                                {!dirPressTargets.some(t => pressKitAiCopy[`${d.id}-pressHook-${t}`]) && (
+                                  <p className="text-xs text-gray-400 leading-relaxed italic">{extra.pressHook}</p>
+                                )}
+
+                                {/* AI hooks — one per selected target */}
+                                {dirPressTargets.length > 0 && (
+                                  <div className="space-y-2 mt-2">
+                                    {dirPressTargets.map(target => {
+                                      const hookKey = `${d.id}-pressHook-${target}`
+                                      const aiHook = pressKitAiCopy[hookKey]
+                                      const hookLoading = pressKitAiLoading[hookKey]
+                                      const hookCopied = pressHookCopied[hookKey]
+                                      if (!aiHook && !hookLoading) return null
+                                      return (
+                                        <div key={target} className="rounded-lg bg-green-50 border border-green-100 px-3 py-2.5">
+                                          <div className="flex items-center justify-between gap-2 mb-1.5">
+                                            <p className="text-xs font-semibold text-green-800">{target} Press</p>
+                                            {aiHook && (
+                                              <button
+                                                onClick={() => copyTextWithConfirm(hookKey, aiHook, setPressHookCopied)}
+                                                className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
+                                                  hookCopied ? 'bg-green-200 text-green-900' : 'bg-white hover:bg-green-100 text-green-800 border border-green-200'
+                                                }`}
+                                              >
+                                                {hookCopied ? '✓ Copied!' : '📋 Copy'}
+                                              </button>
+                                            )}
+                                          </div>
+                                          {hookLoading
+                                            ? <p className="text-xs text-gray-400 italic">Generating…</p>
+                                            : <p className="text-xs text-gray-800 leading-relaxed">{aiHook}</p>
+                                          }
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                )}
+                              </div>
                             )}
                             {extra.linkedinPost && (
                               <ExtraSection
