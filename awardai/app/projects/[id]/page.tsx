@@ -3688,109 +3688,126 @@ export default function ProjectPage() {
                       <div key={dirId} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
 
                         {/* Direction header */}
-                        <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between gap-4">
-                          <div>
+                        <div className="px-5 py-4 border-b border-gray-200 flex items-start justify-between gap-4">
+                          {/* Left: direction name + show/category subline.
+                              Subline only shown when d.name exists — when it doesn't, dirName
+                              already falls back to "Show — Category" so the subline would duplicate it. */}
+                          <div className="min-w-0 pt-0.5">
                             <h3 className="font-medium text-gray-900">{dirName}</h3>
-                            {dirShow && (
+                            {d?.name && dirShow && (
                               <p className="text-green-700 text-xs mt-0.5">
                                 {dirShow} · <span className="text-gray-400">{dirCategory}</span>
                               </p>
                             )}
                           </div>
-                          <div className="flex items-center gap-3 flex-shrink-0 flex-wrap justify-end">
-                            {/* Jury Evaluation button */}
-                            <button
-                              onClick={() => evaluateEntry(dirId, 'judge', evalBoth.judge?.id)}
-                              disabled={evaluating || generatingDraft}
-                              title="Evaluate the entry as written — mirrors what a jury member sees"
-                              className="bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
-                            >
-                              {isEvaluatingThis && evaluatingMode[dirId] === 'judge' ? (
-                                <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Evaluating…</>
-                              ) : (
-                                <>⚖ {hasJudge ? 'Re-run Jury Eval' : 'Jury Evaluation'}</>
-                              )}
-                            </button>
-                            {/* Coach Review button */}
-                            <button
-                              onClick={() => evaluateEntry(dirId, 'coach', evalBoth.coach?.id)}
-                              disabled={evaluating || generatingDraft}
-                              title="Review entry against all brief & materials — identifies what's being undersold"
-                              className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
-                            >
-                              {isEvaluatingThis && evaluatingMode[dirId] === 'coach' ? (
-                                <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Coaching…</>
-                              ) : (
-                                <>✦ {hasCoach ? 'Re-run Coach Review' : 'Coach Review'}</>
-                              )}
-                            </button>
-                            {d && getCurrentDraftFields(dirId).length > 0 && (
+
+                          {/* Right: two rows of buttons */}
+                          <div className="flex flex-col items-end gap-2 flex-shrink-0">
+
+                            {/* Row 1 — Evaluate + Download */}
+                            <div className="flex items-center gap-2 flex-wrap justify-end">
+                              {/* Jury Evaluation */}
                               <button
-                                onClick={() => downloadDraft(d)}
-                                className="text-xs text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-3 py-2 rounded-lg transition-colors"
-                                title="Download current draft as text file"
+                                onClick={() => evaluateEntry(dirId, 'judge', evalBoth.judge?.id)}
+                                disabled={evaluating || generatingDraft}
+                                title="Evaluate the entry as written — mirrors what a jury member sees"
+                                className="bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
                               >
-                                ↓ Draft
+                                {isEvaluatingThis && evaluatingMode[dirId] === 'judge' ? (
+                                  <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Evaluating…</>
+                                ) : (
+                                  <>⚖ {hasJudge ? 'Re-run Jury Eval' : 'Jury Evaluation'}</>
+                                )}
                               </button>
-                            )}
-                            {evaluation && d && (
+                              {/* Coach Review */}
                               <button
-                                onClick={() => downloadEvaluation(d, evaluation)}
-                                className="text-xs text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-3 py-2 rounded-lg transition-colors"
-                                title="Download evaluation report as text file"
+                                onClick={() => evaluateEntry(dirId, 'coach', evalBoth.coach?.id)}
+                                disabled={evaluating || generatingDraft}
+                                title="Review entry against all brief & materials — identifies what's being undersold"
+                                className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
                               >
-                                ↓ Evaluation
+                                {isEvaluatingThis && evaluatingMode[dirId] === 'coach' ? (
+                                  <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Coaching…</>
+                                ) : (
+                                  <>✦ {hasCoach ? 'Re-run Coach Review' : 'Coach Review'}</>
+                                )}
                               </button>
-                            )}
-                            {/* Smart Directions — shown when an evaluation exists */}
-                            {(hasJudge || hasCoach) ? (
-                              <>
+                              {/* ↓ Draft */}
+                              {d && getCurrentDraftFields(dirId).length > 0 && (
                                 <button
-                                  onClick={() => {
-                                    const evalForSmart = evalBoth.judge ?? evalBoth.coach
-                                    if (evalForSmart) generateSmartDirections(dirId, evalForSmart.id, 'alternatives')
-                                  }}
-                                  disabled={evaluating || generatingDraft || !!smartDirectionsLoading[dirId]}
-                                  title="Suggest alternative categories in the same show, informed by this evaluation"
-                                  className="text-xs text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-40"
+                                  onClick={() => downloadDraft(d)}
+                                  className="text-xs text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-3 py-2 rounded-lg transition-colors"
+                                  title="Download current draft as text file"
                                 >
-                                  {smartDirectionsLoading[dirId] === 'alternatives' ? (
-                                    <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Finding…</>
-                                  ) : '✦ Alt Categories'}
+                                  ↓ Draft
                                 </button>
+                              )}
+                              {/* ↓ Evaluation */}
+                              {evaluation && d && (
                                 <button
-                                  onClick={() => {
-                                    const evalForSmart = evalBoth.judge ?? evalBoth.coach
-                                    if (evalForSmart) generateSmartDirections(dirId, evalForSmart.id, 'other_shows')
-                                  }}
-                                  disabled={evaluating || generatingDraft || !!smartDirectionsLoading[dirId]}
-                                  title="Suggest other shows where this entry's strengths would land best"
-                                  className="text-xs text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-40"
+                                  onClick={() => downloadEvaluation(d, evaluation)}
+                                  className="text-xs text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-3 py-2 rounded-lg transition-colors"
+                                  title="Download evaluation report as text file"
                                 >
-                                  {smartDirectionsLoading[dirId] === 'other_shows' ? (
-                                    <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Finding…</>
-                                  ) : '✦ Other Shows'}
+                                  ↓ Evaluation
                                 </button>
-                              </>
-                            ) : (
+                              )}
+                            </div>
+
+                            {/* Row 2 — Smart Directions + Regenerate */}
+                            <div className="flex items-center gap-2 flex-wrap justify-end">
+                              {/* Alt Categories / Other Shows (post-eval) or Suggest Directions (pre-eval) */}
+                              {(hasJudge || hasCoach) ? (
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      const evalForSmart = evalBoth.judge ?? evalBoth.coach
+                                      if (evalForSmart) generateSmartDirections(dirId, evalForSmart.id, 'alternatives')
+                                    }}
+                                    disabled={evaluating || generatingDraft || !!smartDirectionsLoading[dirId]}
+                                    title="Suggest alternative categories in the same show, informed by this evaluation"
+                                    className="text-xs text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-40"
+                                  >
+                                    {smartDirectionsLoading[dirId] === 'alternatives' ? (
+                                      <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Finding…</>
+                                    ) : '✦ Alt Categories'}
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      const evalForSmart = evalBoth.judge ?? evalBoth.coach
+                                      if (evalForSmart) generateSmartDirections(dirId, evalForSmart.id, 'other_shows')
+                                    }}
+                                    disabled={evaluating || generatingDraft || !!smartDirectionsLoading[dirId]}
+                                    title="Suggest other shows where this entry's strengths would land best"
+                                    className="text-xs text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-40"
+                                  >
+                                    {smartDirectionsLoading[dirId] === 'other_shows' ? (
+                                      <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Finding…</>
+                                    ) : '✦ Other Shows'}
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  onClick={() => setTab('directions')}
+                                  className="text-xs text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5"
+                                  title="Explore AI-recommended show and category directions"
+                                >
+                                  <span>Suggest Directions</span>
+                                  <span>→</span>
+                                </button>
+                              )}
+                              {/* Regenerate draft */}
                               <button
-                                onClick={() => setTab('directions')}
-                                className="text-xs text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5"
-                                title="Explore AI-recommended show and category directions"
+                                onClick={() => generateDraft(dirId)}
+                                disabled={generatingDraft || evaluating}
+                                className="text-xs text-gray-400 hover:text-gray-700 disabled:opacity-40 transition-colors flex items-center gap-1"
                               >
-                                <span>Suggest Directions</span>
-                                <span>→</span>
+                                {isGeneratingThis ? (
+                                  <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Regenerating…</>
+                                ) : 'Regenerate draft'}
                               </button>
-                            )}
-                            <button
-                              onClick={() => generateDraft(dirId)}
-                              disabled={generatingDraft || evaluating}
-                              className="text-xs text-gray-400 hover:text-gray-700 disabled:opacity-40 transition-colors flex items-center gap-1"
-                            >
-                              {isGeneratingThis ? (
-                                <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Regenerating…</>
-                              ) : 'Regenerate draft'}
-                            </button>
+                            </div>
+
                           </div>
                         </div>
 
