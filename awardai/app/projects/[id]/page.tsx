@@ -2115,6 +2115,7 @@ export default function ProjectPage() {
 
         {/* ── BRIEF ── */}
         {tab === 'brief' && (
+          <>
           <div className="max-w-2xl space-y-8">
 
             {/* Project Description */}
@@ -2294,7 +2295,7 @@ export default function ProjectPage() {
           </div>
 
           {/* ── Credits & Collaborators ─────────────────────────────────────── */}
-          <div className="max-w-2xl mt-8">
+          <div className="max-w-2xl mt-6">
             <div className="flex items-center justify-between mb-3">
               <div>
                 <h2 className="text-sm font-semibold text-gray-800">Credits &amp; Collaborators</h2>
@@ -2434,7 +2435,7 @@ export default function ProjectPage() {
               <p className="text-xs text-gray-400">No collaborators added. Use this to track all co-credited parties for entry submissions and press kit generation.</p>
             )}
           </div>
-
+          </>
         )}
 
         {/* ── MATERIALS ── */}
