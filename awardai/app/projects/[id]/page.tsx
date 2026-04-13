@@ -3660,10 +3660,20 @@ export default function ProjectPage() {
                     const dirHistory = evalHistory[dirId] ?? []
                     const isEvaluatingThis = evaluatingForDirectionId === dirId
                     const isGeneratingThis = generatingForDirectionId === dirId
-                    // Detect when draft has been improved since the last evaluation
-                    const evalDraft = evaluation ? allDirEntries.find(e => e.id === evaluation.entry_draft_id) : null
-                    const evalGeneration = evalDraft?.draft_generation ?? (evaluation ? 1 : maxGen)
-                    const needsReEval = evaluation !== undefined && maxGen > evalGeneration
+                    // Detect when draft has been improved since the last evaluation.
+                    // Checked against BOTH modes independently — banner must not flicker
+                    // when the user switches between judge/coach tabs.
+                    const judgeEvalDraft = evalBoth.judge
+                      ? allDirEntries.find(e => e.id === evalBoth.judge!.entry_draft_id) : null
+                    const coachEvalDraft = evalBoth.coach
+                      ? allDirEntries.find(e => e.id === evalBoth.coach!.entry_draft_id) : null
+                    const judgeEvalGen = evalBoth.judge
+                      ? (judgeEvalDraft?.draft_generation ?? 1) : null
+                    const coachEvalGen = evalBoth.coach
+                      ? (coachEvalDraft?.draft_generation ?? 1) : null
+                    const needsReEval =
+                      (judgeEvalGen !== null && maxGen > judgeEvalGen) ||
+                      (coachEvalGen !== null && maxGen > coachEvalGen)
                     // Score deltas for this direction (set after a comparison re-evaluation)
                     const deltas = scoreDeltas[dirId] ?? null
 
