@@ -17,10 +17,32 @@ type Project = {
   award_year: number | null
 }
 
+type OrgType = 'agency' | 'brand' | 'production_company' | 'media_agency' | 'consultancy'
+
+const ORG_TYPE_LABELS: Record<OrgType, string> = {
+  agency:             'Creative Agency',
+  brand:              'Brand / Client',
+  production_company: 'Production Company',
+  media_agency:       'Media Agency',
+  consultancy:        'Consultancy',
+}
+
 type AgencyProfile = {
   id: number
+  org_type: OrgType
   agency_name: string | null
   agency_city: string | null
+  tagline: string | null
+  website_url: string | null
+  pr_contact_name: string | null
+  pr_contact_email: string | null
+  pr_contact_phone: string | null
+  linkedin_url: string | null
+  x_handle: string | null
+  instagram_handle: string | null
+  office_locations: string[] | null
+  in_house_team_name: string | null
+  agency_partner_names: string[] | null
   credentials_summary: string | null
   strategic_approach: string | null
   sector_focus: string[] | null
@@ -79,6 +101,17 @@ export default function ProjectsPage() {
   const [removingProfile, setRemovingProfile] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState(false)
   const credentialsInputRef = useRef<HTMLInputElement>(null)
+
+  // Org type pre-selection (shown before credentials are uploaded)
+  const [selectedOrgType, setSelectedOrgType] = useState<OrgType>('agency')
+
+  // Contact / press kit details (manually editable, separate from credentials extraction)
+  const [editingContact, setEditingContact] = useState(false)
+  const [savingContact, setSavingContact] = useState(false)
+  const [contactDraft, setContactDraft] = useState({
+    pr_contact_name: '', pr_contact_email: '', pr_contact_phone: '',
+    website_url: '', linkedin_url: '', x_handle: '', instagram_handle: '',
+  })
 
   useEffect(() => {
     if (!user) return
@@ -169,7 +202,7 @@ export default function ProjectsPage() {
         setCredentialsError('Could not extract readable text from this PDF. Try a text-based PDF rather than a scanned image.')
         return
       }
-      const data = await callExtractEdgeFunction({ credentials_text: credentialsText })
+      const data = await callExtractEdgeFunction({ credentials_text: credentialsText, org_type_hint: selectedOrgType })
       if (data) { setAgencyProfile(data.profile); setProfileOpen(true) }
     } catch (err) {
       setCredentialsError(`Could not extract profile: ${err instanceof Error ? err.message : 'Unknown error'}`)
@@ -216,7 +249,7 @@ export default function ProjectsPage() {
     setUploadingCredentials(true)
     setCredentialsError('')
     try {
-      const data = await callExtractEdgeFunction({ url })
+      const data = await callExtractEdgeFunction({ url, org_type_hint: selectedOrgType })
       if (data) { setAgencyProfile(data.profile); setProfileOpen(true); setCredentialsUrl('') }
     } catch (err) {
       setCredentialsError(`Could not extract profile: ${err instanceof Error ? err.message : 'Unknown error'}`)
@@ -238,6 +271,44 @@ export default function ProjectsPage() {
     } finally {
       setRemovingProfile(false)
     }
+  }
+
+  // ── Contact / press kit details ───────────────────────────────────────────
+
+  const startEditContact = () => {
+    setContactDraft({
+      pr_contact_name:  agencyProfile?.pr_contact_name  ?? '',
+      pr_contact_email: agencyProfile?.pr_contact_email ?? '',
+      pr_contact_phone: agencyProfile?.pr_contact_phone ?? '',
+      website_url:      agencyProfile?.website_url      ?? '',
+      linkedin_url:     agencyProfile?.linkedin_url     ?? '',
+      x_handle:         agencyProfile?.x_handle         ?? '',
+      instagram_handle: agencyProfile?.instagram_handle ?? '',
+    })
+    setEditingContact(true)
+  }
+
+  const handleSaveContact = async () => {
+    if (!orgId) return
+    setSavingContact(true)
+    const { data } = await supabase
+      .from('agency_profiles')
+      .update({
+        pr_contact_name:  contactDraft.pr_contact_name  || null,
+        pr_contact_email: contactDraft.pr_contact_email || null,
+        pr_contact_phone: contactDraft.pr_contact_phone || null,
+        website_url:      contactDraft.website_url      || null,
+        linkedin_url:     contactDraft.linkedin_url     || null,
+        x_handle:         contactDraft.x_handle         || null,
+        instagram_handle: contactDraft.instagram_handle || null,
+        updated_at:       new Date().toISOString(),
+      })
+      .eq('org_id', orgId)
+      .select()
+      .single()
+    if (data) setAgencyProfile(data)
+    setSavingContact(false)
+    setEditingContact(false)
   }
 
   // ── Derived data ───────────────────────────────────────────────────────────
@@ -293,7 +364,7 @@ export default function ProjectsPage() {
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-10">
 
-        {/* ── Agency Profile Panel ──────────────────────────────────────────── */}
+        {/* ── Organisation Profile Panel ───────────────────────────────────── */}
         <div className="mb-8 bg-white border border-gray-200 rounded-xl overflow-hidden">
           <button
             onClick={() => setProfileOpen(o => !o)}
@@ -301,17 +372,15 @@ export default function ProjectsPage() {
           >
             <div className="flex items-center gap-3">
               <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center text-sm">
-                🏢
+                {agencyProfile?.org_type === 'brand' ? '🏷️' : '🏢'}
               </div>
               <div className="text-left">
                 <p className="text-sm font-medium text-gray-900">
-                  {agencyProfile?.agency_name
-                    ? agencyProfile.agency_name
-                    : 'Agency Profile'}
+                  {agencyProfile?.agency_name ?? 'Organisation Profile'}
                 </p>
                 <p className="text-xs text-gray-400 mt-0.5">
                   {agencyProfile
-                    ? `${agencyProfile.agency_city ? agencyProfile.agency_city + ' · ' : ''}Used to personalise all AI-generated entries`
+                    ? `${ORG_TYPE_LABELS[agencyProfile.org_type ?? 'agency']}${agencyProfile.agency_city ? ' · ' + agencyProfile.agency_city : ''} · Personalises all AI-generated entries`
                     : 'Upload your credentials deck to personalise AI-generated entries'}
                 </p>
               </div>
@@ -339,8 +408,26 @@ export default function ProjectsPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {agencyProfile.credentials_summary && (
                       <div className="sm:col-span-2">
-                        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Agency overview</p>
+                        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                          {agencyProfile.org_type === 'brand' ? 'Brand overview' : 'Agency overview'}
+                        </p>
                         <p className="text-sm text-gray-700 leading-relaxed">{agencyProfile.credentials_summary}</p>
+                      </div>
+                    )}
+                    {agencyProfile.in_house_team_name && (
+                      <div>
+                        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">In-house team</p>
+                        <p className="text-sm text-gray-700">{agencyProfile.in_house_team_name}</p>
+                      </div>
+                    )}
+                    {agencyProfile.agency_partner_names && agencyProfile.agency_partner_names.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Agency partners</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {agencyProfile.agency_partner_names.map(p => (
+                            <span key={p} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full border border-gray-200">{p}</span>
+                          ))}
+                        </div>
                       </div>
                     )}
                     {agencyProfile.strategic_approach && (
@@ -379,6 +466,73 @@ export default function ProjectsPage() {
                       Extracted {new Date(agencyProfile.generated_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </p>
                   )}
+
+                  {/* ── Contact & Press Kit Details ──────────────────────── */}
+                  <div className="pt-4 border-t border-gray-100">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Press Kit & Contact Details</p>
+                      {!editingContact && (
+                        <button onClick={startEditContact} className="text-xs text-green-700 hover:text-green-600 transition-colors">
+                          {agencyProfile.pr_contact_email ? 'Edit' : '+ Add details'}
+                        </button>
+                      )}
+                    </div>
+                    {editingContact ? (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {[
+                            { key: 'pr_contact_name',  label: 'PR Contact Name',  placeholder: 'Jane Smith', type: 'text' },
+                            { key: 'pr_contact_email', label: 'PR Contact Email', placeholder: 'jane@agency.com', type: 'email' },
+                            { key: 'pr_contact_phone', label: 'PR Contact Phone', placeholder: '+1 212 555 0100', type: 'text' },
+                            { key: 'website_url',      label: 'Website URL',      placeholder: 'https://www.agency.com', type: 'url' },
+                            { key: 'linkedin_url',     label: 'LinkedIn URL',     placeholder: 'https://linkedin.com/company/…', type: 'url' },
+                            { key: 'x_handle',         label: 'X (Twitter) handle', placeholder: 'agencyname', type: 'text' },
+                            { key: 'instagram_handle', label: 'Instagram handle', placeholder: 'agencyname', type: 'text' },
+                          ].map(({ key, label, placeholder, type }) => (
+                            <div key={key}>
+                              <label className="block text-xs text-gray-500 mb-1">{label}</label>
+                              <input
+                                type={type}
+                                value={contactDraft[key as keyof typeof contactDraft]}
+                                onChange={e => setContactDraft(d => ({ ...d, [key]: e.target.value }))}
+                                placeholder={placeholder}
+                                className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex gap-3 pt-1">
+                          <button onClick={handleSaveContact} disabled={savingContact}
+                            className="bg-green-800 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+                            {savingContact ? 'Saving…' : 'Save'}
+                          </button>
+                          <button onClick={() => setEditingContact(false)} className="text-gray-500 hover:text-gray-900 text-sm px-4 py-2 transition-colors">Cancel</button>
+                        </div>
+                      </div>
+                    ) : agencyProfile.pr_contact_email ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                        {agencyProfile.pr_contact_name && (
+                          <div><span className="text-gray-400 text-xs">Contact: </span><span className="text-gray-700">{agencyProfile.pr_contact_name}</span></div>
+                        )}
+                        {agencyProfile.pr_contact_email && (
+                          <div><span className="text-gray-400 text-xs">Email: </span><span className="text-gray-700">{agencyProfile.pr_contact_email}</span></div>
+                        )}
+                        {agencyProfile.website_url && (
+                          <div><span className="text-gray-400 text-xs">Web: </span><span className="text-gray-700">{agencyProfile.website_url}</span></div>
+                        )}
+                        {(agencyProfile.x_handle || agencyProfile.instagram_handle || agencyProfile.linkedin_url) && (
+                          <div className="flex gap-2 items-center flex-wrap">
+                            {agencyProfile.linkedin_url && <span className="text-xs text-gray-500">LinkedIn ✓</span>}
+                            {agencyProfile.x_handle && <span className="text-xs text-gray-500">@{agencyProfile.x_handle}</span>}
+                            {agencyProfile.instagram_handle && <span className="text-xs text-gray-500">IG: @{agencyProfile.instagram_handle}</span>}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-400">No press contact set. Add details to enable full press kit generation.</p>
+                    )}
+                  </div>
+
                   {/* Re-extract + Remove */}
                   <div className="pt-4 border-t border-gray-100 space-y-3">
                     <div className="flex items-center justify-between">
@@ -469,8 +623,29 @@ export default function ProjectsPage() {
                   <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                     <p className="text-sm text-gray-700 mb-1 font-medium">What this does</p>
                     <p className="text-sm text-gray-500 leading-relaxed">
-                      Upload your credentials deck or link to your agency website. Shortlist extracts your strategic approach, sector expertise, and writing style — then quietly injects this context into every entry draft and evaluation, making outputs feel like they came from your agency, not a generic AI.
+                      Upload your credentials deck or link to your website. Shortlist extracts your strategic approach, sector expertise, and writing style, then injects this context into every entry draft and evaluation so outputs reflect your organisation rather than a generic AI.
                     </p>
+                  </div>
+
+                  {/* Org type pre-selection */}
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">What kind of organisation are you?</p>
+                    <div className="flex flex-wrap gap-2">
+                      {(Object.entries(ORG_TYPE_LABELS) as [OrgType, string][]).map(([type, label]) => (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => setSelectedOrgType(type)}
+                          className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                            selectedOrgType === type
+                              ? 'bg-green-800 text-white border-green-800'
+                              : 'bg-white text-gray-600 border-gray-300 hover:border-green-600 hover:text-green-700'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   {/* Mode toggle */}
