@@ -516,6 +516,14 @@ function scoreBg(score: number): string {
   return 'bg-red-50 border-red-200'
 }
 
+// Coach mode shows UNTAPPED potential (10 - raw score). Lower = better.
+function coachScoreColor(untapped: number): string {
+  if (untapped <= 2) return 'text-green-700'   // ≤2 pts gap — most potential captured
+  if (untapped <= 5) return 'text-amber-700'   // moderate gap
+  return 'text-red-600'                         // significant potential not yet in draft
+}
+}
+
 function buildAnalysisText(
   analysis: ScriptAnalysis,
   campaignName: string,
@@ -3862,14 +3870,19 @@ export default function ProjectPage() {
                             )}
 
                           <div className="px-5 py-5">
+                            {(() => {
+                              const isCoach = evaluation.evaluation_mode === 'coach'
+                              const untapped = parseFloat((10 - evaluation.overall_score).toFixed(1))
+                              const displayScore = isCoach ? untapped : evaluation.overall_score
+                              return (
                             <div className="flex items-start justify-between mb-4">
                               <div>
                                 <div className="flex items-baseline gap-2 flex-wrap">
-                                  <span className={`text-4xl font-bold tabular-nums ${scoreColor(evaluation.overall_score)}`}>
-                                    {evaluation.overall_score.toFixed(1)}
+                                  <span className={`text-4xl font-bold tabular-nums ${isCoach ? coachScoreColor(displayScore) : scoreColor(displayScore)}`}>
+                                    {displayScore.toFixed(1)}
                                   </span>
                                   <span className="text-gray-400 text-lg">/10</span>
-                                  {/* Overall delta badge */}
+                                  {/* Overall delta badge — shown as raw score change regardless of mode */}
                                   {deltas?.['overall'] !== undefined && deltas['overall'] !== 0 && (
                                     <span className={`text-sm font-bold tabular-nums px-2 py-0.5 rounded-full ${deltas['overall'] > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
                                       {deltas['overall'] > 0 ? `↑ +${deltas['overall']}` : `↓ ${deltas['overall']}`}
@@ -3879,15 +3892,19 @@ export default function ProjectPage() {
                                     <span className="text-sm text-gray-400 px-2 py-0.5 rounded-full bg-gray-100">— No change</span>
                                   )}
                                   {/* Mode badge */}
-                                  {evaluation.evaluation_mode === 'coach' ? (
+                                  {isCoach ? (
                                     <span className="text-xs font-medium bg-green-100 text-green-800 border border-green-200 px-2 py-0.5 rounded-full">✦ Coach Review</span>
                                   ) : (
                                     <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">⚖ Jury Evaluation</span>
                                   )}
                                 </div>
+                                {/* Coach: label the inverted score, then explain what it measures */}
+                                {isCoach && (
+                                  <p className="text-xs font-semibold text-gray-500 mt-1">untapped potential <span className="font-normal text-gray-400">— lower is better</span></p>
+                                )}
                                 <p className="text-xs text-gray-400 mt-0.5">
-                                  {evaluation.evaluation_mode === 'coach'
-                                    ? 'Scored against brief & materials · Claude Opus 4.6'
+                                  {isCoach
+                                    ? 'Estimated gap between this draft and your campaign\'s full potential · Claude Opus 4.6'
                                     : 'Scored on entry as written · Claude Opus 4.6'}
                                 </p>
                               </div>
@@ -3895,6 +3912,15 @@ export default function ProjectPage() {
                                 {new Date(evaluation.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                               </p>
                             </div>
+                              )
+                            })()}
+
+                            {/* Coach mode: explain that dimension scores still read higher = more covered */}
+                            {evaluation.evaluation_mode === 'coach' && (
+                              <p className="text-xs text-gray-400 italic mb-3">
+                                Dimension scores show how fully each aspect of your campaign&apos;s available material is represented in this draft. Higher = stronger coverage; lower = more to unlock in that area.
+                              </p>
+                            )}
 
                             <div className="grid grid-cols-3 gap-2 mb-5">
                               {SCORE_DIMENSIONS.map(dim => {
