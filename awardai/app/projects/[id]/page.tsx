@@ -873,7 +873,7 @@ export default function ProjectPage() {
       .from('project_collaborators')
       .insert({
         project_id:        project.id,
-        org_id:            project.org_id,
+        org_id:            orgId,
         collaborator_name: newCollab.collaborator_name.trim(),
         collaborator_type: newCollab.collaborator_type,
         contact_name:      newCollab.contact_name.trim() || null,
