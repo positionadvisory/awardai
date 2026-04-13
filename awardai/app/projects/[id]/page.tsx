@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Fragment } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
@@ -616,9 +616,10 @@ export default function ProjectPage() {
   const [generateError, setGenerateError] = useState('')
   const [geoWarnings, setGeoWarnings] = useState<{ show: string; market: string; rule: string }[]>([])
   const [showGeoWarningModal, setShowGeoWarningModal] = useState(false)
-  const [confirmRegenerateDirections, setConfirmRegenerateDirections] = useState(false)
   const [smartDirectionsLoading, setSmartDirectionsLoading] = useState<Record<number, 'alternatives' | 'other_shows' | null>>({})
   const [smartDirectionsError, setSmartDirectionsError] = useState<Record<number, string>>({})
+  // IDs of directions added in this session (for "New" badge and top-of-list placement)
+  const [newDirectionIds, setNewDirectionIds] = useState<Set<number>>(new Set())
 
   // Draft focus items (Feature 4 — Fix-this chips)
   const [draftFocusItems, setDraftFocusItems] = useState<Record<number, string[]>>({})
@@ -833,7 +834,7 @@ export default function ProjectPage() {
 
     Promise.all([
       supabase.from('projects').select('*').eq('id', projectId).single(),
-      supabase.from('directions').select('*').eq('project_id', projectId).order('sort_order'),
+      supabase.from('directions').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
       // Secondary sort by id ensures deterministic ordering across generations
       supabase.from('entry_drafts').select('*').eq('project_id', projectId).order('sort_order').order('id'),
       supabase.from('evaluations').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
@@ -2176,16 +2177,8 @@ export default function ProjectPage() {
       }
     }
 
-    // ── Pre-check 2: warn before deleting existing entries ────────────────────
-    if (!skipChecks && entries.length > 0 && directions.length > 0) {
-      setConfirmRegenerateDirections(true)
-      return
-    }
-
     setGenerating(true)
     setGenerateError('')
-    // Clear stale entries from state — the edge function deletes them from DB
-    if (directions.length > 0) setEntries([])
     try {
       const accessToken = await getToken()
       if (!accessToken) return
@@ -2215,7 +2208,9 @@ export default function ProjectPage() {
         setGenerateError(formatError(appErrorFromResponse(data, res.status, 'DIR')))
         return
       }
-      setDirections(data.directions || [])
+      const newDirs: Direction[] = data.directions || []
+      setDirections(prev => [...newDirs, ...prev])
+      setNewDirectionIds(prev => new Set([...prev, ...newDirs.map(d => d.id)]))
     } catch (err) {
       setGenerateError(formatError({ message: 'Network error — check your connection and try again.', retryable: true, code: 'DIR-NET' }))
     } finally { setGenerating(false) }
@@ -2250,9 +2245,11 @@ export default function ProjectPage() {
         setSmartDirectionsError(prev => ({ ...prev, [directionId]: data.error || `Error ${res.status}` }))
         return
       }
-      // Append new smart directions to existing list and switch to Directions tab
+      // Prepend new smart directions to top of list and switch to Directions tab
       if (data.directions?.length) {
-        setDirections(prev => [...prev, ...data.directions])
+        const smartNewDirs: Direction[] = data.directions
+        setDirections(prev => [...smartNewDirs, ...prev])
+        setNewDirectionIds(prev => new Set([...prev, ...smartNewDirs.map(d => d.id)]))
         setTab('directions')
       }
     } catch (err) {
@@ -3430,7 +3427,7 @@ export default function ProjectPage() {
                 className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
                 {generating ? (
                   <><svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Generating…</>
-                ) : directions.length > 0 ? 'Regenerate Directions' : 'Generate Directions'}
+                ) : directions.length > 0 ? 'Generate More Directions' : 'Generate Directions'}
               </button>
             </div>
 
@@ -3541,20 +3538,41 @@ export default function ProjectPage() {
                     return bChance - aChance
                   }
                   return 0
-                }).map(d => {
+                }).map((d, idx, arr) => {
                   const hasEntries = entries.some(e => e.direction_id === d.id)
                   const dirEvalBoth = evaluations[d.id] ?? {}
                   const dirBestEval = dirEvalBoth.judge ?? dirEvalBoth.coach ?? null
                   const hasEval = !!dirBestEval
                   const isGeneratingThis = generatingForDirectionId === d.id
+                  const isNew = newDirectionIds.has(d.id)
+                  // Draft generation info — used for the "Draft · Gen N" badge
+                  const dirDraftEntries = entries.filter(e => e.direction_id === d.id && e.field_key !== 'entry')
+                  const hasDraft = dirDraftEntries.length > 0
+                  const dirMaxGen = hasDraft ? Math.max(...dirDraftEntries.map(e => e.draft_generation ?? 1)) : 0
+                  // Show a divider when transitioning from new → existing directions
+                  const prevIsNew = idx > 0 ? newDirectionIds.has(arr[idx - 1].id) : isNew
+                  const showDivider = !isNew && prevIsNew && newDirectionIds.size > 0
                   return (
-                    <div key={d.id} className={`bg-white border rounded-xl p-5 ${d.chosen ? 'border-green-700' : 'border-gray-200'}`}>
+                    <Fragment key={d.id}>
+                      {showDivider && (
+                        <div className="flex items-center gap-3 py-1">
+                          <div className="flex-1 border-t border-gray-200" />
+                          <span className="text-xs text-gray-400 uppercase tracking-wider px-1">Previous directions</span>
+                          <div className="flex-1 border-t border-gray-200" />
+                        </div>
+                      )}
+                    <div className={`bg-white border rounded-xl p-5 ${d.chosen ? 'border-green-700' : isNew ? 'border-green-400' : hasDraft ? 'border-blue-200' : 'border-gray-200'}`}>
                       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <h3 className="font-medium text-gray-900">{d.name}</h3>
+                            {isNew && <span className="text-xs bg-green-700 text-white px-2 py-0.5 rounded-full font-medium">New</span>}
                             {d.chosen && <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">Selected</span>}
-                            {hasEntries && <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full border border-green-200">Draft ready</span>}
+                            {hasDraft && (
+                              <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200 font-medium">
+                                Draft · Gen {dirMaxGen}
+                              </span>
+                            )}
                             {hasEval && dirBestEval && <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${scoreBg(dirBestEval.overall_score)} ${scoreColor(dirBestEval.overall_score)}`}>{dirBestEval.overall_score}/10</span>}
                           </div>
                           {d.best_show && <p className="text-green-700 text-sm mt-0.5">{d.best_show} · <span className="text-gray-500">{d.best_category}</span></p>}
@@ -3664,6 +3682,7 @@ export default function ProjectPage() {
                         )}
                       </div>
                     </div>
+                    </Fragment>
                   )
                 })}
               </div>
@@ -3745,16 +3764,23 @@ export default function ProjectPage() {
 
                         {/* Direction header */}
                         <div className="px-5 py-4 border-b border-gray-200 flex items-start justify-between gap-4">
-                          {/* Left: direction name + show/category subline.
+                          {/* Left: direction label + name + show/category subline.
                               Subline only shown when d.name exists — when it doesn't, dirName
                               already falls back to "Show — Category" so the subline would duplicate it. */}
                           <div className="min-w-0 pt-0.5">
+                            <p className="text-xs text-gray-400 uppercase tracking-wider font-medium mb-0.5">Direction</p>
                             <h3 className="font-medium text-gray-900">{dirName}</h3>
                             {d?.name && dirShow && (
                               <p className="text-green-700 text-xs mt-0.5">
                                 {dirShow} · <span className="text-gray-400">{dirCategory}</span>
                               </p>
                             )}
+                            <button
+                              onClick={() => setTab('directions')}
+                              className="text-xs text-gray-400 hover:text-gray-600 mt-1.5 transition-colors"
+                            >
+                              ← View in Directions
+                            </button>
                           </div>
 
                           {/* Right: two rows of buttons */}
@@ -6033,30 +6059,6 @@ export default function ProjectPage() {
                 onClick={() => { setShowGeoWarningModal(false); setGeoWarnings([]) }}
                 className="flex-1 border border-gray-300 text-gray-700 hover:border-gray-400 text-sm font-medium px-4 py-2.5 rounded-xl transition-colors">
                 Go back
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── REGENERATE DIRECTIONS CONFIRMATION MODAL ── */}
-      {confirmRegenerateDirections && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
-          <div className="bg-white border border-gray-200 rounded-2xl p-6 w-full max-w-md shadow-2xl">
-            <h3 className="font-semibold text-gray-900 mb-2">Regenerate directions?</h3>
-            <p className="text-sm text-gray-600 mb-5">
-              Regenerating will delete your existing directions and all associated entry drafts. This cannot be undone. Your evaluations will also be removed.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => { setConfirmRegenerateDirections(false); generateDirections(true) }}
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-colors">
-                Yes, regenerate
-              </button>
-              <button
-                onClick={() => setConfirmRegenerateDirections(false)}
-                className="flex-1 border border-gray-300 text-gray-700 hover:border-gray-400 text-sm font-medium px-4 py-2.5 rounded-xl transition-colors">
-                Cancel
               </button>
             </div>
           </div>
