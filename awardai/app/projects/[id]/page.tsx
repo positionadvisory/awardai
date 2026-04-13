@@ -75,6 +75,24 @@ type PressKitExtra = {
   instagramCaption: string
 }
 
+// ── Press Kit Draft — persisted AI copy with up to 3 versions ────────────────
+// project_id + direction_id + id are all bigint in the DB (bigint PK pattern used across all tables)
+type PressKitDraftRow = {
+  id: number
+  project_id: number
+  direction_id: number
+  field_key: string       // 'quickSummary' | 'linkedinPost' | 'xPost' | 'instagramCaption' | 'pressHook-Local' | etc.
+  field_label: string
+  version_a: string | null  // newest AI generation
+  version_b: string | null  // previous AI generation
+  version_c: string | null  // oldest AI generation
+  selected: string          // 'a', 'b', or 'c'
+  custom_text: string | null
+  press_target: string | null
+  model_used: string | null
+  updated_at: string
+}
+
 type TonalBrief = {
   summary: string
   mood: string
@@ -633,6 +651,7 @@ export default function ProjectPage() {
   const [pressKitOutputs, setPressKitOutputs] = useState<Record<number, string>>({}) // dirId → email HTML
   const [pressKitExtras, setPressKitExtras] = useState<Record<number, PressKitExtra>>({}) // dirId → extra sections
   const [pressKitAiCopy, setPressKitAiCopy] = useState<Record<string, string>>({}) // key: `${dirId}-${field}` or `${dirId}-pressHook-${target}`
+  const [pressKitDrafts, setPressKitDrafts] = useState<Record<string, PressKitDraftRow>>({}) // key: `${dirId}-${field_key}`
   const [pressKitAiLoading, setPressKitAiLoading] = useState<Record<string, boolean>>({})
   const [pressTargets, setPressTargets] = useState<Record<number, string[]>>({}) // dirId → selected press targets
   const [pressHookCopied, setPressHookCopied] = useState<Record<string, boolean>>({})
@@ -783,6 +802,21 @@ export default function ProjectPage() {
       }
     })
 
+    // Fetch saved press kit drafts for this project (non-critical)
+    supabase
+      .from('press_kit_drafts')
+      .select('id, project_id, direction_id, field_key, field_label, version_a, version_b, version_c, selected, custom_text, press_target, model_used, updated_at')
+      .eq('project_id', projectId)
+      .then(({ data }) => {
+        if (!cancelled && data && data.length > 0) {
+          const map: Record<string, PressKitDraftRow> = {}
+          for (const row of data) {
+            map[`${row.direction_id}-${row.field_key}`] = row as PressKitDraftRow
+          }
+          setPressKitDrafts(map)
+        }
+      })
+
     Promise.all([
       supabase.from('projects').select('*').eq('id', projectId).single(),
       supabase.from('directions').select('*').eq('project_id', projectId).order('sort_order'),
@@ -874,6 +908,39 @@ export default function ProjectPage() {
 
     return () => { cancelled = true }
   }, [user, projectId])
+
+  // Auto-restore saved press kit drafts into pressKitAiCopy when there are saved drafts.
+  // Runs whenever pressKitDrafts loads or tab changes to 'presskit'.
+  useEffect(() => {
+    if (tab !== 'presskit') return
+    if (Object.keys(pressKitDrafts).length === 0) return
+    setPressKitAiCopy(prev => {
+      const next = { ...prev }
+      for (const [storeKey, draft] of Object.entries(pressKitDrafts)) {
+        // Only restore if not already showing something (don't clobber a new generation)
+        if (next[storeKey]) continue
+        const selected = draft.selected === 'b' ? draft.version_b
+                       : draft.selected === 'c' ? draft.version_c
+                       : draft.version_a
+        if (selected) next[storeKey] = selected
+      }
+      return next
+    })
+    // Also restore selected press targets from saved press hook drafts
+    setPressTargets(prev => {
+      const next = { ...prev }
+      for (const [, draft] of Object.entries(pressKitDrafts)) {
+        if (draft.field_key.startsWith('pressHook-') && draft.press_target) {
+          const dirId = draft.direction_id
+          const current = next[dirId] ?? []
+          if (!current.includes(draft.press_target)) {
+            next[dirId] = [...current, draft.press_target]
+          }
+        }
+      }
+      return next
+    })
+  }, [tab, pressKitDrafts])
 
   // Concatenate guided brief sections into a single string for storage
   const briefFromSections = (s: typeof briefSections) => [
@@ -1221,6 +1288,12 @@ export default function ProjectPage() {
       instagramCaption: 'instagram',
       quickSummary: 'quicksummary',
     }
+    const labelMap: Record<string, string> = {
+      linkedinPost: 'LinkedIn Post',
+      xPost: 'X / Twitter Post',
+      instagramCaption: 'Instagram Caption',
+      quickSummary: 'Quick Summary',
+    }
     const key = `${dirId}-${field}`
     setPressKitAiLoading(prev => ({ ...prev, [key]: true }))
     try {
@@ -1236,7 +1309,11 @@ export default function ProjectPage() {
         }
       )
       const data = await res.json()
-      if (data.copy) setPressKitAiCopy(prev => ({ ...prev, [key]: data.copy }))
+      if (data.copy) {
+        setPressKitAiCopy(prev => ({ ...prev, [key]: data.copy }))
+        // Persist to DB with version shifting
+        await upsertPressKitDraft(dirId, field, labelMap[field], data.copy)
+      }
     } catch (err) {
       console.error('AI press copy failed:', err)
     } finally {
@@ -1250,6 +1327,7 @@ export default function ProjectPage() {
     if (targets.length === 0) return
     await Promise.all(targets.map(async (target) => {
       const key = `${dirId}-pressHook-${target}`
+      const fieldKey = `pressHook-${target}`
       setPressKitAiLoading(prev => ({ ...prev, [key]: true }))
       try {
         const res = await fetch(
@@ -1264,7 +1342,11 @@ export default function ProjectPage() {
           }
         )
         const data = await res.json()
-        if (data.copy) setPressKitAiCopy(prev => ({ ...prev, [key]: data.copy }))
+        if (data.copy) {
+          setPressKitAiCopy(prev => ({ ...prev, [key]: data.copy }))
+          // Persist to DB with version shifting
+          await upsertPressKitDraft(dirId, fieldKey, `Press Hook (${target})`, data.copy, target)
+        }
       } catch (err) {
         console.error('AI press hook failed:', err)
       } finally {
@@ -1581,6 +1663,75 @@ export default function ProjectPage() {
     setPressKitOutputs(prev => ({ ...prev, ...outputs }))
     setPressKitExtras(prev => ({ ...prev, ...extras }))
     setPressKitGenerating(false)
+  }
+
+  // Upsert an AI-generated copy string into press_kit_drafts.
+  // Shifts version_a → version_b → version_c on each new generation.
+  const upsertPressKitDraft = async (
+    dirId: number,
+    fieldKey: string,
+    fieldLabel: string,
+    newText: string,
+    pressTarget?: string,
+  ) => {
+    const storeKey = `${dirId}-${fieldKey}`
+    const existing = pressKitDrafts[storeKey]
+
+    // Compute new version columns by shifting
+    let version_a = newText
+    let version_b: string | null = null
+    let version_c: string | null = null
+    if (existing) {
+      version_b = existing.version_a ?? null
+      version_c = existing.version_b ?? null
+      // existing version_c is dropped
+    }
+
+    const upsertData = {
+      project_id: project?.id ?? null,
+      direction_id: dirId,
+      field_key: fieldKey,
+      field_label: fieldLabel,
+      version_a,
+      version_b,
+      version_c,
+      selected: 'a' as const,
+      press_target: pressTarget ?? null,
+      model_used: 'claude-haiku-4-5-20251001',
+    }
+
+    const { data, error } = await supabase
+      .from('press_kit_drafts')
+      .upsert(upsertData, { onConflict: 'direction_id,field_key' })
+      .select('id, project_id, direction_id, field_key, field_label, version_a, version_b, version_c, selected, custom_text, press_target, model_used, updated_at')
+      .single()
+
+    if (!error && data) {
+      setPressKitDrafts(prev => ({ ...prev, [storeKey]: data as PressKitDraftRow }))
+    }
+  }
+
+  // Select a specific saved version for a draft field and update pressKitAiCopy to display it.
+  const selectPressKitVersion = async (dirId: number, fieldKey: string, version: 'a' | 'b' | 'c') => {
+    const storeKey = `${dirId}-${fieldKey}`
+    const draft = pressKitDrafts[storeKey]
+    if (!draft) return
+
+    const text = version === 'a' ? draft.version_a
+                : version === 'b' ? draft.version_b
+                : draft.version_c
+    if (!text) return
+
+    // Optimistic UI update
+    setPressKitDrafts(prev => ({ ...prev, [storeKey]: { ...draft, selected: version } }))
+    setPressKitAiCopy(prev => ({ ...prev, [storeKey]: text }))
+
+    // Persist selection to DB
+    await supabase
+      .from('press_kit_drafts')
+      .update({ selected: version })
+      .eq('direction_id', dirId)
+      .eq('field_key', fieldKey)
   }
 
   const generateTonalBrief = async (scriptText?: string) => {
@@ -5349,6 +5500,10 @@ export default function ProjectPage() {
                       const aiLoading = pressKitAiLoading[key]
                       const displayText = aiText || value
                       const canAI = aiFields.has(field)
+                      const draft = pressKitDrafts[key]
+                      const hasVersionB = !!(draft?.version_b)
+                      const hasVersionC = !!(draft?.version_c)
+                      const selectedVersion = draft?.selected ?? 'a'
                       return (
                         <div className="border-t border-gray-100 px-4 py-4">
                           <div className="flex items-center justify-between gap-3 mb-2">
@@ -5378,6 +5533,25 @@ export default function ProjectPage() {
                               </button>
                             </div>
                           </div>
+                          {/* Version pills — shown when more than one AI generation exists */}
+                          {draft && (hasVersionB || hasVersionC) && (
+                            <div className="flex items-center gap-1.5 mb-2">
+                              <span className="text-xs text-gray-400 mr-0.5">Version:</span>
+                              {(['a', 'b', 'c'] as const).filter(v => v === 'a' || (v === 'b' && hasVersionB) || (v === 'c' && hasVersionC)).map(v => (
+                                <button
+                                  key={v}
+                                  onClick={() => selectPressKitVersion(d.id, field, v)}
+                                  className={`text-xs px-2 py-0.5 rounded-md border transition-colors ${
+                                    selectedVersion === v
+                                      ? 'bg-green-700 text-white border-green-700'
+                                      : 'bg-white text-gray-500 border-gray-200 hover:border-green-400 hover:text-green-700'
+                                  }`}
+                                >
+                                  {v === 'a' ? 'Latest' : v === 'b' ? 'Previous' : 'Older'}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                           <p className={`text-xs leading-relaxed whitespace-pre-wrap ${aiText ? 'text-gray-800' : 'text-gray-500'}`}>{displayText}</p>
                           {aiText && <p className="text-xs text-green-700 mt-1.5 font-medium">✦ AI draft — edit before posting</p>}
                         </div>
@@ -5495,9 +5669,14 @@ export default function ProjectPage() {
                                   <div className="space-y-2 mt-2">
                                     {dirPressTargets.map(target => {
                                       const hookKey = `${d.id}-pressHook-${target}`
+                                      const fieldKey = `pressHook-${target}`
                                       const aiHook = pressKitAiCopy[hookKey]
                                       const hookLoading = pressKitAiLoading[hookKey]
                                       const hookCopied = pressHookCopied[hookKey]
+                                      const hookDraft = pressKitDrafts[`${d.id}-${fieldKey}`]
+                                      const hookHasB = !!(hookDraft?.version_b)
+                                      const hookHasC = !!(hookDraft?.version_c)
+                                      const hookSelected = hookDraft?.selected ?? 'a'
                                       if (!aiHook && !hookLoading) return null
                                       return (
                                         <div key={target} className="rounded-lg bg-green-50 border border-green-100 px-3 py-2.5">
@@ -5514,6 +5693,25 @@ export default function ProjectPage() {
                                               </button>
                                             )}
                                           </div>
+                                          {/* Version pills for press hooks */}
+                                          {hookDraft && (hookHasB || hookHasC) && (
+                                            <div className="flex items-center gap-1.5 mb-2">
+                                              <span className="text-xs text-green-700 opacity-70 mr-0.5">Version:</span>
+                                              {(['a', 'b', 'c'] as const).filter(v => v === 'a' || (v === 'b' && hookHasB) || (v === 'c' && hookHasC)).map(v => (
+                                                <button
+                                                  key={v}
+                                                  onClick={() => selectPressKitVersion(d.id, fieldKey, v)}
+                                                  className={`text-xs px-2 py-0.5 rounded-md border transition-colors ${
+                                                    hookSelected === v
+                                                      ? 'bg-green-700 text-white border-green-700'
+                                                      : 'bg-white text-green-700 border-green-200 hover:bg-green-100'
+                                                  }`}
+                                                >
+                                                  {v === 'a' ? 'Latest' : v === 'b' ? 'Previous' : 'Older'}
+                                                </button>
+                                              ))}
+                                            </div>
+                                          )}
                                           {hookLoading
                                             ? <p className="text-xs text-gray-400 italic">Generating…</p>
                                             : <p className="text-xs text-gray-800 leading-relaxed">{aiHook}</p>
