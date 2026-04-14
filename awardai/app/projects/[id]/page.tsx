@@ -75,6 +75,17 @@ type PressKitExtra = {
   instagramCaption: string
 }
 
+// ── Show Profile — jury intelligence from show_profiles table ─────────────────
+type ShowProfile = {
+  show_name: string
+  judging_philosophy: string
+  scoring_emphasis: string | null
+  language_guidance: string | null
+  common_mistakes: string | null
+  jury_composition_notes: string | null
+  base_win_rate: number | null
+}
+
 // ── Press Kit Draft — persisted AI copy with up to 3 versions ────────────────
 // project_id + direction_id + id are all bigint in the DB (bigint PK pattern used across all tables)
 type PressKitDraftRow = {
@@ -746,6 +757,10 @@ export default function ProjectPage() {
   const [dirSourceEntryDirectionId, setDirSourceEntryDirectionId] = useState<number>(-1)
   // Directions tab: sort key
   const [dirSortKey, setDirSortKey] = useState<'default' | 'category_fit' | 'medal_chance'>('default')
+
+  // Festival / jury intelligence — show_profiles rows keyed by directionId
+  const [showProfiles, setShowProfiles] = useState<Record<number, ShowProfile | null>>({})
+  const [showProfileOpen, setShowProfileOpen] = useState<Record<number, boolean>>({})
   // KB awards count for Script Analysis subheadline
   const [kbCount, setKbCount] = useState<number>(0)
   // Script: asset mode + eval inclusion
@@ -956,6 +971,39 @@ export default function ProjectPage() {
       return next
     })
   }, [tab, pressKitDrafts])
+
+  // Fetch show_profiles rows for any directions not yet loaded.
+  // Keyed by directionId so each card has instant access without a secondary lookup.
+  // Query pattern mirrors the one used in evaluate-entry + generate-draft edge functions:
+  //   category-specific row (non-null category_pattern) preferred over show-level default (null),
+  //   achieved via nullsFirst: false ascending sort + limit 1.
+  useEffect(() => {
+    const unloaded = directions.filter(d => d.best_show && !(d.id in showProfiles))
+    if (unloaded.length === 0) return
+    Promise.all(
+      unloaded.map(async d => {
+        const firstWord = d.best_category?.split(/\s+/)[0] ?? ''
+        const orFilter = firstWord
+          ? `category_pattern.is.null,category_pattern.ilike.%${firstWord}%`
+          : 'category_pattern.is.null'
+        const { data } = await supabase
+          .from('show_profiles')
+          .select('show_name, judging_philosophy, scoring_emphasis, language_guidance, common_mistakes, jury_composition_notes, base_win_rate')
+          .eq('show_name', d.best_show!)
+          .or(orFilter)
+          .order('category_pattern', { ascending: true, nullsFirst: false })
+          .limit(1)
+          .maybeSingle()
+        return { dirId: d.id, profile: (data as ShowProfile | null) ?? null }
+      })
+    ).then(results => {
+      setShowProfiles(prev => {
+        const next = { ...prev }
+        for (const { dirId, profile } of results) next[dirId] = profile
+        return next
+      })
+    })
+  }, [directions]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Concatenate guided brief sections into a single string for storage
   const briefFromSections = (s: typeof briefSections) => [
@@ -3892,6 +3940,66 @@ export default function ProjectPage() {
 
                           </div>
                         </div>
+
+                        {/* ── Jury intelligence panel — "What wins at this show" ──────────── */}
+                        {/* Shown only when a show_profiles row exists for this direction's show.
+                            Collapsed by default. Uses the same show_profiles query pattern as the
+                            evaluate-entry and generate-draft edge functions. */}
+                        {showProfiles[dirId] && (
+                          <div className="border-b border-gray-100">
+                            <button
+                              onClick={() => setShowProfileOpen(prev => ({ ...prev, [dirId]: !prev[dirId] }))}
+                              className="w-full px-5 py-2.5 flex items-center justify-between text-left hover:bg-gray-50 transition-colors group"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-400 group-hover:text-gray-600 transition-colors">🎯</span>
+                                <span className="text-xs font-medium text-gray-400 group-hover:text-gray-600 transition-colors">
+                                  What wins at {dirShow || showProfiles[dirId]!.show_name}
+                                </span>
+                                {dirCategory && showProfiles[dirId]!.show_name && (
+                                  <span className="text-xs text-gray-300">· {dirCategory}</span>
+                                )}
+                              </div>
+                              <span className="text-gray-300 text-xs group-hover:text-gray-400 transition-colors">
+                                {showProfileOpen[dirId] ? '▲' : '▼'}
+                              </span>
+                            </button>
+
+                            {showProfileOpen[dirId] && (
+                              <div className="px-5 pb-5 pt-3 bg-gray-50 space-y-4">
+                                {showProfiles[dirId]!.judging_philosophy && (
+                                  <div>
+                                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Judging philosophy</p>
+                                    <p className="text-sm text-gray-700 leading-relaxed">{showProfiles[dirId]!.judging_philosophy}</p>
+                                  </div>
+                                )}
+                                {showProfiles[dirId]!.scoring_emphasis && (
+                                  <div>
+                                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">What they score on</p>
+                                    <p className="text-sm text-gray-700 leading-relaxed">{showProfiles[dirId]!.scoring_emphasis}</p>
+                                  </div>
+                                )}
+                                {showProfiles[dirId]!.common_mistakes && (
+                                  <div>
+                                    <p className="text-xs font-semibold text-amber-500 uppercase tracking-wider mb-1.5">Common mistakes</p>
+                                    <p className="text-sm text-gray-700 leading-relaxed">{showProfiles[dirId]!.common_mistakes}</p>
+                                  </div>
+                                )}
+                                {showProfiles[dirId]!.language_guidance && (
+                                  <div>
+                                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Language & tone</p>
+                                    <p className="text-sm text-gray-700 leading-relaxed">{showProfiles[dirId]!.language_guidance}</p>
+                                  </div>
+                                )}
+                                {showProfiles[dirId]!.jury_composition_notes && (
+                                  <p className="text-xs text-gray-400 pt-3 border-t border-gray-200 leading-relaxed">
+                                    {showProfiles[dirId]!.jury_composition_notes}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         {isGeneratingThis && (
                           <div className="px-5 pt-3 pb-1">
