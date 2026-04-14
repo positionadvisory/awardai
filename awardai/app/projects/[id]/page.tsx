@@ -3103,7 +3103,7 @@ export default function ProjectPage() {
 
       {/* Tabs — horizontally scrollable on mobile */}
       <div className="border-b border-gray-200 bg-white relative">
-        <div className="max-w-5xl mx-auto px-2 sm:px-6 flex overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+        <div className="w-full max-w-5xl mx-auto px-2 sm:px-6 flex overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
           {TABS.map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
               className={`shrink-0 px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
