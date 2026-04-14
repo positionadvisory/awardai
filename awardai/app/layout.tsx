@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 
@@ -7,6 +7,11 @@ const inter = Inter({ subsets: ['latin'] })
 // ── Global SEO / GEO metadata ────────────────────────────────────────────────
 // Page-level metadata overrides these defaults via Next.js metadata cascade.
 // JSON-LD structured data is added per-page (articles/[slug], about).
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+}
+
 export const metadata: Metadata = {
   metadataBase: new URL('https://gotshortlisted.com'),
 
