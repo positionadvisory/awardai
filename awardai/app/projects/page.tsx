@@ -366,12 +366,12 @@ export default function ProjectsPage() {
           </div>
           <div className="flex items-center gap-4 shrink-0">
             {user?.email === 'ben@positionadvisory.com' && (
-              <Link href="/campaigns" className="text-sm text-gray-500 hover:text-gray-900 transition-colors">
+              <Link href="/campaigns" className="hidden sm:inline text-sm text-gray-500 hover:text-gray-900 transition-colors">
                 Winning Campaigns
               </Link>
             )}
             {userRole === 'admin' && (
-              <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900 transition-colors">
+              <Link href="/dashboard" className="hidden sm:inline text-sm text-gray-500 hover:text-gray-900 transition-colors">
                 Dashboard
               </Link>
             )}
