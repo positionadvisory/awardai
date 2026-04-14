@@ -2991,16 +2991,26 @@ export default function ProjectPage() {
   )
 
   return (
-    <div className="min-h-screen bg-gray-100 text-gray-900">
+    <div className="min-h-screen bg-gray-100 text-gray-900 overflow-x-hidden">
 
       {/* Header */}
-      <header className="border-b border-gray-200 bg-white px-4 sm:px-6 py-4">
-        <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <button onClick={() => router.push('/projects')} className="text-gray-500 hover:text-gray-900 transition-colors text-sm shrink-0">
-              ← Projects
-            </button>
-            <span className="text-gray-300 shrink-0">|</span>
+      <header className="border-b border-gray-200 bg-white px-4 sm:px-6 py-3 sm:py-4">
+        <div className="max-w-5xl mx-auto">
+
+          {/* ── Mobile layout: two rows ─────────────────────────────────────── */}
+          <div className="sm:hidden">
+            {/* Row 1: back link + status badge */}
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <button onClick={() => router.push('/projects')} className="text-gray-500 hover:text-gray-900 transition-colors text-sm">
+                ← Projects
+              </button>
+              <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${
+                project.status === 'active' ? 'bg-green-100 text-green-700' :
+                project.status === 'final' ? 'bg-green-100 text-green-800' :
+                'bg-gray-100 text-gray-500'
+              }`}>{project.status}</span>
+            </div>
+            {/* Row 2: project name */}
             <div className="min-w-0">
               {editingName ? (
                 <div className="flex items-center gap-2">
@@ -3015,7 +3025,7 @@ export default function ProjectPage() {
                     }}
                     onBlur={handleRenameProject}
                     disabled={savingName}
-                    className="text-sm font-semibold text-gray-900 bg-white border border-gray-300 rounded-md px-2 py-0.5 focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent min-w-0 w-48 sm:w-64 disabled:opacity-50"
+                    className="text-sm font-semibold text-gray-900 bg-white border border-gray-300 rounded-md px-2 py-0.5 focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent min-w-0 w-full disabled:opacity-50"
                   />
                   {savingName && (
                     <svg className="animate-spin h-3.5 w-3.5 text-gray-400 shrink-0" viewBox="0 0 24 24" fill="none">
@@ -3027,7 +3037,7 @@ export default function ProjectPage() {
               ) : (
                 <button
                   onClick={() => { setNameEditValue(project.campaign_name); setEditingName(true) }}
-                  className="group flex items-center gap-1.5 text-left"
+                  className="group flex items-center gap-1.5 text-left min-w-0 w-full"
                   title="Click to rename"
                 >
                   <h1 className="font-semibold text-gray-900 leading-tight truncate">{project.campaign_name}</h1>
@@ -3037,11 +3047,57 @@ export default function ProjectPage() {
               {project.client_name && <p className="text-gray-500 text-xs truncate">{project.client_name}</p>}
             </div>
           </div>
-          <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${
-            project.status === 'active' ? 'bg-green-100 text-green-700' :
-            project.status === 'final' ? 'bg-green-100 text-green-800' :
-            'bg-gray-100 text-gray-500'
-          }`}>{project.status}</span>
+
+          {/* ── Desktop layout: single row ──────────────────────────────────── */}
+          <div className="hidden sm:flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <button onClick={() => router.push('/projects')} className="text-gray-500 hover:text-gray-900 transition-colors text-sm shrink-0">
+                ← Projects
+              </button>
+              <span className="text-gray-300 shrink-0">|</span>
+              <div className="min-w-0">
+                {editingName ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      autoFocus
+                      type="text"
+                      value={nameEditValue}
+                      onChange={e => setNameEditValue(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') handleRenameProject()
+                        if (e.key === 'Escape') setEditingName(false)
+                      }}
+                      onBlur={handleRenameProject}
+                      disabled={savingName}
+                      className="text-sm font-semibold text-gray-900 bg-white border border-gray-300 rounded-md px-2 py-0.5 focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent min-w-0 w-64 disabled:opacity-50"
+                    />
+                    {savingName && (
+                      <svg className="animate-spin h-3.5 w-3.5 text-gray-400 shrink-0" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                      </svg>
+                    )}
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setNameEditValue(project.campaign_name); setEditingName(true) }}
+                    className="group flex items-center gap-1.5 text-left min-w-0"
+                    title="Click to rename"
+                  >
+                    <h1 className="font-semibold text-gray-900 leading-tight truncate">{project.campaign_name}</h1>
+                    <span className="text-gray-300 group-hover:text-gray-500 transition-colors shrink-0 text-xs">✎</span>
+                  </button>
+                )}
+                {project.client_name && <p className="text-gray-500 text-xs truncate">{project.client_name}</p>}
+              </div>
+            </div>
+            <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${
+              project.status === 'active' ? 'bg-green-100 text-green-700' :
+              project.status === 'final' ? 'bg-green-100 text-green-800' :
+              'bg-gray-100 text-gray-500'
+            }`}>{project.status}</span>
+          </div>
+
         </div>
       </header>
 
