@@ -117,7 +117,7 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
         />
       </head>
-      <body className={`${inter.className} bg-gray-100 antialiased`}>
+      <body className={`${inter.className} bg-gray-100 antialiased overflow-x-hidden`}>
         {children}
       </body>
     </html>
