@@ -393,15 +393,15 @@ export default function ProjectsPage() {
             onClick={() => setProfileOpen(o => !o)}
             className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
           >
-            <div className="flex items-center gap-3">
-              <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center text-sm">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center text-sm shrink-0">
                 {agencyProfile?.org_type === 'brand' ? '🏷️' : '🏢'}
               </div>
-              <div className="text-left">
-                <p className="text-sm font-medium text-gray-900">
+              <div className="text-left min-w-0">
+                <p className="text-sm font-medium text-gray-900 truncate">
                   {agencyProfile?.agency_name ?? 'Organisation Profile'}
                 </p>
-                <p className="text-xs text-gray-400 mt-0.5">
+                <p className="text-xs text-gray-400 mt-0.5 truncate">
                   {agencyProfile
                     ? `${ORG_TYPE_LABELS[agencyProfile.org_type ?? 'agency']}${agencyProfile.agency_city ? ' · ' + agencyProfile.agency_city : ''} · Personalises all AI-generated entries`
                     : 'Upload your credentials deck to personalise AI-generated entries'}
@@ -844,7 +844,7 @@ export default function ProjectsPage() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
                       <h2 className="font-medium text-gray-900 truncate">{p.campaign_name}</h2>
                       {p.award_year && (
                         <span className="text-xs text-gray-400 shrink-0">{p.award_year}</span>
