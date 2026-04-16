@@ -233,7 +233,7 @@ export default function CampaignsPage() {
 
       {/* Header */}
       <header className="border-b border-gray-200 bg-white px-4 sm:px-6 py-4">
-        <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
+        <div className="w-full max-w-5xl mx-auto flex items-center justify-between gap-3">
           <div className="flex items-center gap-4">
             <Link href="/projects" className="flex items-center gap-3">
               <div className="w-7 h-7 rounded-lg bg-green-800 flex items-center justify-center">
