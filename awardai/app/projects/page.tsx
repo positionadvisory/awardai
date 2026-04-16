@@ -835,7 +835,7 @@ export default function ProjectsPage() {
             )}
           </div>
         ) : (
-          <div className="grid gap-3">
+          <div className="grid grid-cols-1 gap-3">
             {filteredProjects.map((p) => (
               <button
                 key={p.id}
