@@ -2995,7 +2995,7 @@ export default function ProjectPage() {
 
       {/* Header */}
       <header className="border-b border-gray-200 bg-white px-4 sm:px-6 py-3 sm:py-4">
-        <div className="max-w-5xl mx-auto">
+        <div className="w-full max-w-5xl mx-auto">
 
           {/* ── Mobile layout: two rows ─────────────────────────────────────── */}
           <div className="sm:hidden">
@@ -3631,7 +3631,7 @@ export default function ProjectPage() {
                     ))}
                   </div>
                 )}
-              <div className="grid gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 {[...directions].sort((a, b) => {
                   if (dirSortKey === 'category_fit') {
                     return (b.win_likelihood ?? 0) - (a.win_likelihood ?? 0)
