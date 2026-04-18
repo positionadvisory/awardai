@@ -126,15 +126,15 @@ export const DEADLINES_2026: ShowDeadline[] = [
   },
   {
     show: 'Cannes Lions', region: 'Global',
-    finalDate: '2026-04-17', juryDate: '2026-06-15', ceremonyDate: '2026-06-22',
-    earlyBird: 'Feb 2026', standard: 'Mar 2026', final: '17 Apr 2026', ceremony: 'Jun 2026',
-    prValue: 80, note: '$1,200–$1,800/entry. Budget 3–4 entries minimum for a meaningful shot.',
+    finalDate: '2026-04-09', juryDate: '2026-06-15', ceremonyDate: '2026-06-22',
+    earlyBird: 'Feb 2026', standard: 'Mar 2026', final: '9 Apr 2026', ceremony: 'Jun 2026',
+    prValue: 80, note: '$1,200–$1,800/entry. Budget 3–4 entries minimum for a meaningful shot. 2026 deadline was 9 April.',
   },
   {
     show: 'Effie APAC', region: 'APAC',
-    finalDate: '2026-04-30', juryDate: '2026-06-05', ceremonyDate: '2026-06-19',
-    earlyBird: 'Feb 2026', standard: 'Mar 2026', final: '30 Apr 2026', ceremony: 'Jun 2026',
-    prValue: 40, note: 'Most rigorous data requirements of any show. Allow 4–6 weeks for entry writing.',
+    finalDate: '2026-03-09', juryDate: '2026-04-01', ceremonyDate: '2026-09-12',
+    earlyBird: 'Jan 2026', standard: 'Feb 2026', final: '9 Mar 2026', ceremony: 'Sep 2026',
+    prValue: 40, note: 'Most rigorous data requirements of any show. Allow 4–6 weeks for entry writing. 2026 last-chance deadline was 9 March; Gala September 2026.',
   },
   {
     show: 'Women Leading Change', region: 'APAC',
@@ -170,7 +170,7 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'Spikes Asia', region: 'APAC',
     finalDate: '2026-09-11', juryDate: '2026-09-18', ceremonyDate: '2026-09-25',
     earlyBird: 'Jul 2026', standard: 'Aug 2026', final: '11 Sep 2026', ceremony: 'Sep 2026',
-    prValue: 55, note: 'APAC sister show to Cannes Lions. Held in Singapore.',
+    prValue: 55, note: 'APAC sister show to Cannes Lions. Held in Singapore. Sep 2026 dates are estimated next cycle — verify at spikes.asia.',
   },
   {
     show: 'Campaign Asia AOTY', region: 'APAC',
