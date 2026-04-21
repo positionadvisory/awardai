@@ -620,6 +620,7 @@ export default function ProjectPage() {
   const [showRequestSubmitting, setShowRequestSubmitting] = useState(false)
   const [showRequestDone, setShowRequestDone] = useState(false)
   const [showRequestNoKit, setShowRequestNoKit] = useState(false)
+  const [showRequestError, setShowRequestError] = useState('')
 
   // Materials
   const [uploading, setUploading] = useState(false)
@@ -1946,9 +1947,13 @@ export default function ProjectPage() {
   const submitShowRequest = async () => {
     if (!showRequestName.trim()) return
     setShowRequestSubmitting(true)
+    setShowRequestError('')
     try {
       const accessToken = await getToken()
-      if (!accessToken) return
+      if (!accessToken) {
+        setShowRequestError('Session expired — please refresh the page and try again.')
+        return
+      }
       const res = await fetch('/api/shows/request', {
         method: 'POST',
         headers: {
@@ -1972,9 +1977,12 @@ export default function ProjectPage() {
         setCustomShowInput('')
         setShowRequestDone(true)
         setShowRequestNoKit(!showRequestKitUrl.trim())
+      } else {
+        setShowRequestError('Something went wrong sending the request. Please try again.')
       }
     } catch (e) {
       console.error('Show request submit error:', e)
+      setShowRequestError('Something went wrong sending the request. Please try again.')
     } finally {
       setShowRequestSubmitting(false)
     }
@@ -6460,7 +6468,10 @@ export default function ProjectPage() {
                       />
                     </div>
                   </div>
-                  <div className="flex gap-2 mt-5">
+                  {showRequestError && (
+                    <p className="mt-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{showRequestError}</p>
+                  )}
+                  <div className="flex gap-2 mt-4">
                     <button
                       onClick={submitShowRequest}
                       disabled={showRequestSubmitting}
