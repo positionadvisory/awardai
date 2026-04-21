@@ -1,115 +1,136 @@
-// Deploy to: app/api/shows/request/route.ts
-//
-// Called when a user requests an award show not yet in the system.
-// Inserts a show_requests row and sends a notification email to ben@positionadvisory.com
-// Email delivery uses Resend — set RESEND_API_KEY in env to activate.
-// If RESEND_API_KEY is missing, the request is still saved (soft failure).
-
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const ANON_KEY      = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-const SERVICE_KEY   = process.env.SUPABASE_SERVICE_ROLE_KEY!
-const RESEND_KEY    = process.env.RESEND_API_KEY ?? ''
-const NOTIFY_EMAIL  = 'ben@positionadvisory.com'
+// Deploy to: awardai/app/api/shows/request/route.ts
+//
+// Receives a show request from the project workspace and emails
+// ben@positionadvisory.com via the Resend API.
+//
+// Auth: requires a valid Supabase user session (Authorization: Bearer <token>)
+// Required env var: RESEND_API_KEY
+//
+// If RESEND_API_KEY is not set, the request is logged server-side only
+// and the endpoint still returns success so the UI doesn't break.
 
-export async function POST(req: NextRequest) {
-  // ── Auth ────────────────────────────────────────────────────────────────
-  const authHeader = req.headers.get('Authorization') ?? ''
-  const jwt = authHeader.replace('Bearer ', '')
-  if (!jwt) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+const NOTIFY_EMAIL = 'ben@positionadvisory.com'
+const FROM_EMAIL   = 'Shortlist <hello@gotshortlisted.com>'
 
-  const userClient = createClient(SUPABASE_URL, ANON_KEY, {
-    global: { headers: { Authorization: authHeader } },
-  })
-  const { data: { user }, error: authError } = await userClient.auth.getUser(jwt)
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+export async function POST(request: Request) {
+  try {
+    // ── Auth check ──────────────────────────────────────────────────────────
+    const authHeader = request.headers.get('authorization') ?? ''
+    const jwt = authHeader.replace('Bearer ', '').trim()
 
-  // ── Parse body ───────────────────────────────────────────────────────────
-  const body = await req.json().catch(() => ({}))
-  const { show_name, show_url, market, entry_kit_url, project_id } = body
-
-  if (!show_name || typeof show_name !== 'string' || !show_name.trim()) {
-    return NextResponse.json({ error: 'show_name is required' }, { status: 400 })
-  }
-
-  // ── Get org_id ───────────────────────────────────────────────────────────
-  const admin = createClient(SUPABASE_URL, SERVICE_KEY)
-  const { data: membership } = await admin
-    .from('org_members')
-    .select('org_id')
-    .eq('user_id', user.id)
-    .limit(1)
-    .single()
-  const org_id = membership?.org_id ?? null
-
-  // ── Insert show_request ──────────────────────────────────────────────────
-  const { data: inserted, error: insertError } = await admin
-    .from('show_requests')
-    .insert({
-      show_name:     show_name.trim(),
-      show_url:      show_url?.trim() || null,
-      market:        market?.trim() || null,
-      entry_kit_url: entry_kit_url?.trim() || null,
-      requested_by:  user.id,
-      org_id,
-      project_id:    project_id ?? null,
-      status:        'pending',
-    })
-    .select('id')
-    .single()
-
-  if (insertError) {
-    console.error('show_requests insert error:', insertError)
-    return NextResponse.json({ error: 'Failed to save request' }, { status: 500 })
-  }
-
-  // ── Send email notification ─────────────────────────────────────────────
-  let emailSent = false
-  if (RESEND_KEY) {
-    try {
-      const emailBody = [
-        `New award show request`,
-        ``,
-        `Show name: ${show_name.trim()}`,
-        show_url       ? `Show URL: ${show_url.trim()}`             : `Show URL: (not provided)`,
-        market         ? `Market: ${market.trim()}`                 : `Market: (not provided)`,
-        entry_kit_url  ? `Entry kit URL: ${entry_kit_url.trim()}`   : `Entry kit: (not provided — flag for follow-up)`,
-        ``,
-        `Requested by: ${user.email ?? user.id}`,
-        `Request ID: ${inserted.id}`,
-      ].join('\n')
-
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${RESEND_KEY}`,
-        },
-        body: JSON.stringify({
-          from: 'Shortlist <noreply@shortlist.app>',
-          to:   [NOTIFY_EMAIL],
-          subject: `New show request: ${show_name.trim()}`,
-          text: emailBody,
-        }),
-      })
-      emailSent = res.ok
-      if (!res.ok) {
-        const errText = await res.text()
-        console.error('Resend error:', errText)
-      }
-    } catch (e) {
-      console.error('Email send failed (non-fatal):', e)
+    if (!jwt) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-  }
 
-  return NextResponse.json({
-    success: true,
-    request_id: inserted.id,
-    email_sent: emailSent,
-    no_kit: !entry_kit_url,
-  })
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+    const { data: { user }, error: authError } = await supabase.auth.getUser(jwt)
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // ── Parse body ───────────────────────────────────────────────────────────
+    const { show_name, show_url, market, entry_kit_url, project_id } = await request.json()
+
+    if (!show_name?.trim()) {
+      return NextResponse.json({ error: 'show_name is required' }, { status: 400 })
+    }
+
+    // ── Build email ──────────────────────────────────────────────────────────
+    const subject = `Show request: ${show_name.trim()}`
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 520px;">
+        <h2 style="color: #111827; margin-bottom: 4px;">New show request</h2>
+        <p style="color: #6b7280; font-size: 14px; margin-top: 0;">via Shortlist project workspace</p>
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;" />
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td style="padding: 6px 0; color: #6b7280; font-size: 14px; width: 100px;">Show</td>
+            <td style="padding: 6px 0; color: #111827; font-size: 14px; font-weight: 600;">${show_name.trim()}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; color: #6b7280; font-size: 14px;">Requested by</td>
+            <td style="padding: 6px 0; font-size: 14px;">
+              <a href="mailto:${user.email}" style="color: #166534;">${user.email}</a>
+            </td>
+          </tr>
+          ${market ? `
+          <tr>
+            <td style="padding: 6px 0; color: #6b7280; font-size: 14px;">Market</td>
+            <td style="padding: 6px 0; color: #111827; font-size: 14px;">${market}</td>
+          </tr>
+          ` : ''}
+          ${show_url ? `
+          <tr>
+            <td style="padding: 6px 0; color: #6b7280; font-size: 14px; vertical-align: top;">Show website</td>
+            <td style="padding: 6px 0; font-size: 14px;">
+              <a href="${show_url}" style="color: #166534;">${show_url}</a>
+            </td>
+          </tr>
+          ` : ''}
+          ${entry_kit_url ? `
+          <tr>
+            <td style="padding: 6px 0; color: #6b7280; font-size: 14px; vertical-align: top;">Entry kit</td>
+            <td style="padding: 6px 0; font-size: 14px;">
+              <a href="${entry_kit_url}" style="color: #166534;">${entry_kit_url}</a>
+            </td>
+          </tr>
+          ` : ''}
+          ${project_id ? `
+          <tr>
+            <td style="padding: 6px 0; color: #6b7280; font-size: 14px;">Project ID</td>
+            <td style="padding: 6px 0; color: #111827; font-size: 14px; font-family: monospace;">${project_id}</td>
+          </tr>
+          ` : ''}
+        </table>
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;" />
+        <p style="color: #9ca3af; font-size: 12px;">
+          Reply to respond to ${user.email}.
+        </p>
+      </div>
+    `
+
+    // ── Send via Resend ──────────────────────────────────────────────────────
+    const resendKey = process.env.RESEND_API_KEY
+
+    if (!resendKey) {
+      // Log for manual follow-up — don't fail the request
+      console.log('[shows/request] RESEND_API_KEY not set. Show request:', {
+        show_name, show_url, market, entry_kit_url, project_id, user: user.email,
+      })
+      return NextResponse.json({ success: true })
+    }
+
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${resendKey}`,
+      },
+      body: JSON.stringify({
+        from:     FROM_EMAIL,
+        to:       NOTIFY_EMAIL,
+        reply_to: user.email,
+        subject,
+        html,
+      }),
+    })
+
+    if (!res.ok) {
+      const body = await res.text()
+      console.error('[shows/request] Resend error:', res.status, body)
+      return NextResponse.json({ error: 'Email delivery failed' }, { status: 500 })
+    }
+
+    return NextResponse.json({ success: true })
+
+  } catch (err) {
+    console.error('[shows/request] Unexpected error:', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 }
