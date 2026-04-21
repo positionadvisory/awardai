@@ -4,6 +4,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
 import GeneratingBar from '@/components/GeneratingBar'
+import ShowsDrawer from '@/components/ShowsDrawer'
 import { MATERIALS_EVAL_STATEMENTS, JURY_EVAL_STATEMENTS, COACH_REVIEW_STATEMENTS } from '@/lib/generatingStatements'
 import { appErrorFromResponse, formatError, parseErrorString } from '@/lib/errorMessages'
 
@@ -602,6 +603,8 @@ export default function ProjectPage() {
   const [briefSections, setBriefSections] = useState({ idea: '', execution: '', results: '', intentions: '' })
   const [targetShows, setTargetShows] = useState<string[]>([])
   const [editingShows, setEditingShows] = useState(false)
+  const [showsDrawerOpen, setShowsDrawerOpen] = useState(false)
+  const [showsDrawerTab, setShowsDrawerTab] = useState<'calendar' | 'budget'>('calendar')
   const [savingShows, setSavingShows] = useState(false)
   const [editingShowsInline, setEditingShowsInline] = useState(false)
   const [showsChangedWarning, setShowsChangedWarning] = useState(false)
@@ -3205,9 +3208,19 @@ export default function ProjectPage() {
                   <h2 className="text-sm font-semibold text-gray-800">Target Award Shows</h2>
                   <p className="text-xs text-gray-400 mt-0.5">Select the shows you're considering entering. The AI uses these when suggesting directions and evaluating category fit.</p>
                 </div>
-                {!editingShows && (
-                  <button onClick={() => setEditingShows(true)} className="text-xs text-green-700 hover:text-green-600 transition-colors ml-4 flex-shrink-0">Edit</button>
-                )}
+                <div className="flex items-center gap-3 ml-4 flex-shrink-0">
+                  <button
+                    onClick={() => { setShowsDrawerTab('calendar'); setShowsDrawerOpen(true) }}
+                    className="text-xs text-gray-500 hover:text-gray-700 transition-colors"
+                  >📅 Calendar</button>
+                  <button
+                    onClick={() => { setShowsDrawerTab('budget'); setShowsDrawerOpen(true) }}
+                    className="text-xs text-gray-500 hover:text-gray-700 transition-colors"
+                  >💰 Budget</button>
+                  {!editingShows && (
+                    <button onClick={() => setEditingShows(true)} className="text-xs text-green-700 hover:text-green-600 transition-colors">Edit</button>
+                  )}
+                </div>
               </div>
 
               {editingShows ? (
@@ -6413,6 +6426,14 @@ export default function ProjectPage() {
           </div>
         </div>
       )}
+
+      <ShowsDrawer
+        open={showsDrawerOpen}
+        onClose={() => setShowsDrawerOpen(false)}
+        initialTab={showsDrawerTab}
+        directions={directions}
+        orgId={orgId}
+      />
 
     </div>
   )
