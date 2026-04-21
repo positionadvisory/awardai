@@ -7,6 +7,7 @@ import GeneratingBar from '@/components/GeneratingBar'
 import ShowsDrawer from '@/components/shows/ShowsDrawer'
 import { MATERIALS_EVAL_STATEMENTS, JURY_EVAL_STATEMENTS, COACH_REVIEW_STATEMENTS } from '@/lib/generatingStatements'
 import { appErrorFromResponse, formatError, parseErrorString } from '@/lib/errorMessages'
+import { computeRoiIndex } from '@/lib/shows-data'
 
 // ── ErrorBanner — renders a friendly message with a small diagnostic code ────
 // Expects error strings in "message [CODE]" format from formatError().
@@ -759,7 +760,7 @@ export default function ProjectPage() {
   const [dirSourceMaterialIdx, setDirSourceMaterialIdx] = useState<number>(-1)
   const [dirSourceEntryDirectionId, setDirSourceEntryDirectionId] = useState<number>(-1)
   // Directions tab: sort key
-  const [dirSortKey, setDirSortKey] = useState<'default' | 'category_fit' | 'medal_chance'>('default')
+  const [dirSortKey, setDirSortKey] = useState<'default' | 'category_fit' | 'medal_chance' | 'roi'>('default')
 
   // Festival / jury intelligence — show_profiles rows keyed by directionId
   const [showProfiles, setShowProfiles] = useState<Record<number, ShowProfile | null>>({})
@@ -3629,7 +3630,7 @@ export default function ProjectPage() {
                 {directions.length > 1 && (
                   <div className="flex items-center gap-2 mb-4">
                     <span className="text-xs text-gray-400 flex-shrink-0">Sort by:</span>
-                    {(['default', 'category_fit', 'medal_chance'] as const).map(key => (
+                    {(['default', 'category_fit', 'medal_chance', 'roi'] as const).map(key => (
                       <button
                         key={key}
                         onClick={() => setDirSortKey(key)}
@@ -3639,7 +3640,7 @@ export default function ProjectPage() {
                             : 'bg-white border-gray-300 text-gray-500 hover:border-gray-400 hover:text-gray-700'
                         }`}
                       >
-                        {key === 'default' ? 'Default' : key === 'category_fit' ? 'Category Fit ↓' : 'Medal Chance ↓'}
+                        {key === 'default' ? 'Default' : key === 'category_fit' ? 'Category Fit ↓' : key === 'medal_chance' ? 'Medal Chance ↓' : 'ROI ↓'}
                       </button>
                     ))}
                   </div>
@@ -3655,6 +3656,11 @@ export default function ProjectPage() {
                     const aChance = calculateWinLikelihood(a.best_show, aEval?.overall_score)
                     const bChance = calculateWinLikelihood(b.best_show, bEval?.overall_score)
                     return bChance - aChance
+                  }
+                  if (dirSortKey === 'roi') {
+                    const aRoi = computeRoiIndex(a.best_show, a.win_likelihood ?? undefined)
+                    const bRoi = computeRoiIndex(b.best_show, b.win_likelihood ?? undefined)
+                    return bRoi - aRoi
                   }
                   return 0
                 }).map((d, idx, arr) => {
@@ -3797,6 +3803,17 @@ export default function ProjectPage() {
                                 )
                               })()}
                             </div>
+                            {/* ROI Index — category-fit adjusted */}
+                            {(() => {
+                              const roiIdx = computeRoiIndex(d.best_show, d.win_likelihood ?? undefined)
+                              if (!roiIdx) return null
+                              return (
+                                <div>
+                                  <p className={`text-base font-semibold tabular-nums ${roiIdx >= 70 ? 'text-green-700' : roiIdx >= 40 ? 'text-amber-700' : 'text-gray-500'}`}>{roiIdx}<span className="text-xs font-normal text-gray-400">/100</span></p>
+                                  <p className="text-gray-400 text-xs">ROI index</p>
+                                </div>
+                              )
+                            })()}
                           </div>
                         )}
                       </div>
@@ -4511,6 +4528,69 @@ export default function ProjectPage() {
                             )}
                           </div>
                         )}
+
+                        {/* ── ROI Estimation ─────────────────────────────────────────
+                             Shows after jury eval, updates when coach review also exists.
+                             Jury-only:   quality = juryScore × 10
+                             Combined:    quality = (juryScore + untappedPotential) × 10
+                             Both capped at 100 before passing to computeRoiIndex. */}
+                        {(hasJudge || hasCoach) && dirShow && (() => {
+                          const juryScore  = evalBoth.judge?.overall_score
+                          const coachScore = evalBoth.coach?.overall_score
+                          const untapped   = coachScore !== undefined
+                            ? parseFloat((10 - coachScore).toFixed(1))
+                            : undefined
+                          // Jury-only quality: score × 10, capped at 100
+                          const juryQuality = juryScore !== undefined
+                            ? Math.min(100, juryScore * 10)
+                            : undefined
+                          // Combined quality: (juryScore + untapped) × 10, capped at 100
+                          const combinedQuality = juryScore !== undefined && untapped !== undefined
+                            ? Math.min(100, (juryScore + untapped) * 10)
+                            : undefined
+                          const baseRoi     = computeRoiIndex(dirShow)
+                          const juryRoi     = juryQuality !== undefined  ? computeRoiIndex(dirShow, juryQuality)     : undefined
+                          const combinedRoi = combinedQuality !== undefined ? computeRoiIndex(dirShow, combinedQuality) : undefined
+                          if (!baseRoi) return null
+                          const roiColor = (v: number) => v >= 70 ? 'text-green-700' : v >= 40 ? 'text-amber-700' : 'text-gray-500'
+                          const roiBg    = (v: number) => v >= 70 ? 'bg-green-50 border-green-200' : v >= 40 ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-200'
+                          return (
+                            <div className="px-5 py-4 border-b border-gray-200 bg-white">
+                              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">ROI Estimation</p>
+                              <div className="flex flex-wrap gap-2">
+                                {/* Base — no quality adjustment */}
+                                <div className={`flex-1 min-w-[100px] border rounded-lg px-3 py-2.5 ${roiBg(baseRoi)}`}>
+                                  <p className={`text-xl font-bold tabular-nums ${roiColor(baseRoi)}`}>
+                                    {baseRoi}<span className="text-xs font-normal text-gray-400">/100</span>
+                                  </p>
+                                  <p className="text-xs text-gray-400 mt-0.5">Base</p>
+                                </div>
+                                {/* Jury-adjusted */}
+                                {juryRoi !== undefined && (
+                                  <div className={`flex-1 min-w-[100px] border rounded-lg px-3 py-2.5 ${roiBg(juryRoi)}`}>
+                                    <p className={`text-xl font-bold tabular-nums ${roiColor(juryRoi)}`}>
+                                      {juryRoi}<span className="text-xs font-normal text-gray-400">/100</span>
+                                    </p>
+                                    <p className="text-xs text-gray-400 mt-0.5">Jury score adjusted</p>
+                                  </div>
+                                )}
+                                {/* Combined potential — jury + coach untapped */}
+                                {combinedRoi !== undefined && (
+                                  <div className={`flex-1 min-w-[100px] border-2 rounded-lg px-3 py-2.5 ${roiBg(combinedRoi)}`}>
+                                    <p className={`text-xl font-bold tabular-nums ${roiColor(combinedRoi)}`}>
+                                      {combinedRoi}<span className="text-xs font-normal text-gray-400">/100</span>
+                                    </p>
+                                    <p className="text-xs text-gray-400 mt-0.5">Maximum potential</p>
+                                    <p className="text-xs text-gray-400">({juryScore?.toFixed(1)} + {untapped?.toFixed(1)} untapped)</p>
+                                  </div>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-400 mt-2.5 leading-relaxed">
+                                Prestige × Base Medal Chance Rate % ÷ entry fee, quality-adjusted. Index normalized to 100.
+                              </p>
+                            </div>
+                          )
+                        })()}
 
                         {/* Evaluation Chat — gated on hasJudge || hasCoach, not on the active-mode evaluation,
                              so the section stays mounted when the user switches between judge/coach tabs */}
