@@ -434,3 +434,44 @@ export function getDeadlineUrgency(showName: string | null | undefined): Deadlin
     message: `${daysLeft} days to deadline (${show.final})`,
   }
 }
+
+// ── ROI Index ─────────────────────────────────────────────────────────────────
+// Normalized 0–100 index combining show prestige (prValue), Base Medal Chance
+// Rate % (any metal — Bronze/Silver/Gold), and entry fee.
+// Higher = stronger expected return relative to cost.
+//
+// qualityScore (0–100) adjusts medal chance via qFactor():
+//   Category fit:    pass direction.win_likelihood directly
+//   Jury quality:    pass Math.min(100, evaluation.overall_score * 10)
+//   Combined:        pass Math.min(100, (juryScore + untappedPotential) * 10)
+//
+// Normalization: ceiling is the max raw score across all shows at base quality,
+// so the best-value show always = 100 at base; quality-adjusted scores may
+// exceed the base ceiling (capped at 100).
+
+const _ROI_CEILING: number = (() => {
+  let max = 0
+  for (const [show, rates] of Object.entries(WIN_RATES)) {
+    const dl = DEADLINES_2026.find(d => d.show === show)
+    const prv = dl?.prValue ?? 30
+    const raw = (prv * rates.metal) / rates.fee
+    if (raw > max) max = raw
+  }
+  return max
+})()
+
+export function computeRoiIndex(
+  showName: string | null | undefined,
+  qualityScore?: number  // 0–100; omit for base (no quality adjustment)
+): number {
+  const key = resolveWinRateKey(showName)
+  if (!key || !WIN_RATES[key]) return 0
+  const rates = WIN_RATES[key]
+  const dl = DEADLINES_2026.find(d => d.show === key)
+  const prValue = dl?.prValue ?? 30
+  const medalChance = qualityScore !== undefined
+    ? rates.metal * qFactor(qualityScore)
+    : rates.metal
+  const raw = (prValue * medalChance) / rates.fee
+  return Math.min(100, Math.round((raw / _ROI_CEILING) * 100))
+}
