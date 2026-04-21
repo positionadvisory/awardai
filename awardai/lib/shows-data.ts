@@ -101,6 +101,24 @@ export const DEADLINES_2026: ShowDeadline[] = [
     prValue: 35, note: 'Multiple entry rounds. Early bird savings significant.',
   },
   {
+    show: 'Clio Entertainment', region: 'Global',
+    finalDate: '2026-08-08', juryDate: '2026-09-01', ceremonyDate: '2026-10-15',
+    earlyBird: 'May 2026', standard: 'Jun 2026', final: '8 Aug 2026', ceremony: 'Oct 2026',
+    prValue: 30, note: 'Entertainment marketing: Gaming, Home Entertainment, Live, TV/Streaming, Theatrical. Judges come from film/TV/gaming industries. $375 single / $750 campaign. Verify exact ceremony date.',
+  },
+  {
+    show: 'Clio Sports', region: 'Global',
+    finalDate: '2026-09-04', juryDate: '2026-10-01', ceremonyDate: '2026-11-01',
+    earlyBird: 'Jun 2026', standard: 'Jul 2026', final: '4 Sep 2026', ceremony: 'Nov 2026',
+    prValue: 28, note: 'Sports marketing: Sponsor/Brand, Sports Property/Team, Media/Tech. Includes NIL category. $300–$875 depending on category. Entry opened Apr 21 2026.',
+  },
+  {
+    show: 'Clio Creators', region: 'Global',
+    finalDate: '2026-07-31', juryDate: '2026-08-21', ceremonyDate: '2026-09-15',
+    earlyBird: 'Apr 2026', standard: 'Jun 2026', final: '31 Jul 2026', ceremony: 'Sep 2026',
+    prValue: 22, note: 'Brand new 2026 show. Brand Track ($500) + Creator Track ($100) + Student (free). Partnership with YouTube/Influential. First deadline Apr 24. Verify ceremony date for inaugural year.',
+  },
+  {
     show: 'Cristal Festival', region: 'Global',
     finalDate: '2025-12-05', juryDate: '2025-12-10', ceremonyDate: '2025-12-12',
     earlyBird: 'Oct 2025', standard: 'Nov 2025', final: '5 Dec 2025', ceremony: 'Dec 2025',
@@ -116,7 +134,7 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'D&AD', region: 'Global',
     finalDate: '2026-03-27', juryDate: '2026-04-24', ceremonyDate: '2026-05-14',
     earlyBird: 'Jan 2026', standard: 'Feb 2026', final: '27 Mar 2026', ceremony: 'May 2026',
-    prValue: 50, note: 'Pencil levels: Wood / Graphite / Yellow. Widely regarded as hardest to win.',
+    prValue: 50, note: 'Pencil levels: Wood / Graphite / Yellow / Black. GBP fees: Design £180–£250, Advertising £290–£390, Crafts campaigns up to £980. Craft categories: Execution judged before Idea (inverted priority vs other shows).',
   },
   {
     show: 'One Show', region: 'Global',
@@ -128,7 +146,7 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'Cannes Lions', region: 'Global',
     finalDate: '2026-04-09', juryDate: '2026-06-15', ceremonyDate: '2026-06-22',
     earlyBird: 'Feb 2026', standard: 'Mar 2026', final: '9 Apr 2026', ceremony: 'Jun 2026',
-    prValue: 80, note: '$1,200–$1,800/entry. Budget 3–4 entries minimum for a meaningful shot. 2026 deadline was 9 April.',
+    prValue: 80, note: 'EUR pricing: Early Bird €690/€1,150 (single/campaign), Standard €1,100/€1,830, Late €1,695/€2,825. Budget 3–4 entries minimum. AI disclosure mandatory 2026. CEO/CMO sign-off required.',
   },
   {
     show: 'Effie APAC', region: 'APAC',
@@ -241,6 +259,21 @@ export const WIN_RATES: Record<string, WinRateData> = {
     pr: { shortlist: 9000, metal: 35000, gold: 180000, grandprix: 650000 },
     fee: 500,
   },
+  'Clio Entertainment': {
+    shortlist: 25, metal: 14, gold: 5, grandprix: 0.8,
+    pr: { shortlist: 8000, metal: 30000, gold: 150000, grandprix: 500000 },
+    fee: 375,
+  },
+  'Clio Sports': {
+    shortlist: 24, metal: 13, gold: 5, grandprix: 0.8,
+    pr: { shortlist: 8000, metal: 30000, gold: 150000, grandprix: 500000 },
+    fee: 500,
+  },
+  'Clio Creators': {
+    shortlist: 30, metal: 18, gold: 7, grandprix: 1.5,
+    pr: { shortlist: 6000, metal: 20000, gold: 80000, grandprix: 250000 },
+    fee: 250,
+  },
   'Women Leading Change': {
     shortlist: 35, metal: 20, gold: 8, grandprix: 3,
     pr: { shortlist: 8000, metal: 25000, gold: 80000, grandprix: 200000 },
@@ -263,9 +296,9 @@ export const WIN_RATES: Record<string, WinRateData> = {
 // canonical number used in ROI calculations.
 
 export const ENTRY_FEES: Record<string, EntryFeeData> = {
-  'Cannes Lions':           { base: 1350, range: '$1,200–$1,800',           note: 'Film/Craft premium. Late fees add 3–10%.' },
+  'Cannes Lions':           { base: 1200, range: '€690–€1,695 (single); campaign up to €2,825', note: 'EUR pricing. Early Bird €690/€1,150, Standard €1,100/€1,830, Late €1,695/€2,825 (single/campaign). AI disclosure mandatory.' },
   'Spikes Asia':            { base: 1000, range: '$900–$1,400',             note: 'Aligned with APAC market pricing.' },
-  'D&AD':                   { base: 620,  range: '£450–£650 (~$570–$820)',  note: 'GBP pricing. Craft categories higher.' },
+  'D&AD':                   { base: 390,  range: '£180–£980 (GBP)',          note: 'Design £180–£250, Advertising £290–£390, Crafts campaigns up to £980. Execution judged before Idea in Craft categories.' },
   'One Show':               { base: 700,  range: '$650–$950',               note: 'Varies by discipline.' },
   'Effie APAC':             { base: 800,  range: '~$750–$900',              note: 'Data-heavy entries — budget writing time.' },
   'Festival of Media APAC': { base: 550,  range: '~$500–$700',              note: '' },
@@ -274,6 +307,9 @@ export const ENTRY_FEES: Record<string, EntryFeeData> = {
   'ROI Festival':           { base: 450,  range: '~$400–$550',              note: '' },
   'Tangrams':               { base: 400,  range: '~$350–$500',              note: '' },
   'Clio Awards':            { base: 500,  range: '~$450–$700',              note: 'Multiple category tiers.' },
+  'Clio Entertainment':     { base: 375,  range: '$375–$750',               note: 'Single $375 / Campaign $750 (Round 1). AR/VR specialty category free. Entertainment marketing specialist show.' },
+  'Clio Sports':            { base: 500,  range: '$300–$875',               note: 'Gameday/Spot $300, Standard $500–$650, Integrated Campaign $875. Includes NIL category.' },
+  'Clio Creators':          { base: 250,  range: '$100–$500',               note: 'Creator Track $100, Brand Track $500, Student free. New show launched 2026.' },
   'Women Leading Change':   { base: 350,  range: '~$300–$450',              note: '' },
   'Women to Watch APAC':    { base: 300,  range: '~$250–$400',              note: '' },
   'Cristal Festival':       { base: 480,  range: '~$430–$600',              note: 'Premium sector positioning.' },
