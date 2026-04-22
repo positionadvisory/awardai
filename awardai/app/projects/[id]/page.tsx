@@ -2507,10 +2507,35 @@ export default function ProjectPage() {
     const lowerText = text.toLowerCase()
 
     // ── PASS 1: instant client-side show name scan ──────────────────────────
-    // Search the full extracted text for any known show name. Works regardless
-    // of PDF type (AcroForm, flattened, text-based) because the show name always
-    // appears somewhere in the document (header, labels, boilerplate, form fields).
-    const clientShow = kbShows.find(s => lowerText.includes(s.toLowerCase())) ?? null
+    // First try exact canonical match, then fall back to keyword matching so that
+    // variants like "Effies APAC", "SPIKES", "Cannes" all resolve to a known show.
+    const SHOW_KEYWORD_MAP: Array<[string, string]> = [
+      ['cannes', 'Cannes Lions'],
+      ['d&ad', 'D&AD'],
+      ['spikes asia', 'Spikes Asia'],
+      ['spikes', 'Spikes Asia'],
+      ['clio', 'Clio Awards'],
+      ['one show', 'One Show'],
+      ['effie', 'Effies'],
+      ['warc', 'WARC Awards'],
+      ['dubai lynx', 'Dubai Lynx'],
+      ['eurobest', 'Eurobest'],
+      ['new york festivals', 'New York Festivals'],
+      ['london international', 'London International Awards'],
+      ['campaign big', 'Campaign Big Awards'],
+      ['webby', 'Webby Awards'],
+      ['shorty', 'Shorty Awards'],
+      ['adma', 'ADMA Awards'],
+      ['mumbrella', 'Mumbrella Awards'],
+      ['adfest', 'AdFest'],
+      ['gerety', 'Gerety Awards'],
+      ['andy awards', 'Andy Awards'],
+      ['caples', 'Caples Awards'],
+      ['epica', 'Epica Awards'],
+    ]
+    const clientShow =
+      kbShows.find(s => lowerText.includes(s.toLowerCase())) ??
+      (SHOW_KEYWORD_MAP.find(([kw]) => lowerText.includes(kw))?.[1] ?? null)
     if (clientShow) {
       setQuickEvalShow(clientShow)
       setQuickEvalDetectedFields({ show: true, category: false, confidence: 'medium' })
@@ -6524,31 +6549,15 @@ export default function ProjectPage() {
                 )}
                 <input
                   type="text"
+                  list="quickeval-shows"
                   value={quickEvalShow}
                   onChange={e => { setQuickEvalShow(e.target.value); setQuickEvalDetectedFields(prev => ({ ...prev, show: false })) }}
-                  placeholder={(project.target_shows ?? []).length > 0 ? 'Or type another show…' : 'e.g. Cannes Lions, Effies, WARC…'}
+                  placeholder={(project.target_shows ?? []).length > 0 ? 'Or type another show…' : 'e.g. Cannes Lions, Effies APAC, WARC…'}
                   className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
                 />
-                {quickEvalShow.trim().length > 2 && !kbShows.some(s => s.toLowerCase() === quickEvalShow.trim().toLowerCase()) && (
-                  <p className="text-xs text-amber-700 mt-1">
-                    Not in our system yet.{' '}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowRequestName(quickEvalShow.trim())
-                        setShowRequestUrl('')
-                        setShowRequestMarket('')
-                        setShowRequestKitUrl('')
-                        setShowRequestDone(false)
-                        setShowRequestNoKit(false)
-                        setShowRequestModal(true)
-                      }}
-                      className="underline hover:no-underline"
-                    >
-                      Request it
-                    </button>{' '}and we'll add it shortly.
-                  </p>
-                )}
+                <datalist id="quickeval-shows">
+                  {kbShows.map((s: string) => <option key={s} value={s} />)}
+                </datalist>
               </div>
               <div>
                 <div className="flex items-center gap-2 mb-1.5">
@@ -6559,27 +6568,20 @@ export default function ProjectPage() {
                     </span>
                   )}
                 </div>
-                {/* Category dropdown when selected show has known categories */}
-                {SHOW_CATEGORIES[quickEvalShow] ? (
-                  <select
-                    value={quickEvalCategory}
-                    onChange={e => { setQuickEvalCategory(e.target.value); setQuickEvalDetectedFields(prev => ({ ...prev, category: false })) }}
-                    className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-green-600 transition-colors"
-                  >
-                    <option value="">Select a category…</option>
-                    {SHOW_CATEGORIES[quickEvalShow].map((cat: string) => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    type="text"
-                    value={quickEvalCategory}
-                    onChange={e => { setQuickEvalCategory(e.target.value); setQuickEvalDetectedFields(prev => ({ ...prev, category: false })) }}
-                    placeholder="e.g. Grand Prix, Silver, Creative Effectiveness…"
-                    className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
-                  />
-                )}
+                {/* Free-text category input with optional suggestions for known shows */}
+                <input
+                  type="text"
+                  list="quickeval-categories"
+                  value={quickEvalCategory}
+                  onChange={e => { setQuickEvalCategory(e.target.value); setQuickEvalDetectedFields(prev => ({ ...prev, category: false })) }}
+                  placeholder="e.g. Seasonal Marketing, Film Craft, Creative Effectiveness…"
+                  className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
+                />
+                <datalist id="quickeval-categories">
+                  {(SHOW_CATEGORIES[quickEvalShow] ?? []).map((cat: string) => (
+                    <option key={cat} value={cat} />
+                  ))}
+                </datalist>
               </div>
             </div>
 
