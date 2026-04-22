@@ -3,17 +3,18 @@ import { createClient } from '@supabase/supabase-js'
 
 // Deploy to: awardai/app/api/shows/request/route.ts
 //
-// Receives a show request from the project workspace and emails
-// ben@positionadvisory.com via the Resend API.
+// Receives a show request from the project workspace.
+// (1) Persists to show_requests table (service role) so the admin page can action it.
+// (2) Emails ben@positionadvisory.com via Resend.
 //
 // Auth: requires a valid Supabase user session (Authorization: Bearer <token>)
-// Required env var: RESEND_API_KEY
-//
-// If RESEND_API_KEY is not set, the request is logged server-side only
-// and the endpoint still returns success so the UI doesn't break.
+// Required env var: RESEND_API_KEY (email only — DB write succeeds without it)
 
-const NOTIFY_EMAIL = 'ben@positionadvisory.com'
-const FROM_EMAIL   = 'Shortlist <hello@gotshortlisted.com>'
+const NOTIFY_EMAIL   = 'ben@positionadvisory.com'
+const FROM_EMAIL     = 'Shortlist <hello@gotshortlisted.com>'
+const SUPABASE_URL   = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const ANON_KEY       = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const SERVICE_KEY    = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 export async function POST(request: Request) {
   try {
@@ -25,11 +26,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
-    const { data: { user }, error: authError } = await supabase.auth.getUser(jwt)
+    const anonClient = createClient(SUPABASE_URL, ANON_KEY)
+    const { data: { user }, error: authError } = await anonClient.auth.getUser(jwt)
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -39,6 +37,34 @@ export async function POST(request: Request) {
 
     if (!show_name?.trim()) {
       return NextResponse.json({ error: 'show_name is required' }, { status: 400 })
+    }
+
+    // ── Get org_id for the requesting user ───────────────────────────────────
+    const adminClient = createClient(SUPABASE_URL, SERVICE_KEY)
+
+    const { data: profile } = await adminClient
+      .from('profiles')
+      .select('org_id')
+      .eq('id', user.id)
+      .single()
+
+    // ── Persist to show_requests ─────────────────────────────────────────────
+    const { error: insertError } = await adminClient
+      .from('show_requests')
+      .insert({
+        show_name:    show_name.trim(),
+        show_url:     show_url?.trim()       || null,
+        market:       market?.trim()         || null,
+        entry_kit_url: entry_kit_url?.trim() || null,
+        project_id:   project_id             || null,
+        requested_by: user.id,
+        org_id:       profile?.org_id        || null,
+        status:       'pending',
+      })
+
+    if (insertError) {
+      // Log but don't fail — email still goes out
+      console.error('[shows/request] Failed to persist show_request:', insertError.message)
     }
 
     // ── Build email ──────────────────────────────────────────────────────────
@@ -89,8 +115,9 @@ export async function POST(request: Request) {
           ` : ''}
         </table>
         <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;" />
-        <p style="color: #9ca3af; font-size: 12px;">
-          Reply to respond to ${user.email}.
+        <p style="color: #9ca3af; font-size: 12px; margin: 0;">
+          Go to <a href="https://gotshortlisted.com/admin" style="color: #166534;">Admin</a> to research and add this show.
+          Reply to respond directly to ${user.email}.
         </p>
       </div>
     `
@@ -99,8 +126,7 @@ export async function POST(request: Request) {
     const resendKey = process.env.RESEND_API_KEY
 
     if (!resendKey) {
-      // Log for manual follow-up — don't fail the request
-      console.log('[shows/request] RESEND_API_KEY not set. Show request:', {
+      console.log('[shows/request] RESEND_API_KEY not set — persisted to DB only:', {
         show_name, show_url, market, entry_kit_url, project_id, user: user.email,
       })
       return NextResponse.json({ success: true })
@@ -124,7 +150,7 @@ export async function POST(request: Request) {
     if (!res.ok) {
       const body = await res.text()
       console.error('[shows/request] Resend error:', res.status, body)
-      return NextResponse.json({ error: 'Email delivery failed' }, { status: 500 })
+      // Don't fail — DB record already created
     }
 
     return NextResponse.json({ success: true })
