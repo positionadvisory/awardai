@@ -783,7 +783,7 @@ export default function ProjectPage() {
   const [quickEvaluating, setQuickEvaluating] = useState(false)
   const [quickEvalError, setQuickEvalError] = useState('')
   const [quickEvalDetecting, setQuickEvalDetecting] = useState(false)
-  const [quickEvalDetectedFields, setQuickEvalDetectedFields] = useState<{ show: boolean; category: boolean }>({ show: false, category: false })
+  const [quickEvalDetectedFields, setQuickEvalDetectedFields] = useState<{ show: boolean; category: boolean; confidence?: string }>({ show: false, category: false })
 
   useEffect(() => {
     if (!user || !projectId) return
@@ -2469,7 +2469,7 @@ export default function ProjectPage() {
     setQuickEvalShow(project?.target_shows?.[0] || '')
     setQuickEvalCategory('')
     setQuickEvalError('')
-    setQuickEvalDetectedFields({ show: false, category: false })
+    setQuickEvalDetectedFields({ show: false, category: false, confidence: undefined })
     setShowQuickEvalModal(true)
 
     // Fire detection in background if the material has text
@@ -2494,7 +2494,9 @@ export default function ProjectPage() {
       )
       if (!res.ok) return
       const detected = await res.json()
-      if (detected.confidence === 'low') return
+      // Pre-fill on any confidence — even low is better than blank.
+      // The "verify" label makes it clear when confidence is uncertain.
+      if (!detected.show && !detected.category) return
 
       const detectedFields = { show: false, category: false }
       if (detected.show) {
@@ -2505,7 +2507,9 @@ export default function ProjectPage() {
         setQuickEvalCategory(detected.category)
         detectedFields.category = true
       }
-      setQuickEvalDetectedFields(detectedFields)
+      // Store confidence so the banner can show "verify" for low-confidence results
+      setQuickEvalDetectedFields({ ...detectedFields, confidence: detected.confidence ?? 'low' } as typeof detectedFields & { confidence: string })
+
     } catch {
       // Silent — detection is best-effort, never blocks the modal
     } finally {
@@ -2645,7 +2649,7 @@ export default function ProjectPage() {
       setQuickEvalShow('')
       setQuickEvalCategory('')
       setQuickEvalDetecting(false)
-      setQuickEvalDetectedFields({ show: false, category: false })
+      setQuickEvalDetectedFields({ show: false, category: false, confidence: undefined })
       setQuickEvalMaterialIdx(null)
       setTab('entries')
 
@@ -6423,9 +6427,15 @@ export default function ProjectPage() {
               </div>
             )}
             {!quickEvalDetecting && (quickEvalDetectedFields.show || quickEvalDetectedFields.category) && (
-              <div className="mb-4 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                <p className="text-xs text-green-700">
-                  ✓ Detected from document — review and edit if needed.
+              <div className={`mb-4 border rounded-lg px-3 py-2 ${
+                quickEvalDetectedFields.confidence === 'low'
+                  ? 'bg-amber-50 border-amber-200'
+                  : 'bg-green-50 border-green-200'
+              }`}>
+                <p className={`text-xs ${quickEvalDetectedFields.confidence === 'low' ? 'text-amber-700' : 'text-green-700'}`}>
+                  {quickEvalDetectedFields.confidence === 'low'
+                    ? '⚠ Possible match detected — please verify before evaluating.'
+                    : '✓ Detected from document — review and edit if needed.'}
                 </p>
               </div>
             )}
@@ -6435,7 +6445,9 @@ export default function ProjectPage() {
                 <div className="flex items-center gap-2 mb-1.5">
                   <label className="text-xs text-gray-500">Award Show</label>
                   {quickEvalDetectedFields.show && !quickEvalDetecting && (
-                    <span className="text-xs text-green-600 font-medium">✓ detected</span>
+                    <span className={`text-xs font-medium ${quickEvalDetectedFields.confidence === 'low' ? 'text-amber-600' : 'text-green-600'}`}>
+                      {quickEvalDetectedFields.confidence === 'low' ? '? verify' : '✓ detected'}
+                    </span>
                   )}
                 </div>
                 <input
@@ -6470,7 +6482,9 @@ export default function ProjectPage() {
                 <div className="flex items-center gap-2 mb-1.5">
                   <label className="text-xs text-gray-500">Category</label>
                   {quickEvalDetectedFields.category && !quickEvalDetecting && (
-                    <span className="text-xs text-green-600 font-medium">✓ detected</span>
+                    <span className={`text-xs font-medium ${quickEvalDetectedFields.confidence === 'low' ? 'text-amber-600' : 'text-green-600'}`}>
+                      {quickEvalDetectedFields.confidence === 'low' ? '? verify' : '✓ detected'}
+                    </span>
                   )}
                 </div>
                 <input
@@ -6510,7 +6524,7 @@ export default function ProjectPage() {
                 ) : 'Evaluate Entry'}
               </button>
               <button
-                onClick={() => { setShowQuickEvalModal(false); setQuickEvalError(''); setQuickEvalDetecting(false); setQuickEvalDetectedFields({ show: false, category: false }) }}
+                onClick={() => { setShowQuickEvalModal(false); setQuickEvalError(''); setQuickEvalDetecting(false); setQuickEvalDetectedFields({ show: false, category: false, confidence: undefined }) }}
                 disabled={quickEvaluating}
                 className="px-4 py-2.5 text-sm text-gray-500 hover:text-gray-900 disabled:opacity-40 transition-colors"
               >
