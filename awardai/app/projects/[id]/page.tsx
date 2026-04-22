@@ -6450,11 +6450,30 @@ export default function ProjectPage() {
                     </span>
                   )}
                 </div>
+                {/* Quick-select chips from project target shows */}
+                {(project.target_shows ?? []).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {(project.target_shows ?? []).map((show: string) => (
+                      <button
+                        key={show}
+                        type="button"
+                        onClick={() => { setQuickEvalShow(show); setQuickEvalCategory(''); setQuickEvalDetectedFields(prev => ({ ...prev, show: false, category: false })) }}
+                        className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                          quickEvalShow === show
+                            ? 'bg-green-100 text-green-800 border-green-300 font-medium'
+                            : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-gray-400 hover:text-gray-900'
+                        }`}
+                      >
+                        {show}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <input
                   type="text"
                   value={quickEvalShow}
                   onChange={e => { setQuickEvalShow(e.target.value); setQuickEvalDetectedFields(prev => ({ ...prev, show: false })) }}
-                  placeholder="e.g. Cannes Lions, Effies, WARC…"
+                  placeholder={(project.target_shows ?? []).length > 0 ? 'Or type another show…' : 'e.g. Cannes Lions, Effies, WARC…'}
                   className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
                 />
                 {quickEvalShow.trim().length > 2 && !kbShows.some(s => s.toLowerCase() === quickEvalShow.trim().toLowerCase()) && (
@@ -6487,13 +6506,27 @@ export default function ProjectPage() {
                     </span>
                   )}
                 </div>
-                <input
-                  type="text"
-                  value={quickEvalCategory}
-                  onChange={e => { setQuickEvalCategory(e.target.value); setQuickEvalDetectedFields(prev => ({ ...prev, category: false })) }}
-                  placeholder="e.g. Grand Prix, Silver, Creative Effectiveness…"
-                  className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
-                />
+                {/* Category dropdown when selected show has known categories */}
+                {SHOW_CATEGORIES[quickEvalShow] ? (
+                  <select
+                    value={quickEvalCategory}
+                    onChange={e => { setQuickEvalCategory(e.target.value); setQuickEvalDetectedFields(prev => ({ ...prev, category: false })) }}
+                    className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-green-600 transition-colors"
+                  >
+                    <option value="">Select a category…</option>
+                    {SHOW_CATEGORIES[quickEvalShow].map((cat: string) => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={quickEvalCategory}
+                    onChange={e => { setQuickEvalCategory(e.target.value); setQuickEvalDetectedFields(prev => ({ ...prev, category: false })) }}
+                    placeholder="e.g. Grand Prix, Silver, Creative Effectiveness…"
+                    className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
+                  />
+                )}
               </div>
             </div>
 
