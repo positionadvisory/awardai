@@ -2171,12 +2171,19 @@ export default function ProjectPage() {
           // 1. Extract AcroForm field values (fillable PDF forms)
           try {
             const annotations = await page.getAnnotations()
-            for (const ann of annotations as Array<{ subtype?: string; fieldName?: string; fieldValue?: unknown; fieldType?: string }>) {
-              if (ann.subtype !== 'Widget' || !ann.fieldName) continue
-              // fieldValue is a string for Tx/Ch types; skip empty, arrays, and booleans
-              const raw = ann.fieldValue
-              if (typeof raw === 'string' && raw.trim() && !formFields.has(ann.fieldName)) {
-                formFields.set(ann.fieldName, raw.trim())
+            for (const ann of annotations as Array<{
+              subtype?: string; annotationType?: number;
+              fieldName?: string; fullName?: string;
+              fieldValue?: unknown; currentValue?: unknown; defaultFieldValue?: unknown;
+            }>) {
+              // Widget annotations = form fields. Check both string subtype and numeric type (20).
+              const isWidget = ann.subtype === 'Widget' || ann.annotationType === 20
+              const name = ann.fieldName || ann.fullName
+              if (!isWidget || !name) continue
+              // Try fieldValue first, then currentValue, then defaultFieldValue
+              const raw = ann.fieldValue ?? ann.currentValue ?? ann.defaultFieldValue
+              if (typeof raw === 'string' && raw.trim() && !formFields.has(name)) {
+                formFields.set(name, raw.trim())
               }
             }
           } catch { /* annotations optional */ }
@@ -2483,8 +2490,9 @@ export default function ProjectPage() {
     }
   }
 
-  // Opens the Quick Evaluate modal and fires a background detection call
-  // to pre-fill show + category from the document's extracted_text.
+  // Opens the Quick Evaluate modal. Uses a two-pass approach:
+  // Pass 1 (instant, client-side): scan extracted_text for any known show name.
+  // Pass 2 (background, AI): call detect-entry-context for category detection.
   const openQuickEvalModal = async (materialIdx: number) => {
     const material = project?.materials?.[materialIdx]
     setQuickEvalMaterialIdx(materialIdx)
@@ -2494,8 +2502,21 @@ export default function ProjectPage() {
     setQuickEvalDetectedFields({ show: false, category: false, confidence: undefined })
     setShowQuickEvalModal(true)
 
-    // Fire detection in background if the material has text
     if (!material?.extracted_text) return
+    const text = material.extracted_text
+    const lowerText = text.toLowerCase()
+
+    // ── PASS 1: instant client-side show name scan ──────────────────────────
+    // Search the full extracted text for any known show name. Works regardless
+    // of PDF type (AcroForm, flattened, text-based) because the show name always
+    // appears somewhere in the document (header, labels, boilerplate, form fields).
+    const clientShow = kbShows.find(s => lowerText.includes(s.toLowerCase())) ?? null
+    if (clientShow) {
+      setQuickEvalShow(clientShow)
+      setQuickEvalDetectedFields({ show: true, category: false, confidence: 'medium' })
+    }
+
+    // ── PASS 2: background AI detection for category ────────────────────────
     try {
       setQuickEvalDetecting(true)
       const { data: sessionData } = await supabase.auth.getSession()
@@ -2511,29 +2532,39 @@ export default function ProjectPage() {
             'Authorization': `Bearer ${token}`,
             'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
           },
-          body: JSON.stringify({ text: material.extracted_text }),
+          body: JSON.stringify({ text }),
         }
       )
-      if (!res.ok) return
+      if (!res.ok) {
+        console.warn('detect-entry-context returned', res.status)
+        return
+      }
       const detected = await res.json()
-      // Pre-fill on any confidence — even low is better than blank.
-      // The "verify" label makes it clear when confidence is uncertain.
-      if (!detected.show && !detected.category) return
+      console.log('detect-entry-context result:', detected)
 
-      const detectedFields = { show: false, category: false }
-      if (detected.show) {
+      const detectedFields: { show: boolean; category: boolean; confidence?: string } = {
+        show: !!clientShow,  // preserve client-side show detection
+        category: false,
+        confidence: detected.confidence ?? 'low',
+      }
+
+      // Only override show with AI result if client-side found nothing
+      if (detected.show && !clientShow) {
         setQuickEvalShow(detected.show)
         detectedFields.show = true
       }
+      // Always use AI for category — harder to detect client-side
       if (detected.category) {
         setQuickEvalCategory(detected.category)
         detectedFields.category = true
       }
-      // Store confidence so the banner can show "verify" for low-confidence results
-      setQuickEvalDetectedFields({ ...detectedFields, confidence: detected.confidence ?? 'low' } as typeof detectedFields & { confidence: string })
 
-    } catch {
-      // Silent — detection is best-effort, never blocks the modal
+      if (detectedFields.show || detectedFields.category) {
+        setQuickEvalDetectedFields(detectedFields as { show: boolean; category: boolean; confidence: string })
+      }
+
+    } catch (err) {
+      console.warn('detect-entry-context error:', err)
     } finally {
       setQuickEvalDetecting(false)
     }
