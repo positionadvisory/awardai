@@ -2162,9 +2162,26 @@ export default function ProjectPage() {
         const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise
         const textParts: string[] = []
         const chartPageNums: number[] = []
+        // AcroForm field values — keyed by fieldName to deduplicate across pages
+        const formFields: Map<string, string> = new Map()
 
         for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
           const page = await pdf.getPage(pageNum)
+
+          // 1. Extract AcroForm field values (fillable PDF forms)
+          try {
+            const annotations = await page.getAnnotations()
+            for (const ann of annotations as Array<{ subtype?: string; fieldName?: string; fieldValue?: unknown; fieldType?: string }>) {
+              if (ann.subtype !== 'Widget' || !ann.fieldName) continue
+              // fieldValue is a string for Tx/Ch types; skip empty, arrays, and booleans
+              const raw = ann.fieldValue
+              if (typeof raw === 'string' && raw.trim() && !formFields.has(ann.fieldName)) {
+                formFields.set(ann.fieldName, raw.trim())
+              }
+            }
+          } catch { /* annotations optional */ }
+
+          // 2. Extract text content stream
           const textContent = await page.getTextContent()
           const pageText = (textContent.items as Array<{ str?: string }>)
             .filter(item => typeof item.str === 'string')
@@ -2173,7 +2190,12 @@ export default function ProjectPage() {
           if (pageText.length > 80) { textParts.push(pageText) }
           else { chartPageNums.push(pageNum) }
         }
-        extractedText = textParts.join('\n\n').slice(0, 50000)
+
+        // Prepend form fields block so it appears in the first chars read by detection
+        const formFieldsBlock = formFields.size > 0
+          ? `=== Form Fields ===\n${Array.from(formFields.entries()).map(([k, v]) => `${k}: ${v}`).join('\n')}\n=== End Form Fields ===\n\n`
+          : ''
+        extractedText = (formFieldsBlock + textParts.join('\n\n')).slice(0, 50000)
 
         if (chartPageNums.length > 0) {
           setUploadProgress(`Processing ${Math.min(chartPageNums.length, 8)} chart pages…`)
