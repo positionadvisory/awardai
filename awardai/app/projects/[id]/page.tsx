@@ -610,6 +610,7 @@ export default function ProjectPage() {
   const [editingShowsInline, setEditingShowsInline] = useState(false)
   const [showsChangedWarning, setShowsChangedWarning] = useState(false)
   const [kbShows, setKbShows] = useState<string[]>([...CANONICAL_SHOWS].sort((a, b) => a.localeCompare(b)))
+  const [dynamicShowNames, setDynamicShowNames] = useState<Set<string>>(new Set())
   const [customShowInput, setCustomShowInput] = useState('')
   // Show request flow
   const [showRequestModal, setShowRequestModal] = useState(false)
@@ -781,6 +782,8 @@ export default function ProjectPage() {
   const [quickEvalCategory, setQuickEvalCategory] = useState('')
   const [quickEvaluating, setQuickEvaluating] = useState(false)
   const [quickEvalError, setQuickEvalError] = useState('')
+  const [quickEvalDetecting, setQuickEvalDetecting] = useState(false)
+  const [quickEvalDetectedFields, setQuickEvalDetectedFields] = useState<{ show: boolean; category: boolean }>({ show: false, category: false })
 
   useEffect(() => {
     if (!user || !projectId) return
@@ -815,6 +818,21 @@ export default function ProjectPage() {
         // Merge canonical + KB shows, de-dupe, sort alphabetically
         const allShows = Array.from(new Set([...CANONICAL_SHOWS, ...extra]))
         setKbShows(allShows.sort((a, b) => a.localeCompare(b)))
+      })
+
+    // Fetch admin-added dynamic shows and merge into kbShows
+    supabase
+      .from('dynamic_shows')
+      .select('show_name')
+      .eq('status', 'active')
+      .then(({ data }) => {
+        if (cancelled || !data || data.length === 0) return
+        const names = data.map((d: { show_name: string }) => d.show_name).filter(Boolean)
+        setDynamicShowNames(new Set(names))
+        setKbShows(prev => {
+          const merged = Array.from(new Set([...prev, ...names]))
+          return merged.sort((a, b) => a.localeCompare(b))
+        })
       })
 
     // Fetch collaborators independently (non-critical — does not block main data)
@@ -2443,6 +2461,58 @@ export default function ProjectPage() {
     }
   }
 
+  // Opens the Quick Evaluate modal and fires a background detection call
+  // to pre-fill show + category from the document's extracted_text.
+  const openQuickEvalModal = async (materialIdx: number) => {
+    const material = project?.materials?.[materialIdx]
+    setQuickEvalMaterialIdx(materialIdx)
+    setQuickEvalShow(project?.target_shows?.[0] || '')
+    setQuickEvalCategory('')
+    setQuickEvalError('')
+    setQuickEvalDetectedFields({ show: false, category: false })
+    setShowQuickEvalModal(true)
+
+    // Fire detection in background if the material has text
+    if (!material?.extracted_text) return
+    try {
+      setQuickEvalDetecting(true)
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token
+      if (!token) return
+
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/detect-entry-context`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          },
+          body: JSON.stringify({ text: material.extracted_text }),
+        }
+      )
+      if (!res.ok) return
+      const detected = await res.json()
+      if (detected.confidence === 'low') return
+
+      const detectedFields = { show: false, category: false }
+      if (detected.show) {
+        setQuickEvalShow(detected.show)
+        detectedFields.show = true
+      }
+      if (detected.category) {
+        setQuickEvalCategory(detected.category)
+        detectedFields.category = true
+      }
+      setQuickEvalDetectedFields(detectedFields)
+    } catch {
+      // Silent — detection is best-effort, never blocks the modal
+    } finally {
+      setQuickEvalDetecting(false)
+    }
+  }
+
   const evaluateUploadedEntry = async () => {
     if (!project || quickEvalMaterialIdx === null || !user) return
     const material = project.materials[quickEvalMaterialIdx]
@@ -2574,6 +2644,8 @@ export default function ProjectPage() {
       setShowQuickEvalModal(false)
       setQuickEvalShow('')
       setQuickEvalCategory('')
+      setQuickEvalDetecting(false)
+      setQuickEvalDetectedFields({ show: false, category: false })
       setQuickEvalMaterialIdx(null)
       setTab('entries')
 
@@ -2976,6 +3048,7 @@ export default function ProjectPage() {
             <div className="flex flex-wrap gap-2">
               {kbShows.map(show => {
                 const selected = targetShows.includes(show)
+                const isDynamic = dynamicShowNames.has(show)
                 return (
                   <button key={show} onClick={() => toggleShow(show)}
                     className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
@@ -2983,7 +3056,7 @@ export default function ProjectPage() {
                         ? 'bg-green-100 text-green-800 border-green-300'
                         : 'bg-gray-100 text-gray-500 border-gray-300 hover:border-green-600 hover:text-green-700'
                     }`}>
-                    {show}
+                    {show}{isDynamic && <span className="ml-1 text-green-600" title="Recently added">✦</span>}
                   </button>
                 )
               })}
@@ -3250,6 +3323,7 @@ export default function ProjectPage() {
                     <div className="flex flex-wrap gap-2">
                       {kbShows.map(show => {
                         const selected = targetShows.includes(show)
+                        const isDynamic = dynamicShowNames.has(show)
                         return (
                           <button key={show} onClick={() => toggleShow(show)}
                             className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
@@ -3257,7 +3331,7 @@ export default function ProjectPage() {
                                 ? 'bg-green-100 text-green-800 border-green-300'
                                 : 'bg-gray-100 text-gray-500 border-gray-300 hover:border-green-600 hover:text-green-700'
                             }`}>
-                            {show}
+                            {show}{isDynamic && <span className="ml-1 text-green-600" title="Recently added">✦</span>}
                           </button>
                         )
                       })}
@@ -3516,13 +3590,7 @@ export default function ProjectPage() {
                       <div className="flex items-center gap-2 flex-shrink-0">
                         {m.extracted_text && (
                           <button
-                            onClick={() => {
-                              setQuickEvalMaterialIdx(i)
-                              setQuickEvalShow(project.target_shows?.[0] || '')
-                              setQuickEvalCategory('')
-                              setQuickEvalError('')
-                              setShowQuickEvalModal(true)
-                            }}
+                            onClick={() => openQuickEvalModal(i)}
                             className="bg-green-800 hover:bg-green-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
                           >
                             Evaluate as Entry
@@ -6344,13 +6412,36 @@ export default function ProjectPage() {
               </span>
             </p>
 
+            {/* Detection banner */}
+            {quickEvalDetecting && (
+              <div className="mb-4 flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                <svg className="animate-spin h-3.5 w-3.5 text-gray-400 shrink-0" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+                <span className="text-xs text-gray-400">Detecting show and category from document…</span>
+              </div>
+            )}
+            {!quickEvalDetecting && (quickEvalDetectedFields.show || quickEvalDetectedFields.category) && (
+              <div className="mb-4 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                <p className="text-xs text-green-700">
+                  ✓ Detected from document — review and edit if needed.
+                </p>
+              </div>
+            )}
+
             <div className="space-y-3 mb-5">
               <div>
-                <label className="block text-xs text-gray-500 mb-1.5">Award Show</label>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <label className="text-xs text-gray-500">Award Show</label>
+                  {quickEvalDetectedFields.show && !quickEvalDetecting && (
+                    <span className="text-xs text-green-600 font-medium">✓ detected</span>
+                  )}
+                </div>
                 <input
                   type="text"
                   value={quickEvalShow}
-                  onChange={e => setQuickEvalShow(e.target.value)}
+                  onChange={e => { setQuickEvalShow(e.target.value); setQuickEvalDetectedFields(prev => ({ ...prev, show: false })) }}
                   placeholder="e.g. Cannes Lions, Effies, WARC…"
                   className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
                 />
@@ -6376,11 +6467,16 @@ export default function ProjectPage() {
                 )}
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1.5">Category</label>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <label className="text-xs text-gray-500">Category</label>
+                  {quickEvalDetectedFields.category && !quickEvalDetecting && (
+                    <span className="text-xs text-green-600 font-medium">✓ detected</span>
+                  )}
+                </div>
                 <input
                   type="text"
                   value={quickEvalCategory}
-                  onChange={e => setQuickEvalCategory(e.target.value)}
+                  onChange={e => { setQuickEvalCategory(e.target.value); setQuickEvalDetectedFields(prev => ({ ...prev, category: false })) }}
                   placeholder="e.g. Grand Prix, Silver, Creative Effectiveness…"
                   className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
                 />
@@ -6414,7 +6510,7 @@ export default function ProjectPage() {
                 ) : 'Evaluate Entry'}
               </button>
               <button
-                onClick={() => { setShowQuickEvalModal(false); setQuickEvalError('') }}
+                onClick={() => { setShowQuickEvalModal(false); setQuickEvalError(''); setQuickEvalDetecting(false); setQuickEvalDetectedFields({ show: false, category: false }) }}
                 disabled={quickEvaluating}
                 className="px-4 py-2.5 text-sm text-gray-500 hover:text-gray-900 disabled:opacity-40 transition-colors"
               >
