@@ -206,14 +206,14 @@ const SHOW_CATEGORIES: Record<string, string[]> = {
     'Integrated', 'Market Disruption', 'Out of Home', 'PR', 'Promotions',
     'Radio & Audio', 'Social & Influencer', 'Spatial Design',
   ],
-  'Effies': [
+  'Effie APAC': [
     'Best Insights & Strategic Thinking', 'Best Integrated Campaign',
     'Best Launch', 'Best Long-Term Effects', 'Best New Product/Service',
     'Best Use of Data', 'Best Use of Digital', 'Best Use of Media', 'B2B',
     'Challenger Brand', 'Cultural Breakthrough', 'David vs. Goliath',
     'E-Commerce / Shopper Marketing', 'Engagement & Retention', 'Grand Effie',
     'Health & Wellness', 'Local Brand', 'Purpose-Driven Marketing',
-    'Sustained Success',
+    'Seasonal Marketing', 'Sustained Success',
   ],
   'WARC Awards': [
     'Creative Effectiveness', 'Content', 'Effective Channel Integration',
@@ -245,7 +245,7 @@ const SHOW_CATEGORIES: Record<string, string[]> = {
     'Industry Craft', 'Innovation', 'Integrated', 'Media', 'Mobile',
     'Outdoor', 'PR', 'Print & Publishing', 'Radio & Audio', 'Social & Influencer',
   ],
-  'New York Festivals': [
+  'New York Festivals Advertising Awards': [
     'Advertising', 'Brand Design', 'Entertainment', 'Gaming',
     'Health & Wellness', 'Innovation', 'Interactive', 'Out of Home',
     'Branded Film', 'Radio & Audio', 'TV & Cinema',
@@ -282,7 +282,7 @@ const SHOW_CATEGORIES: Record<string, string[]> = {
     'Short Form Video', 'Social Good', 'Social Media', 'Storytelling',
     'Use of Influencers',
   ],
-  'MMA Smarties': [
+  'MMA Smarties APAC': [
     'Audience Technology', 'Brand Awareness', 'Brand Innovation',
     'Commerce & Shopper', 'Cross-Platform', 'Data and Insights',
     'KPI Achievement', 'Lead Generation', 'New Market Entry', 'Purpose',
