@@ -3,27 +3,11 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
+import { DEADLINES_2026 } from '@/lib/shows-data'
 
-// Canonical list — base set always shown even before KB loads
-const CANONICAL_SHOWS = [
-  'Cannes Lions', 'D&AD', 'Clio Awards', 'One Show', 'Effies',
-  'Spikes Asia', 'Dubai Lynx', 'London International Awards',
-  'WARC Awards', 'AdFest', 'AWARD Awards', 'Webby Awards',
-  'Creative Circle', 'Campaign Big Awards', 'Epica Awards',
-  'New York Festivals', 'Eurobest', 'WARC Effectiveness Awards',
-  'Shorty Awards', 'The Drum Awards', 'Festival of Media',
-  'MMA Smarties', 'Anthem Awards', 'PR Week Awards', 'ADMA Awards',
-  'Mumbrella Awards', 'B&T Awards', 'Campaign Asia Awards',
-  'AdFest', 'Asian Marketing Effectiveness Awards',
-  'Asia Pacific Effie Awards', 'Global Effie Awards',
-  'Australian Effies', 'IAB Mixx Awards', 'Caples Awards',
-  'Gerety Awards', 'Andy Awards', 'Communication Arts Awards',
-  'Transform Awards', 'World PR Awards', 'PRCA Awards',
-  'SABRE Awards', 'Holmes Report SABRE', 'PRovoke Awards',
-  'Cannes Lions PR Lions', 'INMA Awards', 'WAN-IFRA Awards',
-  'Social Media Marketing Awards', 'Content Marketing Awards',
-  'Digital Communication Awards',
-]
+// Derived from shows-data.ts — single source of truth for show names.
+// To add or remove shows, update DEADLINES_2026 in lib/shows-data.ts.
+const CANONICAL_SHOWS = DEADLINES_2026.map(d => d.show).sort((a, b) => a.localeCompare(b))
 
 const currentYear = new Date().getFullYear()
 // Show the last 3 years + next year as options
@@ -56,8 +40,9 @@ export default function NewProjectPage() {
   const [showRequestDone, setShowRequestDone] = useState(false)
   const [showRequestNoKit, setShowRequestNoKit] = useState(false)
 
-  // Fetch KB shows on mount and merge with canonical list
+  // Fetch KB shows + dynamic_shows on mount and merge with canonical list
   useEffect(() => {
+    // KB campaigns
     supabase
       .from('campaigns')
       .select('show_raw')
@@ -67,8 +52,26 @@ export default function NewProjectPage() {
         const baseNames = data
           .map(row => (row.show_raw as string).replace(/\s+\d{4}$/, '').trim())
           .filter(Boolean)
-        const unique = Array.from(new Set([...CANONICAL_SHOWS, ...baseNames])).sort()
-        setKbShows(unique)
+        setKbShows(prev => {
+          const merged = Array.from(new Set([...prev, ...baseNames])).sort((a, b) => a.localeCompare(b))
+          return merged
+        })
+      })
+
+    // Admin-added dynamic shows
+    supabase
+      .from('dynamic_shows')
+      .select('show_name')
+      .eq('status', 'active')
+      .then(({ data }) => {
+        if (!data?.length) return
+        const dynamicNames = data.map(r => r.show_name as string).filter(Boolean)
+        setKbShows(prev => {
+          const canonicalLower = new Set(CANONICAL_SHOWS.map(s => s.toLowerCase()))
+          const extra = dynamicNames.filter(s => !canonicalLower.has(s.toLowerCase()))
+          if (!extra.length) return prev
+          return Array.from(new Set([...prev, ...extra])).sort((a, b) => a.localeCompare(b))
+        })
       })
   }, [])
 
