@@ -803,11 +803,16 @@ export default function ProjectPage() {
         if (data) {
           const normalise = (raw: string) =>
             raw
-              .replace(/\s+20\d{2}(\s.*)?$/, '')
-              .replace(/\s*[-–—:\/]\s*.*$/, '')
+              .split(/\s*\|\s*/)[0]           // "Show | YEAR: 2024 | AWARD: X" → "Show"
+              .replace(/\s+20\d{2}(\s.*)?$/, '') // strip trailing year
+              .replace(/\s*[-–—:\/]\s*.*$/, '')  // strip after separator chars
               .trim()
           const kbNormalised = Array.from(
-            new Set(data.map((d: { show_raw: string }) => normalise(d.show_raw)).filter(s => s.length > 2))
+            new Set(
+              data
+                .map((d: { show_raw: string }) => normalise(d.show_raw))
+                .filter(s => s.length > 2 && !s.includes('{') && !s.includes('}'))
+            )
           )
           for (const s of kbNormalised) {
             if (!CANONICAL_SHOWS.some(c => c.toLowerCase() === s.toLowerCase())) {
