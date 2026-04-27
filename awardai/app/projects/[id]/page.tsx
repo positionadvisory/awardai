@@ -7,7 +7,7 @@ import GeneratingBar from '@/components/GeneratingBar'
 import ShowsDrawer from '@/components/shows/ShowsDrawer'
 import { MATERIALS_EVAL_STATEMENTS, JURY_EVAL_STATEMENTS, COACH_REVIEW_STATEMENTS } from '@/lib/generatingStatements'
 import { appErrorFromResponse, formatError, parseErrorString } from '@/lib/errorMessages'
-import { computeRoiIndex } from '@/lib/shows-data'
+import { computeRoiIndex, normaliseKbShow } from '@/lib/shows-data'
 
 // ── ErrorBanner — renders a friendly message with a small diagnostic code ────
 // Expects error strings in "message [CODE]" format from formatError().
@@ -801,17 +801,11 @@ export default function ProjectPage() {
         if (cancelled) return
         const extra: string[] = []
         if (data) {
-          const normalise = (raw: string) =>
-            raw
-              .split(/\s*\|\s*/)[0]           // "Show | YEAR: 2024 | AWARD: X" → "Show"
-              .replace(/\s+20\d{2}(\s.*)?$/, '') // strip trailing year
-              .replace(/\s*[-–—:\/]\s*.*$/, '')  // strip after separator chars
-              .trim()
           const kbNormalised = Array.from(
             new Set(
               data
-                .map((d: { show_raw: string }) => normalise(d.show_raw))
-                .filter(s => s.length > 2 && !s.includes('{') && !s.includes('}'))
+                .map((d: { show_raw: string }) => normaliseKbShow(d.show_raw))
+                .filter((s): s is string => s !== null && s.length > 0)
             )
           )
           for (const s of kbNormalised) {
