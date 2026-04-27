@@ -593,3 +593,78 @@ export function computeRoiIndex(
   const raw = (prValue * medalChance) / rates.fee
   return Math.min(100, Math.round((raw / _ROI_CEILING) * 100))
 }
+
+// ── KB show name normalisation ────────────────────────────────────────────────
+//
+// Maps variant/legacy show names (from campaigns.show_raw in the KB) to their
+// canonical display name, or to null to hide them entirely from all show pickers.
+//
+// Keys are lowercase for case-insensitive lookup. Applied after the show_raw
+// extraction/cleaning step in the show selector dropdowns.
+//
+// To add a new mapping: add a key (lowercase variant) → value (canonical name | null).
+
+export const KB_SHOW_ALIASES: Record<string, string | null> = {
+  // ── Unify name variants ──────────────────────────────────────────────────────
+  // Campaign Asia AOTY
+  'campaign asia agency of the year':             'Campaign Asia AOTY',
+
+  // Festival of Media APAC
+  'festival of media apac (foma)':                'Festival of Media APAC',
+  'festival of media asia pacific':               'Festival of Media APAC',
+
+  // Festival of Media Global
+  'festival of media global (fomg)':              'Festival of Media Global',
+  'festival of media global':                     'Festival of Media Global',
+
+  // MMA Smarties APAC — unify all regional/legacy variants
+  'mma smarties':                                 'MMA Smarties APAC',
+  'mma smarties global':                          'MMA Smarties APAC',
+  'smarties apac':                                'MMA Smarties APAC',
+
+  // Women Leading Change
+  'campaign asia women leading change':           'Women Leading Change',
+
+  // Women to Watch APAC
+  'campaign asia women to watch':                 'Women to Watch APAC',
+
+  // ── Renames ──────────────────────────────────────────────────────────────────
+  'digital a-list':                               'Campaign Greater China Digital A-List',
+  'digital media awards (campaign asia)':         'Campaign Greater China Digital Media Awards',
+  'dma awards':                                   'Campaign Greater China Digital Media Awards',
+
+  // ── Hide — defunct, region-specific noise, or non-award editorial lists ─────
+  'cristal festival':                             null,
+  'global cristal awards':                        null,
+  'mindshare china':                              null,
+  'mindshare china -- 2025 archive':              null,  // belt-and-suspenders before normalise strips year
+  'asian marketing effectiveness & strategy awards (ames)': null,
+  'asian marketing effectiveness':                null,
+  'mma smarties china':                           null,  // China-specific program, out of scope
+  'cmo power list':                               null,  // editorial list, not an awards show
+}
+
+/**
+ * Normalise and alias a raw KB show name for use in show pickers.
+ * Returns the canonical display name, or null if the show should be hidden.
+ *
+ * Usage in show_raw extraction:
+ *   const name = normaliseKbShow(raw)
+ *   if (name === null) skip  // hidden
+ *   else use name
+ */
+export function normaliseKbShow(raw: string): string | null {
+  if (!raw) return null
+  // 1. Take only the segment before the first pipe (handles "Show | YEAR: ... | AWARD: ..." format)
+  const firstSegment = raw.split(/\s*\|\s*/)[0].trim()
+  // 2. Strip trailing year e.g. "Cannes Lions 2024" → "Cannes Lions"
+  const yearStripped = firstSegment.replace(/\s+20\d{2}(\s.*)?$/, '').trim()
+  // 3. Strip after common separator chars
+  const cleaned = yearStripped.replace(/\s*[-–—:\/]\s*.*$/, '').trim()
+  // 4. Reject anything too short or containing structural noise
+  if (cleaned.length <= 3 || cleaned.includes('{') || cleaned.includes('}')) return null
+  // 5. Apply alias map (case-insensitive)
+  const lower = cleaned.toLowerCase()
+  if (lower in KB_SHOW_ALIASES) return KB_SHOW_ALIASES[lower]   // null = hide
+  return cleaned
+}
