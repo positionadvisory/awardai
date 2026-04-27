@@ -220,7 +220,7 @@ export const DEADLINES_2026: ShowDeadline[] = [
     confidence: 'verified', lastVerified: '2026-04-26',
   },
   {
-    show: 'Women Leading Change', region: 'APAC',
+    show: 'Campaign Asia Women Leading Change', region: 'APAC',
     finalDate: '2026-03-25', juryDate: '2026-04-27', ceremonyDate: '2026-05-19',
     earlyBird: 'Feb 2026', standard: 'Mar 2026', final: '25 Mar 2026', ceremony: '19 May 2026',
     prValue: 30,
@@ -306,7 +306,7 @@ export const DEADLINES_2026: ShowDeadline[] = [
     confidence: 'needs_check', lastVerified: '2026-04-26',
   },
   {
-    show: 'Campaign Asia AOTY', region: 'APAC',
+    show: 'Campaign Asia Agency of the Year', region: 'APAC',
     finalDate: '', juryDate: '', ceremonyDate: '',
     earlyBird: '', standard: '', final: 'Unknown', ceremony: 'Unknown',
     prValue: 35,
@@ -338,7 +338,7 @@ export const DEADLINES_2026: ShowDeadline[] = [
     confidence: 'needs_check', lastVerified: '2026-04-26',
   },
   {
-    show: 'Women to Watch APAC', region: 'APAC',
+    show: 'Campaign Asia Women to Watch APAC', region: 'APAC',
     finalDate: '', juryDate: '', ceremonyDate: '',
     earlyBird: '', standard: '', final: 'Unknown', ceremony: 'Unknown',
     prValue: 25,
@@ -383,7 +383,7 @@ export const WIN_RATES: Record<string, WinRateData> = {
     pr: { shortlist: 10000, metal: 35000, gold: 120000, grandprix: 400000 },
     fee: 550,
   },
-  'Women Leading Change': {
+  'Campaign Asia Women Leading Change': {
     shortlist: 35, metal: 20, gold: 8, grandprix: 3,
     pr: { shortlist: 8000, metal: 25000, gold: 80000, grandprix: 200000 },
     fee: 450,
@@ -432,7 +432,7 @@ export const WIN_RATES: Record<string, WinRateData> = {
     pr: { shortlist: 7000, metal: 25000, gold: 120000, grandprix: 400000 },
     fee: 545,
   },
-  'Campaign Asia AOTY': {
+  'Campaign Asia Agency of the Year': {
     shortlist: 40, metal: 25, gold: 10, grandprix: 3,
     pr: { shortlist: 12000, metal: 40000, gold: 150000, grandprix: 500000 },
     fee: 420,
@@ -457,7 +457,7 @@ export const WIN_RATES: Record<string, WinRateData> = {
     pr: { shortlist: 9000, metal: 30000, gold: 120000, grandprix: 450000 },
     fee: 480,
   },
-  'Women to Watch APAC': {
+  'Campaign Asia Women to Watch APAC': {
     shortlist: 40, metal: 40, gold: 40, grandprix: 40,
     pr: { shortlist: 10000, metal: 10000, gold: 10000, grandprix: 10000 },
     fee: 300,
@@ -475,7 +475,7 @@ export const ENTRY_FEES: Record<string, EntryFeeData> = {
   'Clio Awards':            { base: 750,  range: '$525–$1,400 (USD; category/deadline dependent)', note: 'Student $50–$75. Google AI specialty category free. Ceremony 12 May NYC.' },
   'Effie APAC':             { base: 800,  range: 'SGD 1,090–2,690', note: 'Most rigorous data requirements. Allow 4–6 weeks for writing.' },
   'Festival of Media APAC': { base: 550,  range: '£349–£440 (GBP; deadline dependent)', note: 'Early 5 Dec £349; standard 2 Jan £389; final 30 Jan £440. Ceremony 7 May 2026.' },
-  'Women Leading Change':   { base: 450,  range: 'HKD 2,990–3,950 (per entry; tier dependent)', note: 'Deadlines 6pm Hong Kong time. Early/standard/final tiers.' },
+  'Campaign Asia Women Leading Change': { base: 450,  range: 'HKD 2,990–3,950 (per entry; tier dependent)', note: 'Deadlines 6pm Hong Kong time. Early/standard/final tiers.' },
   'MMA Smarties APAC':      { base: 450,  range: '$365–$525 (USD; member/non-member)', note: 'APAC regional program. Country programs vary $140–$350. Global cycle separate.' },
   'Clio Entertainment':     { base: 550,  range: '$400–$1,300 (USD; category/deadline dependent)', note: 'Student $50. Ceremony TBC — confirm before scheduling.' },
   'Clio Sports':            { base: 550,  range: '$300–$1,075 (USD; category/deadline dependent)', note: 'Student $50–$75. Includes NIL category. Ceremony 8 Dec NYC.' },
@@ -484,12 +484,12 @@ export const ENTRY_FEES: Record<string, EntryFeeData> = {
   'New York Festivals Advertising Awards': { base: 1050, range: '$600–$1,500 (USD; entry type/deadline dependent)', note: 'Includes NYF Cristal Village Award. Shortlist 1 Jun, winners 12 Jun. ESTIMATE — benchmark with Ben.' },
   'Dubai Lynx':             { base: 870,  range: '$575–$1,170 (USD; category/deadline dependent)', note: 'MENA premier show. Cannes Lions affiliate. ESTIMATE — benchmark with Ben.' },
   'Gerety Awards':          { base: 545,  range: '€340–€750 (EUR; single/campaign and deadline dependent)', note: 'Female jury. Ceremony TBC. ESTIMATE — benchmark with Ben.' },
-  'Campaign Asia AOTY':     { base: 420,  range: 'Unknown for 2026', note: 'Public page shows 2025 fees only. Do not budget until 2026 page publishes.' },
+  'Campaign Asia Agency of the Year': { base: 420,  range: 'Unknown for 2026', note: 'Public page shows 2025 fees only. Do not budget until 2026 page publishes.' },
   'ROI Festival':           { base: 450,  range: 'Unknown — public 2026 fee table not found', note: 'Do not budget until confirmed.' },
   'Tangrams':               { base: 400,  range: 'N/A — integrated into Spikes Asia', note: 'Use Spikes Asia Strategy & Effectiveness Spike.' },
   'Spikes Asia':            { base: 1000, range: 'Unknown — 2027 cycle not yet open', note: '2026 cycle closed Mar 2026. Await 2027 entry kit.' },
   'Cristal Festival':       { base: 480,  range: 'N/A — show structure changed', note: 'See NYF Advertising Awards (Cristal Village) and African Cristal Festival.' },
-  'Women to Watch APAC':    { base: 300,  range: 'Unknown — no 2026 page found', note: 'Check campaignasia.com.' },
+  'Campaign Asia Women to Watch APAC': { base: 300,  range: 'Unknown — no 2026 page found', note: 'Check campaignasia.com.' },
 }
 
 // ── Helper functions ──────────────────────────────────────────────────────────
@@ -606,8 +606,9 @@ export function computeRoiIndex(
 
 export const KB_SHOW_ALIASES: Record<string, string | null> = {
   // ── Unify name variants ──────────────────────────────────────────────────────
-  // Campaign Asia AOTY
-  'campaign asia agency of the year':             'Campaign Asia AOTY',
+
+  // Campaign Asia Agency of the Year (canonical) — map old short name and variants
+  'campaign asia aoty':                           'Campaign Asia Agency of the Year',
 
   // Festival of Media APAC
   'festival of media apac (foma)':                'Festival of Media APAC',
@@ -622,14 +623,16 @@ export const KB_SHOW_ALIASES: Record<string, string | null> = {
   'mma smarties global':                          'MMA Smarties APAC',
   'smarties apac':                                'MMA Smarties APAC',
 
-  // Women Leading Change
-  'campaign asia women leading change':           'Women Leading Change',
+  // Campaign Asia Women Leading Change (canonical) — map old/short name variants
+  'women leading change':                         'Campaign Asia Women Leading Change',
+  'campaign asia women leading change':           'Campaign Asia Women Leading Change',
 
-  // Women to Watch APAC
-  'campaign asia women to watch':                 'Women to Watch APAC',
+  // Campaign Asia Women to Watch APAC (canonical) — map old/short name variants
+  'women to watch apac':                          'Campaign Asia Women to Watch APAC',
+  'campaign asia women to watch':                 'Campaign Asia Women to Watch APAC',
 
   // ── Renames ──────────────────────────────────────────────────────────────────
-  'digital a-list':                               'Campaign Greater China Digital A-List',
+  'digital a-list':                               'Campaign Greater China A List',
   'digital media awards (campaign asia)':         'Campaign Greater China Digital Media Awards',
   'dma awards':                                   'Campaign Greater China Digital Media Awards',
 
@@ -655,16 +658,20 @@ export const KB_SHOW_ALIASES: Record<string, string | null> = {
  */
 export function normaliseKbShow(raw: string): string | null {
   if (!raw) return null
-  // 1. Take only the segment before the first pipe (handles "Show | YEAR: ... | AWARD: ..." format)
+  // 1. Take only the segment before the first pipe ("Show | YEAR: ... | AWARD: ..." → "Show")
   const firstSegment = raw.split(/\s*\|\s*/)[0].trim()
   // 2. Strip trailing year e.g. "Cannes Lions 2024" → "Cannes Lions"
   const yearStripped = firstSegment.replace(/\s+20\d{2}(\s.*)?$/, '').trim()
-  // 3. Strip after common separator chars
+  // 3. Check alias BEFORE separator strip — required for hyphenated names like "Digital A-List"
+  //    where the separator strip would incorrectly produce "Digital A"
+  const preSepLower = yearStripped.toLowerCase()
+  if (preSepLower in KB_SHOW_ALIASES) return KB_SHOW_ALIASES[preSepLower]  // null = hide
+  // 4. Strip after common separator chars (handles "Cannes Lions - Film" → "Cannes Lions")
   const cleaned = yearStripped.replace(/\s*[-–—:\/]\s*.*$/, '').trim()
-  // 4. Reject anything too short or containing structural noise
+  // 5. Reject anything too short or containing structural noise
   if (cleaned.length <= 3 || cleaned.includes('{') || cleaned.includes('}')) return null
-  // 5. Apply alias map (case-insensitive)
+  // 6. Check alias again on the cleaned name
   const lower = cleaned.toLowerCase()
-  if (lower in KB_SHOW_ALIASES) return KB_SHOW_ALIASES[lower]   // null = hide
+  if (lower in KB_SHOW_ALIASES) return KB_SHOW_ALIASES[lower]
   return cleaned
 }
