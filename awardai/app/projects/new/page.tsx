@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
-import { DEADLINES_2026 } from '@/lib/shows-data'
+import { DEADLINES_2026, normaliseKbShow } from '@/lib/shows-data'
 
 // Derived from shows-data.ts — single source of truth for show names.
 // To add or remove shows, update DEADLINES_2026 in lib/shows-data.ts.
@@ -44,9 +44,9 @@ export default function NewProjectPage() {
   useEffect(() => {
     const canonicalLower = new Set(CANONICAL_SHOWS.map(s => s.toLowerCase()))
 
-    // KB campaigns — extract clean show names from raw award record strings.
-    // show_raw can be either "Show Name" or "Show Name | YEAR: 2024 | AWARD: X".
-    // Split on | and take only the first segment, then strip trailing year.
+    // KB campaigns — extract and normalise show names from raw award record strings.
+    // normaliseKbShow handles "Show | YEAR: ... | AWARD: ..." format, strips noise,
+    // applies alias map (unification + renames + hide-list).
     supabase
       .from('campaigns')
       .select('show_raw')
@@ -54,21 +54,8 @@ export default function NewProjectPage() {
       .then(({ data }) => {
         if (!data) return
         const cleaned = data
-          .map(row => {
-            const raw = ((row.show_raw as string) || '').trim()
-            if (!raw) return ''
-            // Take only the part before any pipe separator
-            const name = raw.split(/\s*\|\s*/)[0].trim()
-            // Strip trailing year e.g. "Cannes Lions 2024" → "Cannes Lions"
-            return name.replace(/\s+\d{4}$/, '').trim()
-          })
-          .filter(s => (
-            s.length > 3 &&
-            !s.includes('|') &&
-            !s.includes('{') &&
-            !s.includes('}') &&
-            !s.includes(':')
-          ))
+          .map(row => normaliseKbShow((row.show_raw as string) || ''))
+          .filter((s): s is string => s !== null && s.length > 0)
         const extra = Array.from(new Set(cleaned))
           .filter(s => !canonicalLower.has(s.toLowerCase()))
         if (!extra.length) return
