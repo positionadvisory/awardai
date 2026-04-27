@@ -42,20 +42,39 @@ export default function NewProjectPage() {
 
   // Fetch KB shows + dynamic_shows on mount and merge with canonical list
   useEffect(() => {
-    // KB campaigns
+    const canonicalLower = new Set(CANONICAL_SHOWS.map(s => s.toLowerCase()))
+
+    // KB campaigns — extract clean show names from raw award record strings.
+    // show_raw can be either "Show Name" or "Show Name | YEAR: 2024 | AWARD: X".
+    // Split on | and take only the first segment, then strip trailing year.
     supabase
       .from('campaigns')
       .select('show_raw')
       .not('show_raw', 'is', null)
       .then(({ data }) => {
         if (!data) return
-        const baseNames = data
-          .map(row => (row.show_raw as string).replace(/\s+\d{4}$/, '').trim())
-          .filter(Boolean)
-        setKbShows(prev => {
-          const merged = Array.from(new Set([...prev, ...baseNames])).sort((a, b) => a.localeCompare(b))
-          return merged
-        })
+        const cleaned = data
+          .map(row => {
+            const raw = ((row.show_raw as string) || '').trim()
+            if (!raw) return ''
+            // Take only the part before any pipe separator
+            const name = raw.split(/\s*\|\s*/)[0].trim()
+            // Strip trailing year e.g. "Cannes Lions 2024" → "Cannes Lions"
+            return name.replace(/\s+\d{4}$/, '').trim()
+          })
+          .filter(s => (
+            s.length > 3 &&
+            !s.includes('|') &&
+            !s.includes('{') &&
+            !s.includes('}') &&
+            !s.includes(':')
+          ))
+        const extra = Array.from(new Set(cleaned))
+          .filter(s => !canonicalLower.has(s.toLowerCase()))
+        if (!extra.length) return
+        setKbShows(prev =>
+          Array.from(new Set([...prev, ...extra])).sort((a, b) => a.localeCompare(b))
+        )
       })
 
     // Admin-added dynamic shows
@@ -66,12 +85,11 @@ export default function NewProjectPage() {
       .then(({ data }) => {
         if (!data?.length) return
         const dynamicNames = data.map(r => r.show_name as string).filter(Boolean)
-        setKbShows(prev => {
-          const canonicalLower = new Set(CANONICAL_SHOWS.map(s => s.toLowerCase()))
-          const extra = dynamicNames.filter(s => !canonicalLower.has(s.toLowerCase()))
-          if (!extra.length) return prev
-          return Array.from(new Set([...prev, ...extra])).sort((a, b) => a.localeCompare(b))
-        })
+        const extra = dynamicNames.filter(s => !canonicalLower.has(s.toLowerCase()))
+        if (!extra.length) return
+        setKbShows(prev =>
+          Array.from(new Set([...prev, ...extra])).sort((a, b) => a.localeCompare(b))
+        )
       })
   }, [])
 
