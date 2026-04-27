@@ -7,7 +7,7 @@ import GeneratingBar from '@/components/GeneratingBar'
 import ShowsDrawer from '@/components/shows/ShowsDrawer'
 import { MATERIALS_EVAL_STATEMENTS, JURY_EVAL_STATEMENTS, COACH_REVIEW_STATEMENTS } from '@/lib/generatingStatements'
 import { appErrorFromResponse, formatError, parseErrorString } from '@/lib/errorMessages'
-import { computeRoiIndex, normaliseKbShow } from '@/lib/shows-data'
+import { computeRoiIndex, normaliseKbShow, DEADLINES_2026 } from '@/lib/shows-data'
 
 // ── ErrorBanner — renders a friendly message with a small diagnostic code ────
 // Expects error strings in "message [CODE]" format from formatError().
@@ -117,56 +117,9 @@ type TonalBrief = {
 }
 
 // Canonical list of award shows — displayed in the Brief tab selector
-const CANONICAL_SHOWS = [
-  'Cannes Lions',
-  'D&AD',
-  'Clio Awards',
-  'One Show',
-  'Effies',
-  'WARC Awards',
-  'WARC Effectiveness Awards',
-  'Spikes Asia',
-  'Dubai Lynx',
-  'Eurobest',
-  'New York Festivals',
-  'London International Awards',
-  'Campaign Big Awards',
-  'Creative Circle',
-  'Epica Awards',
-  'Webby Awards',
-  'Shorty Awards',
-  'The Drum Awards',
-  'Festival of Media',
-  'MMA Smarties',
-  'Anthem Awards',
-  'PR Week Awards',
-  'ADMA Awards',
-  'Mumbrella Awards',
-  'B&T Awards',
-  'Campaign Asia Awards',
-  'AdFest',
-  'Asian Marketing Effectiveness Awards',
-  'Asia Pacific Effie Awards',
-  'Global Effie Awards',
-  'Australian Effies',
-  'IAB Mixx Awards',
-  'Caples Awards',
-  'Gerety Awards',
-  'Andy Awards',
-  'Communication Arts Awards',
-  'Transform Awards',
-  'World PR Awards',
-  'PRCA Awards',
-  'SABRE Awards',
-  'Holmes Report SABRE',
-  'PRovoke Awards',
-  'Cannes Lions PR Lions',
-  'INMA Awards',
-  'WAN-IFRA Awards',
-  'Social Media Marketing Awards',
-  'Content Marketing Awards',
-  'Digital Communication Awards',
-]
+// Derived from shows-data.ts — single source of truth for show names.
+// To add or remove shows, update DEADLINES_2026 in lib/shows-data.ts.
+const CANONICAL_SHOWS = DEADLINES_2026.map(d => d.show).sort((a, b) => a.localeCompare(b))
 
 // Comprehensive category lists per award show — used in Script tab dropdowns
 const SHOW_CATEGORIES: Record<string, string[]> = {
