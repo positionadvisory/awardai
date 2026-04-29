@@ -83,6 +83,12 @@ export default function NewProjectPage() {
   const handleDropdownAdd = (val: string) => {
     if (!val) return
     if (val === '__request__') {
+      setShowRequestName('')
+      setShowRequestUrl('')
+      setShowRequestMarket('')
+      setShowRequestKitUrl('')
+      setShowRequestDone(false)
+      setShowRequestNoKit(false)
       setCustomShowInput('')
       setShowRequestModal(true)
       setDropdownValue('')
@@ -397,10 +403,13 @@ export default function NewProjectPage() {
               <h2 className="text-lg font-semibold text-gray-900 mb-1">Request a new show</h2>
               {!showRequestDone ? (
                 <>
-                  <p className="text-sm text-gray-500 mb-4">
-                    <span className="font-medium text-gray-800">{showRequestName}</span> isn't in our system yet. Give us a few details and we'll add it shortly.
-                  </p>
+                  <p className="text-sm text-gray-500 mb-4">Give us a few details and we'll add it to the system shortly.</p>
                   <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Show name <span className="text-red-500">*</span></label>
+                      <input type="text" value={showRequestName} onChange={e => setShowRequestName(e.target.value)} placeholder="e.g. London International Awards"
+                        className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors" />
+                    </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Show website</label>
                       <input type="url" value={showRequestUrl} onChange={e => setShowRequestUrl(e.target.value)} placeholder="https://example.com"
