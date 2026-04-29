@@ -912,7 +912,7 @@ export default function ProjectPage() {
     supabase.rpc('get_my_org_id').then(({ data }) => { if (!cancelled && data) setOrgId(data) })
 
     return () => { cancelled = true }
-  }, [user, projectId])
+  }, [user?.id, projectId])
 
   // Auto-restore saved press kit drafts into pressKitAiCopy when there are saved drafts.
   // Runs whenever pressKitDrafts loads or tab changes to 'presskit'.
