@@ -287,13 +287,13 @@ export default function NewProjectPage() {
                 <button
                   type="button"
                   onClick={() => setBriefMode('guided')}
-                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${briefMode === 'guided' ? 'bg-green-800 text-white' : 'text-gray-500 hover:text-gray-900'}`}>
+                  className={`px-4 py-2 text-sm font-medium rounded transition-colors ${briefMode === 'guided' ? 'bg-green-800 text-white' : 'text-gray-500 hover:text-gray-900'}`}>
                   ✦ Guided
                 </button>
                 <button
                   type="button"
                   onClick={() => setBriefMode('freeform')}
-                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${briefMode === 'freeform' ? 'bg-green-800 text-white' : 'text-gray-500 hover:text-gray-900'}`}>
+                  className={`px-4 py-2 text-sm font-medium rounded transition-colors ${briefMode === 'freeform' ? 'bg-green-800 text-white' : 'text-gray-500 hover:text-gray-900'}`}>
                   Freeform
                 </button>
               </div>
@@ -380,7 +380,7 @@ export default function NewProjectPage() {
             <button
               type="submit"
               disabled={saving}
-              className="bg-green-800 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-medium px-6 py-2.5 rounded-lg transition-colors"
+              className="bg-green-800 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-medium px-6 py-2.5 rounded transition-colors"
             >
               {saving ? 'Creating…' : 'Create Project'}
             </button>
@@ -428,7 +428,7 @@ export default function NewProjectPage() {
                   </div>
                   <div className="flex gap-2 mt-5">
                     <button onClick={submitShowRequest} disabled={showRequestSubmitting}
-                      className="flex-1 bg-green-800 hover:bg-green-700 disabled:opacity-40 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-colors">
+                      className="flex-1 bg-green-800 hover:bg-green-700 disabled:opacity-40 text-white text-sm font-medium px-4 py-2.5 rounded transition-colors">
                       {showRequestSubmitting ? 'Sending…' : 'Send request'}
                     </button>
                     <button onClick={() => { setShowRequestModal(false); setCustomShowInput('') }} disabled={showRequestSubmitting}
