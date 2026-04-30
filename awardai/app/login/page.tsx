@@ -116,7 +116,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-green-800 hover:bg-green-700 disabled:opacity-50 text-white font-medium py-2.5 rounded-lg transition-colors text-sm mt-2"
+              className="w-full bg-green-800 hover:bg-green-700 disabled:opacity-50 text-white font-medium py-2.5 rounded transition-colors text-sm mt-2"
             >
               {loading ? 'Signing in…' : 'Sign in'}
             </button>
@@ -214,7 +214,7 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   disabled={reqSubmitting}
-                  className="w-full bg-green-800 hover:bg-green-700 disabled:opacity-50 text-white font-medium py-2.5 rounded-lg transition-colors text-sm mt-1"
+                  className="w-full bg-green-800 hover:bg-green-700 disabled:opacity-50 text-white font-medium py-2.5 rounded transition-colors text-sm mt-1"
                 >
                   {reqSubmitting ? 'Sending…' : 'Send request'}
                 </button>
