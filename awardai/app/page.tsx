@@ -147,7 +147,8 @@ const Hero = ({ onCTA }: { onCTA: () => void }) => (
         Great work loses<br />
         to great writing.<br />
         <span style={{ color: 'var(--gold)', fontStyle: 'italic' }}>It always has.</span>
-        <span style={{ color: 'var(--bone)' }}> Built something about it.</span>
+        <br />
+        <span style={{ color: 'var(--bone)' }}>Built something about it.</span>
       </h1>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 64, marginTop: 80, alignItems: 'end' }}>
         <p style={{ fontSize: 19, lineHeight: 1.55, color: 'var(--muted-dark)', margin: 0, maxWidth: 560 }}>
