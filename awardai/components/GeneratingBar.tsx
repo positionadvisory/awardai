@@ -145,17 +145,17 @@ export default function GeneratingBar({
         width: '100%',
         height: '32px',
         backgroundColor: '#e5e7eb',
-        borderRadius: '9999px',
+        borderRadius: '2px',
         overflow: 'hidden',
       }}>
-        {/* Light green fill */}
+        {/* Gold fill */}
         <div style={{
           position: 'absolute',
           top: 0,
           bottom: 0,
           left: 0,
-          backgroundColor: '#86efac',
-          borderRadius: '9999px',
+          backgroundColor: '#c9a95c',
+          borderRadius: '2px',
           width: `${progress}%`,
           transition: `width ${progress === 100 ? '500ms' : '200ms'} ease-out`,
         }} />
