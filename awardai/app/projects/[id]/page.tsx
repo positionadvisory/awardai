@@ -3098,7 +3098,7 @@ export default function ProjectPage() {
           </div>
           <div className="flex gap-3">
             <button onClick={saveShows} disabled={savingShows}
-              className="bg-green-800 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+              className="bg-green-800 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded transition-colors">
               {savingShows ? 'Saving…' : 'Save'}
             </button>
             <button onClick={() => { setEditingShowsInline(false); setTargetShows(project.target_shows || []) }}
@@ -3263,12 +3263,12 @@ export default function ProjectPage() {
                   <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl p-1 w-fit mb-5">
                     <button
                       onClick={() => setBriefMode('guided')}
-                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${briefMode === 'guided' ? 'bg-green-800 text-white' : 'text-gray-500 hover:text-gray-900'}`}>
+                      className={`px-4 py-2 text-sm font-medium rounded transition-colors ${briefMode === 'guided' ? 'bg-green-800 text-white' : 'text-gray-500 hover:text-gray-900'}`}>
                       ✦ Guided
                     </button>
                     <button
                       onClick={() => setBriefMode('freeform')}
-                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${briefMode === 'freeform' ? 'bg-green-800 text-white' : 'text-gray-500 hover:text-gray-900'}`}>
+                      className={`px-4 py-2 text-sm font-medium rounded transition-colors ${briefMode === 'freeform' ? 'bg-green-800 text-white' : 'text-gray-500 hover:text-gray-900'}`}>
                       Freeform
                     </button>
                   </div>
@@ -3301,7 +3301,7 @@ export default function ProjectPage() {
 
                   <div className="flex gap-3 mt-3">
                     <button onClick={saveBrief} disabled={savingBrief}
-                      className="bg-green-800 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+                      className="bg-green-800 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded transition-colors">
                       {savingBrief ? 'Saving…' : 'Save'}
                     </button>
                     <button onClick={() => { setBriefEdit(false); setBriefText(project.combined_text || ''); setBriefSections({ idea: '', execution: '', results: '', intentions: '' }) }}
@@ -3397,7 +3397,7 @@ export default function ProjectPage() {
 
                   <div className="flex gap-3">
                     <button onClick={saveShows} disabled={savingShows}
-                      className="bg-green-800 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+                      className="bg-green-800 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded transition-colors">
                       {savingShows ? 'Saving…' : 'Save'}
                     </button>
                     <button onClick={() => { setEditingShows(false); setTargetShows(project.target_shows || []); setCustomShowInput('') }}
@@ -3556,7 +3556,7 @@ export default function ProjectPage() {
                   <button
                     onClick={handleAddCollaborator}
                     disabled={savingCollab || !newCollab.collaborator_name.trim()}
-                    className="bg-green-800 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                    className="bg-green-800 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded transition-colors"
                   >
                     {savingCollab ? 'Adding…' : 'Add'}
                   </button>
@@ -3625,7 +3625,7 @@ export default function ProjectPage() {
                         {m.extracted_text && (
                           <button
                             onClick={() => openQuickEvalModal(i)}
-                            className="bg-green-800 hover:bg-green-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+                            className="bg-green-800 hover:bg-green-700 text-white text-xs font-medium px-3 py-1.5 rounded transition-colors"
                           >
                             Evaluate as Entry
                           </button>
@@ -3654,7 +3654,7 @@ export default function ProjectPage() {
               </div>
               <button onClick={() => generateDirections()} disabled={generating || (!project.combined_text && !(project.materials || []).some((m: { extracted_text?: string }) => m.extracted_text))}
                 title={(!project.combined_text && !(project.materials || []).some((m: { extracted_text?: string }) => m.extracted_text)) ? 'Add a brief or upload materials first' : ''}
-                className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
+                className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded transition-colors flex items-center gap-2">
                 {generating ? (
                   <><svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Generating…</>
                 ) : directions.length > 0 ? 'Generate More Directions' : 'Generate Directions'}
@@ -3811,7 +3811,7 @@ export default function ProjectPage() {
                             {hasEval && dirBestEval && <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${scoreBg(dirBestEval.overall_score)} ${scoreColor(dirBestEval.overall_score)}`}>{dirBestEval.overall_score}/10</span>}
                           </div>
                           {d.best_show && <p className="text-green-700 text-sm mt-0.5">{d.best_show} · <span className="text-gray-500">{d.best_category}</span></p>}
-                          {d.hook && <p className="text-gray-700 text-sm mt-2 italic">"{d.hook}"</p>}
+                          {d.hook && <p className="text-gray-700 mt-2 italic" style={{ fontFamily: '"Instrument Serif", "Times New Roman", serif', fontSize: '0.95rem', lineHeight: 1.45 }}>&#8220;{d.hook}&#8221;</p>}
 
                           {/* ── More Openers ── */}
                           <div className="mt-1.5">
@@ -3835,7 +3835,7 @@ export default function ProjectPage() {
                               <div className="mt-2 bg-gray-50 border border-gray-200 rounded-xl p-3 space-y-2">
                                 {hooksOptions[d.id].map((hook, i) => (
                                   <div key={i} className="flex items-start gap-2">
-                                    <p className="text-sm text-gray-700 italic flex-1 leading-snug">"{hook}"</p>
+                                    <p className="text-gray-700 italic flex-1" style={{ fontFamily: '"Instrument Serif", "Times New Roman", serif', fontSize: '0.9rem', lineHeight: 1.4 }}>&#8220;{hook}&#8221;</p>
                                     <button
                                       onClick={() => {
                                         navigator.clipboard.writeText(hook)
@@ -3878,7 +3878,7 @@ export default function ProjectPage() {
                           </div>
                           <div className="mt-4 pt-4 border-t border-gray-200 flex items-center gap-3 flex-wrap">
                             <button onClick={() => generateDraft(d.id)} disabled={generatingDraft}
-                              className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
+                              className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded transition-colors flex items-center gap-2">
                               {isGeneratingThis ? (<><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Writing draft…</>) : hasEntries ? 'Regenerate Draft' : 'Generate Draft'}
                             </button>
                             {hasEntries && !isGeneratingThis && (
@@ -4039,7 +4039,7 @@ export default function ProjectPage() {
                                 onClick={() => evaluateEntry(dirId, 'judge', evalBoth.judge?.id)}
                                 disabled={evaluating || generatingDraft}
                                 title="Evaluate the entry as written — mirrors what a jury member sees"
-                                className="bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                                className="bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded transition-colors flex items-center gap-2"
                               >
                                 {isEvaluatingThis && evaluatingMode[dirId] === 'judge' ? (
                                   <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Evaluating…</>
@@ -4052,7 +4052,7 @@ export default function ProjectPage() {
                                 onClick={() => evaluateEntry(dirId, 'coach', evalBoth.coach?.id)}
                                 disabled={evaluating || generatingDraft}
                                 title="Review entry against all brief & materials — identifies what's being undersold"
-                                className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                                className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded transition-colors flex items-center gap-2"
                               >
                                 {isEvaluatingThis && evaluatingMode[dirId] === 'coach' ? (
                                   <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Coaching…</>
@@ -4282,10 +4282,13 @@ export default function ProjectPage() {
                             <div className="flex items-start justify-between mb-4">
                               <div>
                                 <div className="flex items-baseline gap-2 flex-wrap">
-                                  <span className={`text-4xl font-bold tabular-nums ${isCoach ? coachScoreColor(displayScore) : scoreColor(displayScore)}`}>
+                                  <span
+                                    className={`font-bold tabular-nums ${isCoach ? coachScoreColor(displayScore) : scoreColor(displayScore)}`}
+                                    style={{ fontFamily: '"Instrument Serif", "Times New Roman", serif', fontSize: '2.8rem', lineHeight: 1, letterSpacing: '-0.02em' }}
+                                  >
                                     {displayScore.toFixed(1)}
                                   </span>
-                                  <span className="text-gray-400 text-lg">/10</span>
+                                  <span className="text-gray-400" style={{ fontFamily: '"Instrument Serif", "Times New Roman", serif', fontSize: '1.25rem' }}>/10</span>
                                   {/* Overall delta badge — shown as raw score change regardless of mode */}
                                   {deltas?.['overall'] !== undefined && deltas['overall'] !== 0 && (
                                     <span className={`text-sm font-bold tabular-nums px-2 py-0.5 rounded-full ${deltas['overall'] > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
@@ -4561,7 +4564,7 @@ export default function ProjectPage() {
                               <button
                                 onClick={() => generateDraft(dirId, evaluation.id)}
                                 disabled={generatingDraft || evaluating}
-                                className="w-full bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-5 py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
+                                className="w-full bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-5 py-3 rounded transition-colors flex items-center justify-center gap-2"
                               >
                                 {isGeneratingThis ? (
                                   <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Writing improved draft…</>
@@ -4796,7 +4799,7 @@ export default function ProjectPage() {
                                   <button
                                     onClick={() => sendEvalChat(dirId)}
                                     disabled={evalChatting[dirId] || !(evalChatInput[dirId] || '').trim()}
-                                    className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors flex-shrink-0"
+                                    className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded transition-colors flex-shrink-0"
                                   >
                                     Send
                                   </button>
@@ -4911,7 +4914,7 @@ export default function ProjectPage() {
                                       <button
                                         onClick={() => saveFieldEdit(field.id)}
                                         disabled={savingFieldEdit}
-                                        className="text-xs bg-green-800 hover:bg-green-700 disabled:opacity-40 text-white px-3 py-1.5 rounded-lg transition-colors"
+                                        className="text-xs bg-green-800 hover:bg-green-700 disabled:opacity-40 text-white px-3 py-1.5 rounded transition-colors"
                                       >
                                         {savingFieldEdit ? 'Saving…' : 'Save'}
                                       </button>
@@ -4987,7 +4990,7 @@ export default function ProjectPage() {
                                   <button
                                     onClick={() => refineField(field, dirId)}
                                     disabled={isRefining || !refineMessage[field.id]?.trim()}
-                                    className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2 flex-shrink-0"
+                                    className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded transition-colors flex items-center gap-2 flex-shrink-0"
                                   >
                                     {isRefining ? (
                                       <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Refining…</>
@@ -5264,7 +5267,7 @@ export default function ProjectPage() {
                       <button
                         onClick={suggestCategories}
                         disabled={suggestingCategories || (!project.combined_text && !(project.materials || []).some(m => m.extracted_text))}
-                        className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                        className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded transition-colors flex items-center gap-2"
                       >
                         {suggestingCategories ? (
                           <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Analysing…</>
@@ -5435,7 +5438,7 @@ export default function ProjectPage() {
                 (scriptMode === 'review' && !uploadedScriptText.trim()) ||
                 scriptCategory === 'suggest'
               }
-              className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors flex items-center gap-2 mb-8"
+              className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-5 py-2.5 rounded transition-colors flex items-center gap-2 mb-8"
             >
               {generatingScript ? (
                 <><svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
@@ -5680,7 +5683,7 @@ export default function ProjectPage() {
                           <button
                             onClick={sendScriptChat}
                             disabled={scriptChatting || !scriptChatInput.trim()}
-                            className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors flex-shrink-0"
+                            className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded transition-colors flex-shrink-0"
                           >
                             Edit
                           </button>
@@ -5931,7 +5934,7 @@ export default function ProjectPage() {
                               <button
                                 onClick={sendBriefChat}
                                 disabled={briefChatting || !briefChatInput.trim()}
-                                className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors flex-shrink-0"
+                                className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded transition-colors flex-shrink-0"
                               >
                                 Edit
                               </button>
@@ -6082,7 +6085,7 @@ export default function ProjectPage() {
               <button
                 onClick={generatePressKits}
                 disabled={selectedPressKitDirs.size === 0 || pressKitGenerating}
-                className="w-full bg-green-800 hover:bg-green-700 disabled:opacity-40 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-colors mb-8"
+                className="w-full bg-green-800 hover:bg-green-700 disabled:opacity-40 text-white text-sm font-medium px-4 py-2.5 rounded transition-colors mb-8"
               >
                 {pressKitGenerating
                   ? 'Generating…'
@@ -6421,7 +6424,7 @@ export default function ProjectPage() {
                 id="geoConfirmBtn"
                 disabled
                 onClick={() => { setShowGeoWarningModal(false); generateDirections(true) }}
-                className="flex-1 bg-green-800 hover:bg-green-700 disabled:opacity-30 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-colors">
+                className="flex-1 bg-green-800 hover:bg-green-700 disabled:opacity-30 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2.5 rounded transition-colors">
                 Confirmed — generate directions
               </button>
               <button
@@ -6557,7 +6560,7 @@ export default function ProjectPage() {
               <button
                 onClick={evaluateUploadedEntry}
                 disabled={quickEvaluating}
-                className="flex-1 bg-green-800 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2"
+                className="flex-1 bg-green-800 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2.5 rounded transition-colors flex items-center justify-center gap-2"
               >
                 {quickEvaluating ? (
                   <><svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Evaluating…</>
@@ -6625,7 +6628,7 @@ export default function ProjectPage() {
                     <button
                       onClick={submitShowRequest}
                       disabled={showRequestSubmitting}
-                      className="flex-1 bg-green-800 hover:bg-green-700 disabled:opacity-40 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-colors"
+                      className="flex-1 bg-green-800 hover:bg-green-700 disabled:opacity-40 text-white text-sm font-medium px-4 py-2.5 rounded transition-colors"
                     >
                       {showRequestSubmitting ? 'Sending…' : 'Send request'}
                     </button>
