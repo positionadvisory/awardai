@@ -3159,7 +3159,7 @@ export default function ProjectPage() {
                   className="group flex items-center gap-1.5 text-left min-w-0 w-full"
                   title="Click to rename"
                 >
-                  <h1 className="font-semibold text-gray-900 leading-tight truncate">{project.campaign_name}</h1>
+                  <h1 className="sl-serif text-gray-900 leading-tight truncate" style={{ fontSize: '1.15rem', letterSpacing: '-0.01em' }}>{project.campaign_name}</h1>
                   <span className="text-gray-300 group-hover:text-gray-500 transition-colors shrink-0 text-xs">✎</span>
                 </button>
               )}
@@ -3203,7 +3203,7 @@ export default function ProjectPage() {
                     className="group flex items-center gap-1.5 text-left min-w-0"
                     title="Click to rename"
                   >
-                    <h1 className="font-semibold text-gray-900 leading-tight truncate">{project.campaign_name}</h1>
+                    <h1 className="sl-serif text-gray-900 leading-tight truncate" style={{ fontSize: '1.15rem', letterSpacing: '-0.01em' }}>{project.campaign_name}</h1>
                     <span className="text-gray-300 group-hover:text-gray-500 transition-colors shrink-0 text-xs">✎</span>
                   </button>
                 )}
@@ -3796,7 +3796,7 @@ export default function ProjectPage() {
                           <div className="flex-1 border-t border-gray-200" />
                         </div>
                       )}
-                    <div className={`bg-white border rounded-xl p-5 ${d.chosen ? 'border-green-700' : isNew ? 'border-green-400' : hasDraft ? 'border-blue-200' : 'border-gray-200'}`}>
+                    <div className={`bg-white border rounded-xl p-5 ${d.chosen ? 'border-green-700' : isNew ? 'border-green-400' : hasDraft ? 'border-blue-200' : 'border-gray-200'}`} style={{ borderLeftColor: '#c9a95c', borderLeftWidth: '3px' }}>
                       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
