@@ -230,10 +230,18 @@ export const DEADLINES_2026: ShowDeadline[] = [
   {
     show: 'MMA Smarties APAC', region: 'APAC',
     finalDate: '2026-07-21', juryDate: '2026-08-14', ceremonyDate: '2026-09-11',
-    earlyBird: 'May 2026', standard: 'Jul 2026', final: '21 Jul 2026', ceremony: 'Sep 2026',
+    earlyBird: '25 May 2026', standard: '9 Jul 2026', final: '21 Jul 2026', ceremony: 'Sep 2026',
     prValue: 28,
-    note: 'APAC regional: early bird 5 May, on-time 9 Jul, extended/final 21 Jul. Member/non-member fees $365–$525 USD. Some APAC country programs run separately at lower fees. APAC and Global cycles are distinct.',
-    confidence: 'verified', lastVerified: '2026-04-26',
+    note: 'Early bird 25 May, on-time 9 Jul, extended/final 21 Jul. Member/non-member fees $365–$525 USD. Early bird saves ~$160 per entry vs extended. APAC and Global cycles are distinct.',
+    confidence: 'verified', lastVerified: '2026-05-03',
+  },
+  {
+    show: 'MMA Smarties Global', region: 'Global',
+    finalDate: '2026-07-23', juryDate: '2026-08-20', ceremonyDate: '2026-09-15',
+    earlyBird: '22 May 2026', standard: '23 Jul 2026', final: '6 Aug 2026', ceremony: 'Sep 2026',
+    prValue: 30,
+    note: 'Early bird 22 May ($435), on-time 23 Jul ($495), extended 6 Aug ($570). Global program separate from APAC regional. Early bird saves $135 vs extended.',
+    confidence: 'verified', lastVerified: '2026-05-03',
   },
 
   // ── PARTIAL — agent will pause, user must operate manually ──────────────────
@@ -391,7 +399,12 @@ export const WIN_RATES: Record<string, WinRateData> = {
   'MMA Smarties APAC': {
     shortlist: 28, metal: 16, gold: 6, grandprix: 1.5,
     pr: { shortlist: 8000, metal: 30000, gold: 100000, grandprix: 350000 },
-    fee: 450,
+    fee: 435,
+  },
+  'MMA Smarties Global': {
+    shortlist: 22, metal: 12, gold: 5, grandprix: 1.0,
+    pr: { shortlist: 10000, metal: 40000, gold: 140000, grandprix: 480000 },
+    fee: 435,
   },
   'Clio Entertainment': {
     shortlist: 25, metal: 14, gold: 5, grandprix: 0.8,
@@ -476,7 +489,8 @@ export const ENTRY_FEES: Record<string, EntryFeeData> = {
   'Effie APAC':             { base: 800,  range: 'SGD 1,090–2,690', note: 'Most rigorous data requirements. Allow 4–6 weeks for writing.' },
   'Festival of Media APAC': { base: 550,  range: '£349–£440 (GBP; deadline dependent)', note: 'Early 5 Dec £349; standard 2 Jan £389; final 30 Jan £440. Ceremony 7 May 2026.' },
   'Campaign Asia Women Leading Change': { base: 450,  range: 'HKD 2,990–3,950 (per entry; tier dependent)', note: 'Deadlines 6pm Hong Kong time. Early/standard/final tiers.' },
-  'MMA Smarties APAC':      { base: 450,  range: '$365–$525 (USD; member/non-member)', note: 'APAC regional program. Country programs vary $140–$350. Global cycle separate.' },
+  'MMA Smarties APAC':      { base: 435,  range: '$365–$525 (USD; early bird $435, on-time $495, extended $570)', note: 'Early bird 25 May saves ~$160 vs extended. Country programs vary $140–$350.' },
+  'MMA Smarties Global':    { base: 435,  range: '$435–$570 (USD; early bird $435, on-time $495, extended $570)', note: 'Early bird 22 May. Global program distinct from APAC regional.' },
   'Clio Entertainment':     { base: 550,  range: '$400–$1,300 (USD; category/deadline dependent)', note: 'Student $50. Ceremony TBC — confirm before scheduling.' },
   'Clio Sports':            { base: 550,  range: '$300–$1,075 (USD; category/deadline dependent)', note: 'Student $50–$75. Includes NIL category. Ceremony 8 Dec NYC.' },
   'Clio Creators':          { base: 250,  range: '$100–$600 (USD; medium/deadline dependent)', note: 'Creator Track $100, Brand Track $500, Student free. Inaugural 2026 program.' },
@@ -618,10 +632,11 @@ export const KB_SHOW_ALIASES: Record<string, string | null> = {
   'festival of media global (fomg)':              'Festival of Media Global',
   'festival of media global':                     'Festival of Media Global',
 
-  // MMA Smarties APAC — unify all regional/legacy variants
+  // MMA Smarties — route legacy variants to correct canonical shows
   'mma smarties':                                 'MMA Smarties APAC',
-  'mma smarties global':                          'MMA Smarties APAC',
+  'mma smarties global':                          'MMA Smarties Global',
   'smarties apac':                                'MMA Smarties APAC',
+  'smarties global':                              'MMA Smarties Global',
 
   // Campaign Asia Women Leading Change (canonical) — map old/short name variants
   'women leading change':                         'Campaign Asia Women Leading Change',
