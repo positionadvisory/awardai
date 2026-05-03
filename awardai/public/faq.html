@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shortlist: Frequently Asked Questions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=EB+Garamond:ital,wght@0,400;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: oklch(0.18 0.02 155);
+    --ink-2: oklch(0.26 0.035 155);
+    --green-deep: oklch(0.18 0.04 158);
+    --green-mid: oklch(0.24 0.045 155);
+    --bone: oklch(0.965 0.008 85);
+    --bone-2: oklch(0.93 0.012 85);
+    --paper: oklch(0.985 0.005 85);
+    --rule: oklch(0.86 0.01 85);
+    --rule-dark: oklch(0.32 0.03 155);
+    --gold: #c9a95c;
+    --gold-deep: oklch(0.66 0.13 70);
+    --muted: oklch(0.45 0.01 155);
+    --muted-dark: oklch(0.72 0.012 90);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: "Geist", ui-sans-serif, system-ui, -apple-system, Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.65;
+    color: var(--ink);
+    background: var(--bone);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .serif { font-family: "Instrument Serif", "Times New Roman", serif; font-weight: 400; }
+  .mono  { font-family: "EB Garamond", "Times New Roman", serif; font-weight: 500; }
+
+  /* Cover */
+  .cover {
+    background: var(--green-deep);
+    color: var(--bone);
+    padding: 64px 60px 56px;
+  }
+  .cover-eyebrow {
+    font-family: "EB Garamond", serif;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted-dark);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .cover-eyebrow::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    background: var(--gold);
+  }
+  .cover-logo {
+    font-family: "Instrument Serif", serif;
+    font-size: 42px;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    color: var(--bone);
+    line-height: 1;
+    margin-bottom: 10px;
+  }
+  .cover-sub {
+    font-size: 15px;
+    color: var(--muted-dark);
+    margin-bottom: 48px;
+  }
+  .cover-rule {
+    height: 1px;
+    background: rgba(245,238,224,0.15);
+    margin-bottom: 32px;
+  }
+  .cover-title {
+    font-family: "Instrument Serif", serif;
+    font-size: 28px;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    color: var(--bone);
+  }
+  .cover-date {
+    font-family: "EB Garamond", serif;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted-dark);
+    margin-top: 10px;
+  }
+
+  /* Headline time block */
+  .time-hero {
+    background: var(--ink);
+    color: var(--bone);
+    padding: 64px 60px;
+  }
+  .time-hero-label {
+    font-family: "EB Garamond", serif;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted-dark);
+    margin-bottom: 28px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .time-hero-label::before { content: ''; display: inline-block; width: 6px; height: 6px; background: var(--gold); }
+  .time-hero h2 {
+    font-family: "Instrument Serif", serif;
+    font-size: clamp(32px, 4vw, 52px);
+    font-weight: 400;
+    line-height: 1.05;
+    letter-spacing: -0.015em;
+    max-width: 800px;
+    margin-bottom: 48px;
+  }
+  .time-hero h2 em { font-style: italic; color: var(--gold); }
+  .time-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    border-top: 1px solid var(--rule-dark);
+    border-bottom: 1px solid var(--rule-dark);
+    margin-bottom: 40px;
+  }
+  .time-cell {
+    padding: 32px 24px;
+    border-right: 1px solid var(--rule-dark);
+  }
+  .time-cell:last-child { border-right: none; }
+  .time-cell-feature {
+    font-family: "EB Garamond", serif;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted-dark);
+    margin-bottom: 16px;
+  }
+  .time-before {
+    font-family: "Instrument Serif", serif;
+    font-size: 42px;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: var(--bone);
+    margin-bottom: 4px;
+  }
+  .time-after {
+    font-family: "Instrument Serif", serif;
+    font-size: 42px;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: var(--gold);
+  }
+  .time-label {
+    font-size: 12px;
+    color: var(--muted-dark);
+    margin-top: 8px;
+    line-height: 1.4;
+  }
+  .time-note {
+    font-size: 15px;
+    color: var(--muted-dark);
+    max-width: 680px;
+    line-height: 1.6;
+  }
+  .time-note strong { color: var(--bone); font-weight: 500; }
+
+  /* TOC */
+  .toc {
+    padding: 48px 60px;
+    background: var(--bone-2);
+    border-bottom: 1px solid var(--rule);
+  }
+  .toc-label {
+    font-family: "EB Garamond", serif;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .toc-label::before { content: ''; width: 6px; height: 6px; background: var(--gold); display: inline-block; }
+  .toc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 48px; }
+  .toc-item { font-size: 14px; color: var(--ink-2); display: flex; gap: 10px; }
+  .toc-num { font-family: "EB Garamond", serif; font-size: 11px; color: var(--gold); min-width: 20px; font-weight: 500; }
+
+  /* Main content */
+  .content { max-width: 860px; margin: 0 auto; padding: 0 60px; }
+
+  /* Sections */
+  .section { padding: 52px 0 0; }
+  .section-eyebrow {
+    font-family: "EB Garamond", serif;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-eyebrow::before { content: ''; width: 5px; height: 5px; background: var(--gold); display: inline-block; }
+  .section-title {
+    font-family: "Instrument Serif", serif;
+    font-size: clamp(22px, 3vw, 32px);
+    font-weight: 400;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    color: var(--green-deep);
+    padding-bottom: 20px;
+    border-bottom: 2px solid var(--gold);
+    margin-bottom: 32px;
+  }
+
+  /* Q&A */
+  .qa { margin-bottom: 32px; }
+  .question { font-size: 16px; font-weight: 600; color: var(--ink); margin-bottom: 8px; line-height: 1.35; }
+  .answer { font-size: 15px; color: oklch(0.30 0.02 155); line-height: 1.7; }
+  .answer p + p { margin-top: 10px; }
+
+  /* Timing callout */
+  .timing {
+    display: flex;
+    gap: 0;
+    margin: 20px 0 24px;
+    border: 1px solid var(--rule);
+    overflow: hidden;
+  }
+  .timing-before, .timing-after {
+    flex: 1;
+    padding: 16px 20px;
+  }
+  .timing-before {
+    background: var(--bone-2);
+    border-right: 1px solid var(--rule);
+  }
+  .timing-after { background: var(--paper); }
+  .timing-label {
+    font-family: "EB Garamond", serif;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .timing-value {
+    font-family: "Instrument Serif", serif;
+    font-size: 26px;
+    line-height: 1;
+    letter-spacing: -0.01em;
+  }
+  .timing-before .timing-value { color: var(--ink-2); }
+  .timing-after .timing-value { color: var(--gold-deep); }
+  .timing-note { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.4; }
+
+  /* Show tags */
+  .show-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border-top: 1px solid var(--rule);
+    border-left: 1px solid var(--rule);
+    margin-top: 16px;
+  }
+  .show-grid-item {
+    font-family: "EB Garamond", serif;
+    font-size: 13px;
+    letter-spacing: 0.02em;
+    color: var(--ink-2);
+    padding: 10px 14px;
+    border-right: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    line-height: 1.3;
+  }
+
+  /* Feature list */
+  .feature-list { list-style: none; margin: 12px 0; }
+  .feature-list li {
+    padding: 8px 0 8px 20px;
+    position: relative;
+    font-size: 14px;
+    color: oklch(0.30 0.02 155);
+    border-bottom: 1px solid var(--rule);
+  }
+  .feature-list li:last-child { border-bottom: none; }
+  .feature-list li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 16px;
+    width: 5px;
+    height: 5px;
+    background: var(--gold);
+  }
+
+  /* Pull quote */
+  .pull-quote {
+    margin: 28px 0;
+    padding: 0 0 0 24px;
+    border-left: 3px solid var(--gold);
+  }
+  .pull-quote p {
+    font-family: "Instrument Serif", serif;
+    font-size: 20px;
+    font-style: italic;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+
+  /* Pricing */
+  .pricing-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0; border: 1px solid var(--rule); margin: 20px 0; }
+  .plan-card { padding: 24px; border-right: 1px solid var(--rule); }
+  .plan-card:last-child { border-right: none; }
+  .plan-name {
+    font-family: "EB Garamond", serif;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+  .plan-price {
+    font-family: "Instrument Serif", serif;
+    font-size: 36px;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: var(--green-deep);
+    margin-bottom: 2px;
+  }
+  .plan-period { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+  .plan-desc { font-size: 13px; color: var(--ink-2); line-height: 1.5; }
+
+  hr.section-divider { border: none; border-top: 1px solid var(--rule); margin: 20px 0 0; }
+
+  /* Footer */
+  .footer {
+    background: var(--green-deep);
+    color: var(--bone);
+    padding: 40px 60px;
+    margin-top: 64px;
+  }
+  .footer-logo {
+    font-family: "Instrument Serif", serif;
+    font-size: 24px;
+    font-weight: 400;
+    color: var(--bone);
+    margin-bottom: 4px;
+  }
+  .footer-url {
+    font-family: "EB Garamond", serif;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted-dark);
+    margin-bottom: 20px;
+  }
+  .footer-note {
+    font-family: "EB Garamond", serif;
+    font-size: 12px;
+    color: var(--muted-dark);
+    border-top: 1px solid rgba(245,238,224,0.1);
+    padding-top: 16px;
+    line-height: 1.6;
+    letter-spacing: 0.02em;
+  }
+
+  @media print {
+    body { font-size: 13px; }
+    .cover, .time-hero { padding: 48px; }
+    .content { padding: 0 48px; }
+    .toc { padding: 36px 48px; }
+    .footer { margin-top: 48px; padding: 32px 48px; }
+    .section { page-break-inside: avoid; }
+    .timing { page-break-inside: avoid; }
+    .time-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  /* Print / PDF font overrides
+     WeasyPrint cannot load Google Fonts from the web, so we fall back to
+     Georgia for all serif elements — it renders cleanly in PDF. */
+  @media print {
+    .cover-logo, .cover-title, .time-hero h2, .section-title,
+    .pull-quote p, .plan-price, .time-before, .time-after,
+    .timing-value, .show-grid-item,
+    .time-cell .time-before, .time-cell .time-after {
+      font-family: Georgia, "Times New Roman", serif !important;
+    }
+    .cover-eyebrow, .toc-label, .toc-num, .section-eyebrow,
+    .timing-label, .time-cell-feature, .time-hero-label,
+    .time-label, .time-note, .footer-url, .footer-note,
+    .cover-date, .plan-name, .plan-period {
+      font-family: Georgia, "Times New Roman", serif !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- Cover -->
+<div class="cover">
+  <div class="cover-eyebrow">Shortlist · gotshortlisted.com</div>
+  <div class="cover-logo">Shortlist</div>
+  <div class="cover-sub">Awards intelligence, built by someone who ran one</div>
+  <div class="cover-rule"></div>
+  <div class="cover-title">Frequently Asked Questions</div>
+  <div class="cover-date">Updated May 2026</div>
+</div>
+
+<!-- Time hero -->
+<div class="time-hero">
+  <div class="time-hero-label">The case for Shortlist</div>
+  <h2>Developing a full award entry used to take <em>40 hours of work</em> from a lead strategist. Now it takes under two.</h2>
+  <div class="time-grid">
+    <div class="time-cell">
+      <div class="time-cell-feature">Entry draft</div>
+      <div class="time-before">8 hrs</div>
+      <div class="time-after">10 min</div>
+      <div class="time-label">First draft. Plus 5 min per revision vs 1–2 hrs.</div>
+    </div>
+    <div class="time-cell">
+      <div class="time-cell-feature">Video script</div>
+      <div class="time-before">8 hrs</div>
+      <div class="time-after">20 min</div>
+      <div class="time-label">Generate, score, and refine for jury.</div>
+    </div>
+    <div class="time-cell">
+      <div class="time-cell-feature">Show research & ROI</div>
+      <div class="time-before">8 hrs</div>
+      <div class="time-after">Instant</div>
+      <div class="time-label">On page load. Every show, every season.</div>
+    </div>
+  </div>
+  <p class="time-note">
+    This is work that used to land on a lead strategist and travel up to the CEO for sign-off.
+  </p>
+  <p class="time-note" style="margin-top:16px;">
+    <strong>In most agencies, it still does.</strong>
+  </p>
+</div>
+
+<!-- TOC -->
+<div class="toc">
+  <div class="toc-label">Contents</div>
+  <div class="toc-grid">
+    <div class="toc-item"><span class="toc-num">01</span> What is Shortlist?</div>
+    <div class="toc-item"><span class="toc-num">07</span> Entry drafts</div>
+    <div class="toc-item"><span class="toc-num">02</span> Getting started</div>
+    <div class="toc-item"><span class="toc-num">08</span> Press kit</div>
+    <div class="toc-item"><span class="toc-num">03</span> Projects &amp; materials</div>
+    <div class="toc-item"><span class="toc-num">09</span> Video script</div>
+    <div class="toc-item"><span class="toc-num">04</span> Entry directions</div>
+    <div class="toc-item"><span class="toc-num">10</span> Shows, calendar &amp; budget</div>
+    <div class="toc-item"><span class="toc-num">05</span> Show intelligence &amp; ROI</div>
+    <div class="toc-item"><span class="toc-num">11</span> Agency profile</div>
+    <div class="toc-item"><span class="toc-num">06</span> Evaluation</div>
+    <div class="toc-item"><span class="toc-num">12</span> Data, privacy &amp; pricing</div>
+  </div>
+</div>
+
+<div class="content">
+
+<!-- 01 -->
+<div class="section">
+  <div class="section-eyebrow">01</div>
+  <div class="section-title">What is Shortlist?</div>
+
+  <div class="qa">
+    <div class="question">What is Shortlist?</div>
+    <div class="answer"><p>Shortlist is an awards intelligence system for agencies and marketing teams. It reads your campaign materials, identifies the strongest show-and-category combinations to enter, writes entries, evaluates them against jury criteria, generates press and video materials, and tracks your outcomes.</p><p>All in one workspace.</p><p>It was built specifically for awards.</p><p>Not adapted from a general-purpose writing tool.</p></div>
+  </div>
+
+  <div class="pull-quote">
+    <p>"A lead strategist to the CEO: that's the range of people this work used to require. Shortlist compresses it to one person, one hour."</p>
+  </div>
+
+  <div class="qa">
+    <div class="question">Who is it built for?</div>
+    <div class="answer"><p>Agencies and in-house teams entering work in creative, effectiveness, and media award shows. Designed for strategists, writers, and account teams who write entries but aren't specialists, and for award managers who need to move faster across more shows each season.</p><p>More specifically: it was built so that future CEOs wouldn't spend their entire holiday editing Agency of the Year entries with their team while staring at the beach outside the hotel window. Won, though.</p></div>
+  </div>
+
+  <div class="qa">
+    <div class="question">How is it different from other AI writing tools?</div>
+    <div class="answer"><p>Most AI tools are general-purpose. Shortlist is built around award show dynamics: jury psychology, show-specific scoring criteria, what wins at Cannes versus what wins at the Effies, as well as category-specific requirements and expectations.</p><p>It draws on a knowledge base built from drafting, editing, and overseeing 1,500 award entries personally, nearly 1,000 verified winning campaigns from published records, plus show-specific intelligence from official entry kits, judging guidelines, and online jury interviews from just about every major show.</p><p>The system is essentially a recreation of a very particular kind of OCD about award writing.</p><p>It is a damn good writer, editor, and coach.</p><p>In many ways better than I was. Certainly faster.</p></div>
+  </div>
+
+  <div class="qa">
+    <div class="question">What award shows does it cover?</div>
+    <div class="answer">20+ shows at launch with confirmed 2026 data:
+      <div class="show-grid">
+        <div class="show-grid-item">Cannes Lions</div>
+        <div class="show-grid-item">D&amp;AD</div>
+        <div class="show-grid-item">One Show</div>
+        <div class="show-grid-item">Clio Awards</div>
+        <div class="show-grid-item">Effie APAC</div>
+        <div class="show-grid-item">Festival of Media APAC</div>
+        <div class="show-grid-item">MMA Smarties APAC</div>
+        <div class="show-grid-item">Dubai Lynx</div>
+        <div class="show-grid-item">ANDY Awards</div>
+        <div class="show-grid-item">New York Festivals</div>
+        <div class="show-grid-item">Gerety Awards</div>
+        <div class="show-grid-item">Spikes Asia</div>
+        <div class="show-grid-item">Campaign Asia Agency of the Year</div>
+        <div class="show-grid-item">+&nbsp;more added regularly</div>
+      </div>
+      <p style="margin-top:14px;">New shows added regularly. You can request a show directly from the platform.</p>
+    </div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- 02 -->
+<div class="section">
+  <div class="section-eyebrow">02</div>
+  <div class="section-title">Getting started</div>
+
+  <div class="qa">
+    <div class="question">How do I get access?</div>
+    <div class="answer">Sign up at gotshortlisted.com. No credit card required.</div>
+  </div>
+  <div class="qa">
+    <div class="question">What do I need to get started?</div>
+    <div class="answer">A campaign brief or case study. The more detail you provide (results, methodology, client context), the stronger the outputs. Upload your agency credentials document early for best results (see Agency Profile).</div>
+  </div>
+  <div class="qa">
+    <div class="question">How long does setup take?</div>
+    <div class="answer">Creating an account takes under two minutes. Getting your first set of entry directions for a campaign takes 10–15 minutes from a standing start.</div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- 03 -->
+<div class="section">
+  <div class="section-eyebrow">03</div>
+  <div class="section-title">Projects &amp; materials</div>
+
+  <div class="qa">
+    <div class="question">What is a Project?</div>
+    <div class="answer">A Project is the workspace for a single campaign entry effort. It contains your brief, uploaded materials, AI-generated directions, draft entries, evaluations, press kit outputs, and video script, all in one place, organized by tab.</div>
+  </div>
+  <div class="qa">
+    <div class="question">What materials can I upload?</div>
+    <div class="answer">PDFs, Word documents (.docx), and plain text files. Shortlist extracts all text, including from fillable PDF entry forms, and uses this across every AI operation in that project.</div>
+  </div>
+  <div class="qa">
+    <div class="question">Can multiple people work on the same project?</div>
+    <div class="answer">Yes. Team members added to your account share access to all projects in the organisation. No seat limits.</div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- 04 -->
+<div class="section">
+  <div class="section-eyebrow">04</div>
+  <div class="section-title">Entry directions</div>
+
+  <div class="timing">
+    <div class="timing-before">
+      <div class="timing-label">Before Shortlist</div>
+      <div class="timing-value">3 hours</div>
+      <div class="timing-note">Manual category research across multiple shows, usually by a senior strategist.</div>
+    </div>
+    <div class="timing-after">
+      <div class="timing-label">With Shortlist</div>
+      <div class="timing-value">~10 minutes</div>
+      <div class="timing-note">Upload brief, review AI-generated directions with win likelihood scores.</div>
+    </div>
+  </div>
+
+  <div class="qa">
+    <div class="question">What are Entry Directions?</div>
+    <div class="answer">AI-generated strategic recommendations: specific show-and-category combinations, each with a win likelihood score, strategic angle, ROI index, strengths and risks, and a one-line hook. Generated before you write a word, so you know where your campaign has a real shot before committing the entry fee.</div>
+  </div>
+  <div class="qa">
+    <div class="question">How does Shortlist decide which shows and categories to recommend?</div>
+    <div class="answer">It combines campaign fit against what each show's jury typically rewards, historical win rates, your agency's past performance if available, and the 876-campaign knowledge base which surfaces comparable winning work.</div>
+  </div>
+  <div class="qa">
+    <div class="question">Can I generate more directions after the first batch?</div>
+    <div class="answer">Yes. Generate More Directions adds to the existing set without deleting previous ones. You can sort directions by Category Fit, Chance of Medal, or ROI Index.</div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- 05 -->
+<div class="section">
+  <div class="section-eyebrow">05</div>
+  <div class="section-title">Show intelligence &amp; ROI</div>
+
+  <div class="timing">
+    <div class="timing-before">
+      <div class="timing-label">Before Shortlist</div>
+      <div class="timing-value">8 hours</div>
+      <div class="timing-note">Researching judging criteria, past winners, entry fees, and ROI across multiple shows. Often required the most senior person in the room.</div>
+    </div>
+    <div class="timing-after">
+      <div class="timing-label">With Shortlist</div>
+      <div class="timing-value">Instant</div>
+      <div class="timing-note">On page load. Every show, every season, with verified data.</div>
+    </div>
+  </div>
+
+  <div class="qa">
+    <div class="question">What is Jury Intelligence?</div>
+    <div class="answer">A panel inside each entry card that surfaces what a specific show's jury actually rewards: their judging philosophy, what they score on, common mistakes that kill entries, and language that resonates or raises flags. Drawn from official entry kits, published judging criteria, and observed patterns in winning work.</div>
+  </div>
+  <div class="qa">
+    <div class="question">What is the ROI Index?</div>
+    <div class="answer">A 0–100 index per direction that combines show prestige, realistic medal probability, and entry cost. A high-prestige show at $2,000 per entry scores very differently from a show with comparable odds at $400. Helps prioritise where to allocate budget.</div>
+  </div>
+  <div class="qa">
+    <div class="question">Is the deadline and fee data reliable?</div>
+    <div class="answer">All show data is human-verified against official show websites before being added. Each show has a confidence level and a last-verified date. Shows marked as unverified are flagged before any deadline-sensitive actions.</div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- 06 -->
+<div class="section">
+  <div class="section-eyebrow">06</div>
+  <div class="section-title">Evaluation</div>
+
+  <div class="timing">
+    <div class="timing-before">
+      <div class="timing-label">Before Shortlist</div>
+      <div class="timing-value">1 hour each</div>
+      <div class="timing-note">Jury review, coach feedback, and benchmarking an existing entry, each requiring a separate manual process.</div>
+    </div>
+    <div class="timing-after">
+      <div class="timing-label">With Shortlist</div>
+      <div class="timing-value">~2 minutes</div>
+      <div class="timing-note">Per evaluation. Jury mode and Coach mode coexist on the same entry.</div>
+    </div>
+  </div>
+
+  <div class="qa">
+    <div class="question">What is Jury Evaluation?</div>
+    <div class="answer">Scores your entry the way a judge would, across six dimensions including strategic clarity, insight quality, creative idea, execution, and results evidence. Catches weaknesses before they cost you a shortlist.</div>
+  </div>
+  <div class="qa">
+    <div class="question">What is Coach Review?</div>
+    <div class="answer">Flips the lens. Instead of scoring like a judge, it gives you an untapped potential score (the gap between your current entry and its ceiling) and a prioritised fix list. The specific changes most likely to move you from shortlist to metal. Both modes can run on the same entry.</div>
+  </div>
+  <div class="qa">
+    <div class="question">What is Quick Evaluate?</div>
+    <div class="answer">Upload an existing entry PDF and get an immediate jury-standard evaluation without going through the full direction and drafting workflow. Useful for benchmarking legacy work or entries from another source.</div>
+  </div>
+  <div class="qa">
+    <div class="question">Can I track score changes between drafts?</div>
+    <div class="answer">Yes. When you re-evaluate after editing, Shortlist shows a score delta per dimension. A "Notable Changes" summary explains what drove the shift. Draft generations are kept, not deleted.</div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- 07 -->
+<div class="section">
+  <div class="section-eyebrow">07</div>
+  <div class="section-title">Entry drafts</div>
+
+  <div class="timing">
+    <div class="timing-before">
+      <div class="timing-label">Before Shortlist</div>
+      <div class="timing-value">8 hrs + 1–2 hrs per revision</div>
+      <div class="timing-note">First draft by a lead strategist. Each revision cycle required another full review session and a sign-off loop up to the CEO.</div>
+    </div>
+    <div class="timing-after">
+      <div class="timing-label">With Shortlist</div>
+      <div class="timing-value">10 min + ~5 min per revision</div>
+      <div class="timing-note">First draft generated. Revisions via inline editing or conversational chat.</div>
+    </div>
+  </div>
+
+  <div class="pull-quote">
+    <p>"This was the work.</p><p>Eight hours to get a first draft that might still need three rounds of revision.</p><p>That's where campaigns went to die on the calendar."</p>
+  </div>
+
+  <div class="qa">
+    <div class="question">How does entry writing work?</div>
+    <div class="answer">Select a direction and click Generate Draft. Shortlist writes across all entry fields (situation, insight, idea, execution, results) in your agency's voice, informed by your credentials profile and the specific jury's criteria for that show and category.</div>
+  </div>
+  <div class="qa">
+    <div class="question">How do I revise a draft?</div>
+    <div class="answer">Two ways. Click any field to edit inline directly. Changes save immediately. Or use the chat interface to revise specific sections conversationally: "Make the results section more specific to sales impact" and Shortlist applies the change.</div>
+  </div>
+  <div class="qa">
+    <div class="question">Does it sound like our agency, not generic AI?</div>
+    <div class="answer">Yes, provided you've uploaded your agency credentials (see Agency Profile). Shortlist extracts your agency's strategic register, sector expertise, and voice and applies it silently to every draft. The difference is noticeable.</div>
+  </div>
+  <div class="qa">
+    <div class="question">Can I track whether entries win?</div>
+    <div class="answer">Yes. Mark any direction as submitted and record the outcome: shortlisted, finalist, winner, or no placement. Shortlist uses this history to calibrate future direction recommendations for the same shows.</div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- 08 -->
+<div class="section">
+  <div class="section-eyebrow">08</div>
+  <div class="section-title">Press kit</div>
+
+  <div class="timing">
+    <div class="timing-before">
+      <div class="timing-label">Before Shortlist</div>
+      <div class="timing-value">1 hour</div>
+      <div class="timing-note">Writing press materials, adapting by format, coordinating approvals. Often happened after the shortlist announcement, in a panic.</div>
+    </div>
+    <div class="timing-after">
+      <div class="timing-label">With Shortlist</div>
+      <div class="timing-value">~30 seconds</div>
+      <div class="timing-note">One click. Full suite generated in your agency voice before submission, not after shortlist.</div>
+    </div>
+  </div>
+
+  <div class="qa">
+    <div class="question">What does the Press Kit generate?</div>
+    <div class="answer">
+      <ul class="feature-list">
+        <li>LinkedIn post (full, conversational)</li>
+        <li>X / Twitter post (tight, punchy)</li>
+        <li>Instagram caption</li>
+        <li>Press hook copy (written for journalism)</li>
+        <li>Quick summary paragraph</li>
+        <li>Outlook-safe HTML email</li>
+        <li>PDF press release</li>
+      </ul>
+    </div>
+  </div>
+  <div class="qa">
+    <div class="question">Does it customise copy for each format?</div>
+    <div class="answer">Yes. Each format is generated separately, not reformatted from one source. The LinkedIn post is fuller and more conversational; X is tight and punchy; the press hook is written for journalism. Versions are saved and can be revised without losing earlier drafts.</div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- 09 -->
+<div class="section">
+  <div class="section-eyebrow">09</div>
+  <div class="section-title">Video script</div>
+
+  <div class="timing">
+    <div class="timing-before">
+      <div class="timing-label">Before Shortlist</div>
+      <div class="timing-value">8 hours</div>
+      <div class="timing-note">Script writing, multiple internal review rounds, director briefing prep. Often the last thing done before the deadline, and the first thing cut when time ran out.</div>
+    </div>
+    <div class="timing-after">
+      <div class="timing-label">With Shortlist</div>
+      <div class="timing-value">~20 minutes</div>
+      <div class="timing-note">Generate, score, refine, and produce the director brief in the same workspace.</div>
+    </div>
+  </div>
+
+  <div class="qa">
+    <div class="question">What does the Video Script feature produce?</div>
+    <div class="answer">A 2-minute awards case study video script in the standard format: hook, challenge, idea, execution, results, close. Scored for win likelihood against your target show's criteria. Category-specific improvement suggestions. A tonal brief for briefing your director.</div>
+  </div>
+  <div class="qa">
+    <div class="question">Can I revise it?</div>
+    <div class="answer">Yes. The script and its tonal brief can both be edited via a chat interface. You describe the change; Shortlist applies it and saves the revision.</div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- 10 -->
+<div class="section">
+  <div class="section-eyebrow">10</div>
+  <div class="section-title">Shows, calendar &amp; budget</div>
+
+  <div class="qa">
+    <div class="question">Is there a way to track upcoming deadlines?</div>
+    <div class="answer">Yes. The Shows Calendar shows all covered shows in a Gantt-style view with urgency indicators: Critical (14 days or fewer), Tight (15–35 days), and Prepare (36–56 days). Accessible from any project.</div>
+  </div>
+  <div class="qa">
+    <div class="question">What is the Budget Planner?</div>
+    <div class="answer">A planning tool that models entry spend across your target shows for the season, useful for deciding which shows to prioritise before committing budget. Entry fee data is drawn from the verified show database.</div>
+  </div>
+  <div class="qa">
+    <div class="question">How do I request a show not in the list?</div>
+    <div class="answer">From any show selector in the platform, select "Request a show not in the list." New shows are typically added within 48 hours of a request.</div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- 11 -->
+<div class="section">
+  <div class="section-eyebrow">11</div>
+  <div class="section-title">Agency profile</div>
+
+  <div class="timing">
+    <div class="timing-before">
+      <div class="timing-label">Before Shortlist</div>
+      <div class="timing-value">1 hour per person</div>
+      <div class="timing-note">Briefing each new team member or consultant on the agency's voice, positioning, and context. Repeated every engagement.</div>
+    </div>
+    <div class="timing-after">
+      <div class="timing-label">With Shortlist</div>
+      <div class="timing-value">15 min (one-time)</div>
+      <div class="timing-note">Upload your credentials document once. Applied automatically to every output from that point forward.</div>
+    </div>
+  </div>
+
+  <div class="qa">
+    <div class="question">What is the Agency Profile?</div>
+    <div class="answer">A one-time upload of your credentials: a PDF deck or a URL. Shortlist extracts your agency's strategic approach, sector expertise, voice, and past performance, then uses this context silently across all AI outputs. Your entries come out sounding like your agency, not generic AI copy.</div>
+  </div>
+  <div class="qa">
+    <div class="question">Does it update automatically?</div>
+    <div class="answer">No. Re-upload when your credentials change. The profile version is logged so you can see when it was last updated.</div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- 12 -->
+<div class="section">
+  <div class="section-eyebrow">12</div>
+  <div class="section-title">Data, privacy &amp; pricing</div>
+
+  <div class="qa">
+    <div class="question">Does my content train the AI?</div>
+    <div class="answer">No. Shortlist uses Anthropic's Claude API. Under their API terms, content submitted via the API is never used to train their models.</div>
+  </div>
+  <div class="qa">
+    <div class="question">Can other agencies see my work?</div>
+    <div class="answer">No. Every project, material, draft, and evaluation is locked to your organisation using row-level database security. No other agency can access your work.</div>
+  </div>
+  <div class="qa">
+    <div class="question">Where does the award intelligence come from?</div>
+    <div class="answer"><p>My own personal knowledge bank of drafting, editing, and overseeing more than 1,500 award entries during my career.</p><p>37% medal rate over that time.</p><p>On top of that, have analyzed nearly 1,000 winning campaigns from publicly available award records, and critically, never from client submissions to Shortlist.</p><p>Show-specific jury intelligence is sourced from a combination of personal jury duty time, online jury interviews from just about every major show, official entry kits, and published judging frameworks.</p></div>
+  </div>
+  <div class="qa">
+    <div class="question">How much does it cost?</div>
+    <div class="answer">
+      <div class="pricing-row">
+        <div class="plan-card">
+          <div class="plan-name">Studio</div>
+          <div class="plan-price">$149</div>
+          <div class="plan-period">per month</div>
+          <div class="plan-desc">Freelancers and independent consultants</div>
+        </div>
+        <div class="plan-card">
+          <div class="plan-name">Agency</div>
+          <div class="plan-price">$299</div>
+          <div class="plan-period">per month</div>
+          <div class="plan-desc">Teams. Unlimited users and projects.</div>
+        </div>
+        <div class="plan-card">
+          <div class="plan-name">Enterprise</div>
+          <div class="plan-price">$599</div>
+          <div class="plan-period">per month</div>
+          <div class="plan-desc">Multi-market teams and holding groups</div>
+        </div>
+      </div>
+      <p style="font-size:13px;color:var(--muted);margin-top:12px;">No credit card required to start. Contact ben@positionadvisory.com with questions.</p>
+    </div>
+  </div>
+</div>
+
+</div><!-- /content -->
+
+<div class="footer">
+  <div class="footer-logo">Shortlist</div>
+  <div class="footer-url">gotshortlisted.com &nbsp;·&nbsp; ben@positionadvisory.com</div>
+  <div class="footer-note">
+    Built for organisations serious about winning.<br>
+    Content accurate as of May 2026.
+  </div>
+</div>
+
+</body>
+</html>
