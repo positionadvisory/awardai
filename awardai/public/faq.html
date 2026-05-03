@@ -42,7 +42,12 @@
   .cover {
     background: var(--green-deep);
     color: var(--bone);
-    padding: 64px 60px 56px;
+    padding: 64px 0 56px;
+  }
+  .cover-inner, .time-hero-inner, .toc-inner, .footer-inner {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 0 48px;
   }
   .cover-eyebrow {
     font-family: "EB Garamond", serif;
@@ -101,7 +106,7 @@
   .time-hero {
     background: var(--ink);
     color: var(--bone);
-    padding: 64px 60px;
+    padding: 64px 0;
   }
   .time-hero-label {
     font-family: "EB Garamond", serif;
@@ -177,7 +182,7 @@
 
   /* TOC */
   .toc {
-    padding: 48px 60px;
+    padding: 48px 0;
     background: var(--bone-2);
     border-bottom: 1px solid var(--rule);
   }
@@ -197,8 +202,8 @@
   .toc-item { font-size: 14px; color: var(--ink-2); display: flex; gap: 10px; }
   .toc-num { font-family: "EB Garamond", serif; font-size: 11px; color: var(--gold); min-width: 20px; font-weight: 500; }
 
-  /* Main content */
-  .content { max-width: 860px; margin: 0 auto; padding: 0 60px; }
+  /* Main content — unified width with Container */
+  .content { max-width: 920px; margin: 0 auto; padding: 0 48px; }
 
   /* Sections */
   .section { padding: 52px 0 0; }
@@ -350,7 +355,7 @@
   .footer {
     background: var(--green-deep);
     color: var(--bone);
-    padding: 40px 60px;
+    padding: 40px 0;
     margin-top: 64px;
   }
   .footer-logo {
@@ -378,12 +383,68 @@
     letter-spacing: 0.02em;
   }
 
+  /* ── Mobile — everything collapses to single column ── */
+  @media screen and (max-width: 768px) {
+
+    /* Spacing: 60px horizontal padding → 20px */
+    .cover        { padding: 40px 0 36px; }
+    .time-hero    { padding: 40px 0; }
+    .toc          { padding: 28px 0; }
+    .content      { padding: 0 20px; }
+    .footer       { padding: 36px 0; margin-top: 40px; }
+    .cover-inner, .time-hero-inner, .toc-inner, .footer-inner { padding: 0 20px; }
+    .section      { padding-top: 36px; }
+
+    /* Cover: reduce font sizes */
+    .cover-logo   { font-size: 32px; }
+    .cover-title  { font-size: 22px; }
+
+    /* Time hero: stack the 3 stats vertically */
+    .time-hero h2 { font-size: clamp(26px, 7vw, 38px); margin-bottom: 32px; }
+    .time-grid    { grid-template-columns: 1fr; }
+    .time-cell    {
+      border-right: none;
+      border-bottom: 1px solid var(--rule-dark);
+      padding: 24px 0;
+    }
+    .time-cell:last-child { border-bottom: none; }
+    .time-before, .time-after { font-size: 36px; }
+    .time-note    { font-size: 14px; }
+
+    /* TOC: single column */
+    .toc-grid     { grid-template-columns: 1fr; gap: 6px; }
+
+    /* Section titles */
+    .section-title { font-size: clamp(20px, 6vw, 28px); }
+
+    /* Timing callouts: stack before/after vertically */
+    .timing        { flex-direction: column; }
+    .timing-before { border-right: none; border-bottom: 1px solid var(--rule); }
+    .timing-value  { font-size: 22px; }
+
+    /* Show grid: 2-column on mobile */
+    .show-grid               { grid-template-columns: 1fr 1fr; }
+    .show-grid-item          { font-size: 12px; padding: 8px 10px; }
+
+    /* Pull quote: reduce size */
+    .pull-quote              { padding-left: 16px; }
+    .pull-quote p            { font-size: 17px; }
+
+    /* Pricing: single column, remove side borders */
+    .pricing-row             { grid-template-columns: 1fr; }
+    .plan-card               { border-right: none; border-bottom: 1px solid var(--rule); }
+    .plan-card:last-child    { border-bottom: none; }
+    .plan-price              { font-size: 48px; }
+  }
+
   @media print {
     body { font-size: 13px; }
-    .cover, .time-hero { padding: 48px; }
+    .cover { padding: 48px 0; }
+    .time-hero { padding: 48px 0; }
+    .cover-inner, .time-hero-inner, .toc-inner, .footer-inner { padding: 0 48px; }
     .content { padding: 0 48px; }
-    .toc { padding: 36px 48px; }
-    .footer { margin-top: 48px; padding: 32px 48px; }
+    .toc { padding: 36px 0; }
+    .footer { margin-top: 48px; padding: 32px 0; }
     .section { page-break-inside: avoid; }
     .timing { page-break-inside: avoid; }
     .time-grid { grid-template-columns: repeat(3, 1fr); }
@@ -412,18 +473,21 @@
 
 <!-- Cover -->
 <div class="cover">
+<div class="cover-inner">
   <div class="cover-eyebrow">Shortlist · gotshortlisted.com</div>
   <div class="cover-logo">Shortlist</div>
   <div class="cover-sub">Awards intelligence, built by someone who ran one</div>
   <div class="cover-rule"></div>
   <div class="cover-title">Frequently Asked Questions</div>
   <div class="cover-date">Updated May 2026</div>
+</div><!-- /cover-inner -->
 </div>
 
 <!-- Time hero -->
 <div class="time-hero">
+<div class="time-hero-inner">
   <div class="time-hero-label">The case for Shortlist</div>
-  <h2>Developing a full award entry used to take <em>40 hours of work</em> from a lead strategist. Now it takes under two.</h2>
+  <h2><span style="display:block">Developing a full award entry took</span><span style="display:block"><em>40 hours of work</em> from a lead strategist.</span><span style="display:block">Now it takes under two.</span></h2>
   <div class="time-grid">
     <div class="time-cell">
       <div class="time-cell-feature">Entry draft</div>
@@ -450,10 +514,12 @@
   <p class="time-note" style="margin-top:16px;">
     <strong>In most agencies, it still does.</strong>
   </p>
+</div><!-- /time-hero-inner -->
 </div>
 
 <!-- TOC -->
 <div class="toc">
+<div class="toc-inner">
   <div class="toc-label">Contents</div>
   <div class="toc-grid">
     <div class="toc-item"><span class="toc-num">01</span> What is Shortlist?</div>
@@ -469,6 +535,7 @@
     <div class="toc-item"><span class="toc-num">06</span> Evaluation</div>
     <div class="toc-item"><span class="toc-num">12</span> Data, privacy &amp; pricing</div>
   </div>
+</div><!-- /toc-inner -->
 </div>
 
 <div class="content">
@@ -882,12 +949,14 @@
 </div><!-- /content -->
 
 <div class="footer">
+<div class="footer-inner">
   <div class="footer-logo">Shortlist</div>
   <div class="footer-url">gotshortlisted.com &nbsp;·&nbsp; ben@positionadvisory.com</div>
   <div class="footer-note">
     Built for organisations serious about winning.<br>
     Content accurate as of May 2026.
   </div>
+</div><!-- /footer-inner -->
 </div>
 
 </body>
