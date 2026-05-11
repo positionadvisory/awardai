@@ -106,15 +106,14 @@ const Hero = ({ onCTA, m }: { onCTA: () => void; m: boolean }) => (
   <section style={{ background: 'var(--green-deep)', color: 'var(--bone)', paddingTop: m ? 56 : 96, paddingBottom: m ? 64 : 120, position: 'relative', overflow: 'hidden' }}>
     {!m && <div className="sl-mono" style={{ position: 'absolute', top: 24, right: 40, fontSize: 11, letterSpacing: '0.18em', color: 'var(--muted-dark)', textTransform: 'uppercase' }}>Edition 01 / Asia / 2026</div>}
     <Container m={m}>
-      <Eyebrow tone="light">Awards intelligence, built by an operator</Eyebrow>
+      <Eyebrow tone="light">Awards intelligence, built by someone who ran one</Eyebrow>
       <h1 className="sl-serif" style={{ margin: '24px 0 0', fontSize: m ? 'clamp(44px, 12vw, 72px)' : 'clamp(48px, 7vw, 104px)', lineHeight: 1.0, letterSpacing: '-0.02em', maxWidth: 1100, fontWeight: 400 }}>
-        Great work loses<br />to great writing.<br />
-        <span style={{ color: 'var(--gold)', fontStyle: 'italic' }}>It always has.</span><br />
-        <span style={{ color: 'var(--bone)' }}>Built something about it.</span>
+        Your final edit,<br />brought forward<br />
+        <span style={{ color: 'var(--gold)', fontStyle: 'italic' }}>as fast as possible.</span>
       </h1>
       <div style={{ display: 'grid', gridTemplateColumns: m ? '1fr' : '1fr 1fr', gap: m ? 32 : 64, marginTop: m ? 40 : 80, alignItems: 'end' }}>
         <p style={{ fontSize: m ? 17 : 19, lineHeight: 1.55, color: 'var(--muted-dark)', margin: 0 }}>
-          Shortlist is an awards intelligence system built by someone who spent a decade running the most awarded media agency program in Asia, and occasionally losing sleep over the ones that didn&apos;t make shortlist.
+          Shortlist is an awards intelligence system for agencies. It puts the lead strategist and the CEO in the editor-in-chief seat from step one. Entry directions, first drafts, jury evaluation, coach feedback: ready before the real expertise is applied, not instead of it.
         </p>
         <div>
           <div style={{ display: 'flex', flexDirection: m ? 'column' : 'row', alignItems: m ? 'stretch' : 'center', gap: m ? 10 : 16 }}>
@@ -122,7 +121,7 @@ const Hero = ({ onCTA, m }: { onCTA: () => void; m: boolean }) => (
             <GhostCTA tone="dark" m={m}>See what&apos;s built</GhostCTA>
           </div>
           <div className="sl-mono" style={{ marginTop: 16, fontSize: 12, color: 'var(--muted-dark)', letterSpacing: '0.04em' }}>
-            20+ shows. Unlimited entries. No stretched strategist required.
+            20+ shows. Unlimited entries. The judgment stays yours.
           </div>
         </div>
       </div>
@@ -241,8 +240,8 @@ const Problem = ({ m }: { m: boolean }) => (
     <Container m={m}>
       <Eyebrow tone="light">The known problem</Eyebrow>
       <h2 className="sl-serif" style={{ margin: '24px 0 0', fontSize: m ? 'clamp(32px, 9vw, 52px)' : 'clamp(36px, 4.6vw, 68px)', lineHeight: 1.05, letterSpacing: '-0.015em', maxWidth: 1000, fontWeight: 400 }}>
-        Agencies spend a lot on awards.<br />
-        <span style={{ color: 'var(--gold)', fontStyle: 'italic' }}>Most of it doesn&apos;t work.</span>
+        Running a serious program<br />
+        <span style={{ color: 'var(--gold)', fontStyle: 'italic' }}>costs the wrong people.</span>
       </h2>
       <div style={{ marginTop: m ? 48 : 80, display: 'grid', gridTemplateColumns: m ? '1fr' : 'repeat(3, 1fr)', borderTop: '1px solid var(--rule-dark)', borderBottom: '1px solid var(--rule-dark)' }}>
         {[['$30K+', 'Average agency spend per awards season'], ['>60%', 'Of entries that never make shortlist'], ['0', 'Dedicated awards writers at most agencies']].map(([k, v], i) => (
@@ -256,8 +255,8 @@ const Problem = ({ m }: { m: boolean }) => (
       <div style={{ marginTop: m ? 48 : 96, display: 'grid', gridTemplateColumns: m ? '1fr' : '1fr 1fr', gap: m ? 40 : 64 }}>
         <div>
           <div className="sl-mono" style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 16 }}>The general problem</div>
-          <p style={{ margin: 0, fontSize: m ? 16 : 18, lineHeight: 1.6, color: 'var(--bone)' }}>Most agencies hand entry writing to the already-stretched strategist. Or brief a consultant at $2,000 per entry. Or submit with their fingers crossed.</p>
-          <p style={{ margin: '16px 0 0', fontSize: m ? 16 : 18, lineHeight: 1.6, color: 'var(--muted-dark)' }}>The category selection is guesswork. The writing is rushed. The jury intelligence is nonexistent. When the results come in, nobody really knows what went wrong.</p>
+          <p style={{ margin: 0, fontSize: m ? 16 : 18, lineHeight: 1.6, color: 'var(--bone)' }}>The fully-loaded cost of a single serious entry, fees plus the senior time it actually takes, runs $6,000 to $12,000. Multiply that across a competitive season and the awards budget is a real line item. Most of that cost lands on the two or three people in the agency who can least afford to give it.</p>
+          <p style={{ margin: '16px 0 0', fontSize: m ? 16 : 18, lineHeight: 1.6, color: 'var(--muted-dark)' }}>The category selection is guesswork. The writing is rushed. When the results come in, nobody really knows what went wrong.</p>
         </div>
         <div>
           <div className="sl-mono" style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 16 }}>The Asia problem</div>
@@ -373,12 +372,12 @@ const HowItWorks = ({ m }: { m: boolean }) => {
   return (
     <section id="how" style={{ background: 'var(--bone)', padding: m ? '72px 0 80px' : '120px 0 140px' }}>
       <Container m={m}>
-        <Eyebrow>What Shortlist does</Eyebrow>
+        <Eyebrow>The editor-in-chief seat, from step one</Eyebrow>
         <div style={{ display: 'grid', gridTemplateColumns: m ? '1fr' : '1fr 1fr', gap: m ? 20 : 80, marginTop: 24, alignItems: 'end' }}>
           <h2 className="sl-serif" style={{ margin: 0, fontSize: m ? 'clamp(30px, 8vw, 44px)' : 'clamp(36px, 4.4vw, 64px)', lineHeight: 1.05, letterSpacing: '-0.01em', maxWidth: 600, fontWeight: 400 }}>
-            Four things that used to take weeks.{' '}<span style={{ fontStyle: 'italic', color: 'var(--gold-deep)' }}>Now take hours.</span>
+            The process that gets you there{' '}<span style={{ fontStyle: 'italic', color: 'var(--gold-deep)' }}>doesn&apos;t have to cost the beach.</span>
           </h2>
-          {!m && <p style={{ margin: 0, fontSize: 17, lineHeight: 1.6, color: 'var(--muted)', maxWidth: 460 }}>Designed specifically to get the team back to doing brilliant client work, instead of making client work sound brilliant.</p>}
+          {!m && <p style={{ margin: 0, fontSize: 17, lineHeight: 1.6, color: 'var(--muted)', maxWidth: 460 }}>Every campaign that deserves a proper entry gets one. Not a rushed submission on deadline night. Not a direction chosen because it was the first one remembered.</p>}
         </div>
         <div style={{ marginTop: m ? 40 : 80, display: 'grid', gridTemplateColumns: '1fr', borderTop: '1px solid var(--rule)' }}>
           {cards.map((c, i) => (
