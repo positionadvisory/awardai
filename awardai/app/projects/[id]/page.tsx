@@ -8,6 +8,7 @@ import ShowsDrawer from '@/components/shows/ShowsDrawer'
 import { MATERIALS_EVAL_STATEMENTS, JURY_EVAL_STATEMENTS, COACH_REVIEW_STATEMENTS } from '@/lib/generatingStatements'
 import { appErrorFromResponse, formatError, parseErrorString } from '@/lib/errorMessages'
 import { computeRoiIndex, normaliseKbShow, DEADLINES_2026 } from '@/lib/shows-data'
+import JuryProfilePanel, { JuryCell, RegionalUplift } from '@/components/JuryProfilePanel'
 
 // ── ErrorBanner — renders a friendly message with a small diagnostic code ────
 // Expects error strings in "message [CODE]" format from formatError().
@@ -720,6 +721,10 @@ export default function ProjectPage() {
   // Festival / jury intelligence — show_profiles rows keyed by directionId
   const [showProfiles, setShowProfiles] = useState<Record<number, ShowProfile | null>>({})
   const [showProfileOpen, setShowProfileOpen] = useState<Record<number, boolean>>({})
+  // Jury Intelligence Layer — Phase 1 (jury_cells keyed by show name, panel open state by dirId)
+  const [juryShowCells, setJuryShowCells] = useState<Record<string, JuryCell[]>>({})
+  const [juryPanelOpen, setJuryPanelOpen] = useState<Record<number, boolean>>({})
+  const [regionalUplift, setRegionalUplift] = useState<RegionalUplift[]>([])
   // KB awards count for Script Analysis subheadline
   const [kbCount, setKbCount] = useState<number>(0)
   // Script: asset mode + eval inclusion
@@ -979,6 +984,38 @@ export default function ProjectPage() {
       })
     })
   }, [directions]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Jury Intelligence Layer — fetch jury_cells for shows in current directions
+  useEffect(() => {
+    const shows = [...new Set(directions.map(d => d.best_show).filter(Boolean))] as string[]
+    const unloaded = shows.filter(s => !(s in juryShowCells))
+    if (unloaded.length === 0) return
+    supabase
+      .from('jury_cells')
+      .select('id, show_name, year, category, n_jurors, n_repeat_jurors, top_region, top_region_share, region_breakdown, president_region, president_country, president_is_repeat, philosophy_cluster, winner_regions, winner_countries, n_grand_prix, n_gold')
+      .in('show_name', unloaded)
+      .then(({ data }) => {
+        if (!data) return
+        setJuryShowCells(prev => {
+          const next = { ...prev }
+          for (const show of unloaded) {
+            next[show] = (data as JuryCell[]).filter(c => c.show_name === show)
+          }
+          return next
+        })
+      })
+  }, [directions]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Jury Intelligence Layer — fetch global regional uplift stats (once)
+  useEffect(() => {
+    if (regionalUplift.length > 0) return
+    supabase
+      .from('jury_regional_uplift')
+      .select('region, cells_as_top_juror, cells_with_region_in_winners, pct_when_top_juror, baseline_pct, uplift_points')
+      .then(({ data }) => {
+        if (data) setRegionalUplift(data as RegionalUplift[])
+      })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Concatenate guided brief sections into a single string for storage
   const briefFromSections = (s: typeof briefSections) => [
@@ -4197,6 +4234,20 @@ export default function ProjectPage() {
                               </div>
                             )}
                           </div>
+                        )}
+
+                        {/* ── Jury Profile Intelligence panel — "Who judges this show" ──────── */}
+                        {/* Phase 1: static 2021-2026 dataset. Shows composition, president signal,
+                            and historical win patterns. No individual names exposed. */}
+                        {dirShow && juryShowCells[dirShow] && juryShowCells[dirShow].length > 0 && (
+                          <JuryProfilePanel
+                            showName={dirShow}
+                            category={dirCategory ?? ''}
+                            cells={juryShowCells[dirShow]}
+                            regionalUplift={regionalUplift}
+                            isOpen={!!juryPanelOpen[dirId]}
+                            onToggle={() => setJuryPanelOpen(prev => ({ ...prev, [dirId]: !prev[dirId] }))}
+                          />
                         )}
 
                         {isGeneratingThis && (
