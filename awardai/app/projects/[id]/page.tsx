@@ -987,7 +987,7 @@ export default function ProjectPage() {
 
   // Jury Intelligence Layer — fetch jury_cells for shows in current directions
   useEffect(() => {
-    const shows = [...new Set(directions.map(d => d.best_show).filter(Boolean))] as string[]
+    const shows = Array.from(new Set(directions.map(d => d.best_show).filter(Boolean))) as string[]
     const unloaded = shows.filter(s => !(s in juryShowCells))
     if (unloaded.length === 0) return
     supabase
