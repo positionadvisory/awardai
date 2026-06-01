@@ -138,7 +138,7 @@ export default function JuryProfilePanel({ cells, category, showName, isOpen, on
   const categoryMatched = matchedCells.length > 0
 
   // Show years available — up to 3 most recent
-  const years = [...new Set(displayCells.map(c => c.year))].slice(0, 3)
+  const years = Array.from(new Set(displayCells.map(c => c.year))).slice(0, 3)
   const [selectedYear, setSelectedYear] = useState<number>(years[0] ?? currentYear - 1)
 
   const activeCell = displayCells.find(c => c.year === selectedYear) ?? null
