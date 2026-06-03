@@ -11,7 +11,7 @@
  *        confidence === 'verified' AND the deadline is in the future.
  *        All other shows require manual operation via the standard UI.
  *
- * Last verified pass: 26 April 2026 (Ben Royalcondit)
+ * Last verified pass: 4 June 2026 (Ben Royalcondit) — ADFEST added
  * =============================================================================
  */
 
@@ -306,6 +306,14 @@ export const DEADLINES_2026: ShowDeadline[] = [
   // ── NEEDS CHECK — agent will pause, user must operate manually ──────────────
 
   {
+    show: 'ADFEST', region: 'APAC',
+    finalDate: '', juryDate: '', ceremonyDate: '',
+    earlyBird: '', standard: '', final: 'Closed — 2027 TBC', ceremony: 'Mar 2027, Pattaya (TBC)',
+    prValue: 50,
+    note: 'ADFEST 2026 ("Human+") completed 19–21 Mar 2026, PEACH, Royal Cliff Hotels, Pattaya, Thailand. 2026 entry deadlines: early bird invoice/confirmation 19 Dec 2025, payment 9 Jan 2026; regular payment + materials final deadline 23 Jan 2026. 2027 cycle dates NOT YET PUBLISHED as of Jun 2026. Based on consistent annual pattern, expect 2027 early bird ~Dec 2026 and final deadline ~Jan 2027. Geographic eligibility: Asia Pacific + MENA only — companies must be based in eligible region. Fees 2026: THB 15,500 / 17,500 / 19,500 (early/regular/late, standard 19 categories); THB 23,000 / 25,000 / 27,000 (INNOVA Lotus + Lotus Roots). ~USD 430–770 depending on tier. 21 Lotus Award categories. Grand Jury President 2026: Yasuharu Sasaki (Global CCO, dentsu). Included in WARC Creative 100 Rankings, Campaign Brief Asia Creative Rankings, Drum World Creative Rankings. Non-profit organiser. Over 1,400 entries in 2026; 56 jurors from 17 cities.',
+    confidence: 'needs_check', lastVerified: '2026-06-04',
+  },
+  {
     show: 'Spikes Asia', region: 'APAC',
     finalDate: '', juryDate: '', ceremonyDate: '2026-03-12',
     earlyBird: '', standard: '', final: 'Closed', ceremony: '12 Mar 2026 (Singapore — 2026 cycle complete)',
@@ -465,6 +473,14 @@ export const WIN_RATES: Record<string, WinRateData> = {
     pr: { shortlist: 10000, metal: 50000, gold: 250000, grandprix: 900000 },
     fee: 1000,
   },
+  // ESTIMATE — ADFEST does not publish shortlist/metal rates. Derived from 2026 winner
+  // analysis (~1,400 entries, 21 categories, multiple Grandes withheld).
+  // Do not use in client-facing materials without caveat.
+  'ADFEST': {
+    shortlist: 20, metal: 9, gold: 3, grandprix: 0.3,
+    pr: { shortlist: 8000, metal: 35000, gold: 150000, grandprix: 500000 },
+    fee: 500,
+  },
   'Cristal Festival': {
     shortlist: 30, metal: 16, gold: 6, grandprix: 1.5,
     pr: { shortlist: 9000, metal: 30000, gold: 120000, grandprix: 450000 },
@@ -502,6 +518,7 @@ export const ENTRY_FEES: Record<string, EntryFeeData> = {
   'ROI Festival':           { base: 450,  range: 'Not published in English', note: 'Fees appear in Chinese-language entry handbook only (roifestival.com/cn). Require login at entry.roifestival.com/en or handbook download to obtain. Do not commit budget until fees confirmed.' },
   'Tangrams':               { base: 400,  range: 'N/A — integrated into Spikes Asia', note: 'Use Spikes Asia Strategy & Effectiveness Spike.' },
   'Spikes Asia':            { base: 1000, range: 'Unknown — 2027 cycle not yet open', note: '2026 cycle closed Mar 2026. Await 2027 entry kit.' },
+  'ADFEST':                 { base: 500,  range: 'THB 15,500–27,000 (~USD 430–770; standard/INNOVA × early/regular/late)', note: 'Standard 19 categories: THB 15,500 early / 17,500 regular / 19,500 late. INNOVA Lotus + Lotus Roots: THB 23,000 / 25,000 / 27,000. Film School (sub of New Director Lotus): ~half standard rate. Post-submission changes THB 2,000/request. 2027 cycle fees not yet published. USD conversions approximate at 2026 FX rates.' },
   'Cristal Festival':       { base: 480,  range: 'N/A — show structure changed', note: 'See NYF Advertising Awards (Cristal Village) and African Cristal Festival.' },
   'Campaign Asia Women to Watch APAC': { base: 300,  range: 'HKD 3,600–4,100 (deadline dependent)', note: 'Early bird by 8 Jun: HKD 3,600. Standard by 14 Jul: HKD 3,900. Final by 28 Jul: HKD 4,100. Fees non-refundable; include one-year Campaign Asia-Pacific membership. Source: campaignwomentowatch.com (verified 3 Jun 2026).' },
 }
@@ -645,6 +662,9 @@ export const KB_SHOW_ALIASES: Record<string, string | null> = {
   // Campaign Asia Women to Watch APAC (canonical) — map old/short name variants
   'women to watch apac':                          'Campaign Asia Women to Watch APAC',
   'campaign asia women to watch':                 'Campaign Asia Women to Watch APAC',
+
+  // ADFEST — map legacy KB variant (KB entries may use mixed case 'AdFest')
+  'adfest':                                       'ADFEST',
 
   // ── Renames ──────────────────────────────────────────────────────────────────
   'digital a-list':                               'Campaign Greater China A List',
