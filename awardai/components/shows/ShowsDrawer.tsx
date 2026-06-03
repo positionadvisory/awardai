@@ -209,7 +209,16 @@ export default function ShowsDrawer({
 
         {/* Scrollable content */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto bg-gray-50">
-          {tab === 'calendar' && <DeadlineCalendar />}
+          {tab === 'calendar' && (
+            <>
+              <div className="px-4 pt-3 pb-1">
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                  📅 Only shows with confirmed 2026 deadlines appear below. Shows with unannounced entry windows are not surfaced until dates are confirmed.
+                </p>
+              </div>
+              <DeadlineCalendar />
+            </>
+          )}
           {tab === 'budget' && (
             <BudgetPlanner
               directions={directions}
