@@ -358,20 +358,27 @@ const BASE_WIN_RATES: Record<string, number> = {
   'WARC Effectiveness Awards': 15,
   'Spikes Asia': 10,
   'Dubai Lynx': 15,
-  'Eurobest': 10,
+  'Eurobest': 9,             // Research-based: ~9% shortlist rate
   'New York Festivals': 15,
   'London International Awards': 12,
   'Campaign Big Awards': 15,
   'Creative Circle': 14,
-  'Epica Awards': 18,
+  'Epica Awards': 8,          // Research-based: scarce, journalist jury
   'AdFest': 12,
-  'Webby Awards': 20,
+  'Webby Awards': 5,           // Research-based: 13,000+ entries, very competitive
   'Shorty Awards': 20,
   'MMA Smarties': 20,
   'Asian Marketing Effectiveness Awards': 18,
   'Asia Pacific Effie Awards': 18,
   'Global Effie Awards': 12,
   'Australian Effies': 18,
+  'The Drum Awards Festival': 12,       // ~12% across discipline shows
+  'African Cristal Festival': 9,        // One winner per category — scarce
+  'Campaign UK Agency of the Year': 15, // Agency-tier; broad recognition
+  'Campaign US Agency of the Year': 15,
+  'Campaign Global Agency of the Year': 15,
+  'Adweek Agency of the Year': 15,      // Editorial judged; paid entry new in 2025
+  'One Show Indies': 8,                 // Inaugural 2026; high-bar One Show criteria
 }
 
 // Calculate realistic win likelihood: base rate × quality adjustment from eval score
