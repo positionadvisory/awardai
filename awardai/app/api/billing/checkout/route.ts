@@ -48,6 +48,15 @@ export async function POST(req: NextRequest) {
     },
     // Card required upfront — charges automatically after trial
     payment_method_collection: 'always',
+    // Show T&C acceptance checkbox on checkout page; Stripe records consent timestamp
+    consent_collection: {
+      terms_of_service: 'required',
+    },
+    custom_text: {
+      terms_of_service_acceptance: {
+        message: 'I agree to the [Terms of Use](https://gotshortlisted.com/terms) and [Privacy Policy](https://gotshortlisted.com/privacy).',
+      },
+    },
     success_url: `${process.env.NEXT_PUBLIC_APP_URL}/settings/billing?upgraded=1`,
     cancel_url:  `${process.env.NEXT_PUBLIC_APP_URL}/settings/billing`,
   })
