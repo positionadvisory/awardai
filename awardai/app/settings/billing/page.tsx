@@ -121,7 +121,7 @@ export default function BillingPage() {
         {/* Success banner */}
         {upgraded && (
           <div style={{ background: '#dcfce7', border: '1px solid #bbf7d0', borderRadius: 8, padding: '12px 16px', color: '#166534', fontSize: 14, marginBottom: 20, fontWeight: 500 }}>
-            🎉 You\'re on Shortlist Pro — your 14-day trial has started. You won\'t be charged until the trial ends.
+            🎉 You're on Shortlist Pro — your 14-day trial has started. You won't be charged until the trial ends.
           </div>
         )}
 
@@ -156,7 +156,7 @@ export default function BillingPage() {
                 <div style={{ fontSize: 13, color: '#6b7280', marginTop: 6 }}>$299 / month · cancel anytime</div>
               )}
             </div>
-            {!isPro && !isTrial && (
+            {!isPro && !isTrial && !upgraded && (
               <button
                 onClick={handleUpgrade}
                 disabled={upgrading}
@@ -170,6 +170,15 @@ export default function BillingPage() {
               >
                 {upgrading ? 'Redirecting…' : 'Start free trial'}
               </button>
+            )}
+            {upgraded && (
+              <Link href="/projects" style={{
+                padding: '10px 20px', borderRadius: 8, border: 'none',
+                background: '#166534', color: '#fff', fontSize: 14,
+                fontWeight: 600, textDecoration: 'none',
+              }}>
+                Back to projects →
+              </Link>
             )}
           </div>
 
@@ -188,8 +197,8 @@ export default function BillingPage() {
           </div>
         </div>
 
-        {/* Pricing card — only show if not yet pro */}
-        {!isPro && !isTrial && (
+        {/* Pricing card — only show if not yet pro and not just upgraded */}
+        {!isPro && !isTrial && !upgraded && (
           <div style={{ background: '#fff', borderRadius: 12, border: '2px solid #166534', padding: 28, marginBottom: 20 }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
               <div>
@@ -263,7 +272,7 @@ export default function BillingPage() {
         </div>
 
         <p style={{ fontSize: 12, color: '#9ca3af', textAlign: 'center', marginTop: 16 }}>
-          Questions? Contact <a href="mailto:ben@gotshortlisted.com" style={{ color: '#166534' }}>ben@gotshortlisted.com</a>
+          Questions? Contact <a href="mailto:ben@positionadvisory.com" style={{ color: '#166534' }}>ben@positionadvisory.com</a>
         </p>
 
       </div>
