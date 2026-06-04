@@ -230,6 +230,17 @@ function SignupContent() {
             >
               {loading ? 'Creating your account…' : 'Create account'}
             </button>
+
+            <p className="text-xs text-gray-400 text-center leading-relaxed mt-3">
+              By creating your account, you agree to our{' '}
+              <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-green-700 underline hover:text-green-600">
+                Terms of Use
+              </a>
+              {' '}and{' '}
+              <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-green-700 underline hover:text-green-600">
+                Privacy Policy
+              </a>.
+            </p>
           </form>
         </div>
 
