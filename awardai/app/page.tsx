@@ -121,7 +121,7 @@ const Hero = ({ onCTA, m }: { onCTA: () => void; m: boolean }) => (
             <GhostCTA tone="dark" m={m}>See what&apos;s built</GhostCTA>
           </div>
           <div className="sl-mono" style={{ marginTop: 16, fontSize: 12, color: 'var(--muted-dark)', letterSpacing: '0.04em' }}>
-            20+ shows. Unlimited entries. The judgment stays yours.
+            30+ shows. Unlimited entries. The judgment stays yours.
           </div>
         </div>
       </div>
@@ -460,7 +460,7 @@ const Built = ({ m }: { m: boolean }) => (
    Pricing
    ========================================================================= */
 
-const PLAN_FEATURES = ['Full platform access', '30+ shows tracked', 'Unlimited entries and projects', 'Unlimited team members', 'Entry directions with win likelihood scores', 'Jury mode + Coach mode evaluation', 'Press kit generation (LinkedIn, X, Instagram, PDF)', 'Video script generation and scoring', 'ROI Index and budget planner', 'Outcome tracking across seasons']
+const PLAN_FEATURES = ['Full platform access', '30+ shows tracked', 'Up to 5 active projects', 'Unlimited entries per project', 'Unlimited team members', 'Entry directions with win likelihood scores', 'Jury mode + Coach mode evaluation', 'Press kit generation (LinkedIn, X, Instagram, PDF)', 'Video script generation and scoring', 'ROI Index and budget planner', 'Outcome tracking across seasons']
 
 const Pricing = ({ onCTA, m }: { onCTA: () => void; m: boolean }) => (
   <section id="pricing" style={{ background: 'var(--ink)', color: 'var(--bone)', padding: m ? '72px 0' : '120px 0' }}>
@@ -470,7 +470,6 @@ const Pricing = ({ onCTA, m }: { onCTA: () => void; m: boolean }) => (
         <h2 className="sl-serif" style={{ margin: 0, fontSize: m ? 'clamp(28px, 8vw, 44px)' : 'clamp(36px, 4.4vw, 64px)', lineHeight: 1.05, letterSpacing: '-0.01em', fontWeight: 400 }}>
           Built for organizations{' '}<span style={{ fontStyle: 'italic', color: 'var(--gold)' }}>serious about winning.</span>
         </h2>
-        {!m && <p style={{ margin: 0, fontSize: 17, lineHeight: 1.6, color: 'var(--muted-dark)', maxWidth: 420 }}>Full platform access from day one. No seat limits. No project caps.</p>}
       </div>
       <div style={{ marginTop: m ? 32 : 80, maxWidth: m ? '100%' : 480 }}>
         <div style={{ border: '1px solid var(--rule-dark)', background: 'oklch(0.21 0.045 158)', padding: m ? '28px 24px' : '40px 36px', position: 'relative' }}>
@@ -479,7 +478,7 @@ const Pricing = ({ onCTA, m }: { onCTA: () => void; m: boolean }) => (
             <span className="sl-serif" style={{ fontSize: m ? 72 : 88, lineHeight: 0.95, letterSpacing: '-0.02em' }}>$299</span>
             <span className="sl-mono" style={{ fontSize: 11, color: 'var(--muted-dark)', letterSpacing: '0.14em', textTransform: 'uppercase' }}>/ month</span>
           </div>
-          <p style={{ margin: '16px 0 24px', fontSize: 15, lineHeight: 1.55, color: 'var(--muted-dark)' }}>For agencies running a full international season. One price, everything included.</p>
+          <p style={{ margin: '16px 0 24px', fontSize: 15, lineHeight: 1.55, color: 'var(--muted-dark)' }}>For agencies running a full international season. Up to 5 projects, unlimited usage within each. One price, everything included.</p>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 10 }}>
             {PLAN_FEATURES.map((f, j) => (
               <li key={j} style={{ display: 'grid', gridTemplateColumns: '16px 1fr', gap: 10, fontSize: 13, color: 'var(--bone)' }}>
