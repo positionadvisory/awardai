@@ -229,6 +229,13 @@ export default function LoginPage() {
         </div>
 
       </div>
+
+      <p className="text-center text-gray-400 text-xs mt-8">
+        <a href="/terms" className="hover:text-green-700 underline transition-colors">Terms of Use</a>
+        {' · '}
+        <a href="/privacy" className="hover:text-green-700 underline transition-colors">Privacy Policy</a>
+      </p>
+
     </div>
   )
 }
