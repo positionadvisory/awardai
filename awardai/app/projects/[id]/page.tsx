@@ -268,6 +268,50 @@ const SHOW_CATEGORIES: Record<string, string[]> = {
     'Branded Content', 'Integrated Campaign', 'Digital Campaign',
     'Interactive Online & Mobile', 'Experiential',
   ],
+  'PRCA UK Awards': [
+    'Automotive & Transport',
+    'B2B',
+    'B2B Technology',
+    'Broadcast',
+    'Consumer (High Budget)',
+    'Consumer (Low Budget)',
+    'Consumer Technology',
+    'Corporate, Financial & Investor Relations',
+    'Crisis & Issues Management',
+    'Digital & Social Media',
+    'Diversity, Equity & Inclusion',
+    'Employee Engagement',
+    'Health & Wellbeing',
+    'International Campaign',
+    'Media Relations',
+    'Not-for-Profit & Charity',
+    'Public Sector',
+    'Purpose',
+    'Small Consultancy',
+    'Medium Consultancy',
+    'Large Consultancy',
+    'Specialist Consultancy',
+    'New Consultancy',
+    'International Consultancy',
+    'In-House Team (Private Sector)',
+    'In-House Team (Public Sector)',
+    'Young Communicator of the Year',
+    'PR Leader of the Year',
+  ],
+  'PRCA APAC Awards': [
+    'Agency of the Year',
+    'Small Consultancy of the Year',
+    'Campaign of the Year',
+    'B2B',
+    'Consumer PR',
+    'Corporate Communications',
+    'Crisis & Issues Management',
+    'Digital PR',
+    'Employee Engagement',
+    'Public Affairs',
+    'Purpose & Sustainability',
+    'Individual Award',
+  ],
   'Shorty Awards': [
     'B2B', 'Brand Strategy', 'Community', 'Content Series',
     'Creative Use of Technology', 'Events & Experiential', 'Gaming',
@@ -449,6 +493,8 @@ const BASE_WIN_RATES: Record<string, number> = {
   'Campaign Global Agency of the Year': 15,
   'Adweek Agency of the Year': 15,      // Editorial judged; paid entry new in 2025
   'One Show Indies': 8,                 // Inaugural 2026; high-bar One Show criteria
+  'PRCA UK Awards': 15,                 // PR sector show; fee-banded tiers, outcomes-led
+  'PRCA APAC Awards': 15,               // PR sector show; APAC regional
 }
 
 // Calculate realistic win likelihood: base rate × quality adjustment from eval score
@@ -483,6 +529,8 @@ const REGIONAL_SHOWS: Record<string, { market: string; rule: string }> = {
   'Effie Awards China':   { market: 'China', rule: 'Open to campaigns that ran in the Chinese market only.' },
   'MMA Smarties':         { market: 'Regional — check entry kit', rule: 'Regional chapters have specific market eligibility requirements.' },
   'Loeries':              { market: 'Africa & Middle East', rule: 'Open to work created FOR the Africa/MENA region (Sub-Saharan Africa, MENA, Türkiye, island territories) OR FROM regionally-based companies. Global campaigns merely airing in the region are NOT eligible.' },
+  'PRCA UK Awards':       { market: 'United Kingdom', rule: 'Open to PR and communications work in the UK market. Consultancy categories require UK-based operations. Fee-income banding applies: Small ≤£2m, Medium £2.01–7.5m, Large >£7.5m.' },
+  'PRCA APAC Awards':     { market: 'Asia Pacific', rule: 'Open to PR and communications agencies operating in the Asia Pacific region. Verify APAC-specific eligibility against official programme page.' },
   'African Cristal Festival': { market: 'Africa', rule: 'Open to work created for and disseminated on the African continent. Gulf/MENA eligibility unconfirmed — contact organiser.' },
 }
 
@@ -2674,6 +2722,8 @@ export default function ProjectPage() {
       ['adfest', 'ADFEST'],
       ['loeries', 'Loeries'],
       ['loerie', 'Loeries'],
+      ['prca apac', 'PRCA APAC Awards'],
+      ['prca', 'PRCA UK Awards'],
       ['gerety', 'Gerety Awards'],
       ['andy awards', 'Andy Awards'],
       ['caples', 'Caples Awards'],
