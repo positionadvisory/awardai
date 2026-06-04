@@ -306,6 +306,22 @@ export const DEADLINES_2026: ShowDeadline[] = [
   // ── NEEDS CHECK — agent will pause, user must operate manually ──────────────
 
   {
+    show: 'PRCA UK Awards', region: 'Global',
+    finalDate: '', juryDate: '', ceremonyDate: '',
+    earlyBird: 'Typically ~16 Jun (based on 2025)', standard: 'Typically ~14 Jul', final: 'Typically ~14 Jul — 2026 date not yet published', ceremony: 'Typically ~Nov (London); 2026 date TBC',
+    prValue: 25,
+    note: 'PRCA UK Awards (National Awards) — flagship programme of the Public Relations and Communications Association, the world''s largest PR professional body. 2026 entries confirmed open May 2026; specific deadlines and ceremony not yet published. 2025 pattern: early bird 16 Jun, final 14 Jul, finalists 22 Sep, individual interviews 27 Sep, ceremony 15 Nov (London). Entry fees not published on official pages — DARE regional proxy ~£150–285+VAT is directional only; UK flagship likely higher. Verify fees at prca.global before budgeting. ~26 categories (2025): campaign awards (19) + individual + team/consultancy (banded by fee income: Small ≤£2m, Medium £2.01–7.5m, Large >£7.5m). PRCA runs a portfolio of programmes — also see PRCA APAC Awards, Digital Awards, DARE (regional), Public Affairs Awards, Platinum Awards.',
+    confidence: 'needs_check', lastVerified: '2026-06-04',
+  },
+  {
+    show: 'PRCA APAC Awards', region: 'APAC',
+    finalDate: '', juryDate: '', ceremonyDate: '2026-04-23',
+    earlyBird: 'Early bird closed 5 Dec 2025 (2026 cycle)', standard: '', final: 'Closed — 6 Feb 2026 (2026 cycle complete)', ceremony: '~23 Apr 2026 (location unconfirmed; likely Singapore)',
+    prValue: 20,
+    note: 'PRCA APAC Awards — Asia-Pacific arm of the PRCA awards portfolio. 2026 cycle: early bird closed 5 Dec 2025; entry deadline 6 Feb 2026; judging panel announced ~25 Feb 2026; ceremony ~23 Apr 2026 (inferred from winner social post — location unconfirmed). 2027 cycle dates not yet published. Entry fees not publicly available — contact PRCA APAC chapter. Category list not confirmed from primary source; approximate list in platform is based on PRCA programme structure. Small Consultancy of the Year and individual tracks confirmed. Most relevant PRCA programme for Asia-based agencies.',
+    confidence: 'needs_check', lastVerified: '2026-06-04',
+  },
+  {
     show: 'Loeries', region: 'MENA',
     finalDate: '', juryDate: '', ceremonyDate: '',
     earlyBird: 'Typically ~March (15% off)', standard: 'Through ~June', final: 'Typically early July — 2026 dates TBC', ceremony: 'Typically late Sep / early Oct (Creative Week)',
@@ -489,6 +505,20 @@ export const WIN_RATES: Record<string, WinRateData> = {
     pr: { shortlist: 10000, metal: 50000, gold: 250000, grandprix: 900000 },
     fee: 1000,
   },
+  // ESTIMATE — PRCA does not publish shortlist/metal rates for any programme.
+  // Rates estimated from sector-specialist show comparison. PR shows tend to have
+  // broader recognition rates than global creative shows.
+  // Do not use in client-facing materials without caveat.
+  'PRCA UK Awards': {
+    shortlist: 30, metal: 15, gold: 5, grandprix: 1,
+    pr: { shortlist: 4000, metal: 12000, gold: 40000, grandprix: 120000 },
+    fee: 200,
+  },
+  'PRCA APAC Awards': {
+    shortlist: 30, metal: 15, gold: 5, grandprix: 1,
+    pr: { shortlist: 3000, metal: 8000, gold: 25000, grandprix: 80000 },
+    fee: 150,
+  },
   // ESTIMATE — Loeries does not publish shortlist/metal rates.
   // 2,784 entries (2025); Finalist → Bronze → Silver → Gold → Grand Prix structure confirmed.
   // Rates estimated from regional show comparison; do not use in client-facing materials without caveat.
@@ -551,6 +581,8 @@ export const ENTRY_FEES: Record<string, EntryFeeData> = {
   'ROI Festival':           { base: 450,  range: 'Not published in English', note: 'Fees appear in Chinese-language entry handbook only (roifestival.com/cn). Require login at entry.roifestival.com/en or handbook download to obtain. Do not commit budget until fees confirmed.' },
   'Tangrams':               { base: 400,  range: 'N/A — integrated into Spikes Asia', note: 'Use Spikes Asia Strategy & Effectiveness Spike.' },
   'Spikes Asia':            { base: 1000, range: 'Unknown — 2027 cycle not yet open', note: '2026 cycle closed Mar 2026. Await 2027 entry kit.' },
+  'PRCA UK Awards':         { base: 200,  range: 'GBP + VAT (not published for UK Awards; DARE proxy ~£150–£285 member/non-member — flagship likely higher)', note: 'Member vs non-member pricing — PRCA members pay materially less (~45% discount for non-members). 20% charity discount. Some individual/culture categories free. Verify at prca.global before budgeting. ESTIMATE — base fee is a directional proxy only.' },
+  'PRCA APAC Awards':       { base: 150,  range: 'Not publicly published', note: 'Contact PRCA APAC chapter for entry fee information. 2026 cycle: early bird 5 Dec 2025, entry deadline 6 Feb 2026.' },
   'Loeries':                { base: 294,  range: '$219.50–$444.50 USD (ZAR R3,505–R7,105; craft/single/campaign)', note: '2025 standard rates: $294 single (R4,700), $444.50 campaign (R7,105), $219.50 craft (R3,505). Early bird 15% off (~Mar–Apr); late fee +10% (~Jun–Jul). R500 of each fee is annual membership to 28 Feb. Young Creatives Award free. 2026 fees not yet confirmed — check loeries.com/fees/ before budgeting.' },
   'London International Awards': { base: 800,  range: 'USD (fee varies by medium — check live Entry Kit; not published on public pages)', note: '35% early-bird discount through 30 Apr 2026 (PASSED). Change fees: USD 250/entry (credit changes), USD 500/entry (material changes after locking). ESTIMATE — base fee of USD 800 derived from comparable global shows; verify against live entry system before budgeting.' },
   'ADFEST':                 { base: 500,  range: 'THB 15,500–27,000 (~USD 430–770; standard/INNOVA × early/regular/late)', note: 'Standard 19 categories: THB 15,500 early / 17,500 regular / 19,500 late. INNOVA Lotus + Lotus Roots: THB 23,000 / 25,000 / 27,000. Film School (sub of New Director Lotus): ~half standard rate. Post-submission changes THB 2,000/request. 2027 cycle fees not yet published. USD conversions approximate at 2026 FX rates.' },
