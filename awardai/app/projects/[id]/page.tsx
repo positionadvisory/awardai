@@ -329,6 +329,27 @@ const SHOW_CATEGORIES: Record<string, string[]> = {
     'Advertising', 'B2B', 'Content', 'Design', 'Digital Experience',
     'Experiential', 'Media', 'PR', 'Social', 'Social Purpose', 'Agency Business',
   ],
+  'Loeries': [
+    'Design',
+    'Digital',
+    'Film',
+    'Live Communications',
+    'Media Innovation',
+    'Out of Home',
+    'Print Communication',
+    'PR & Media Communication',
+    'Radio & Audio',
+    'Student Awards',
+    'Effective Creativity',
+    'Social Impact Campaign',
+    'Service Design',
+    'B2B Creativity',
+    'Comedic Impact',
+    'New Launch Campaign',
+    'Marketing Impact Award',
+    'Integrated Campaign',
+    'Young Creatives Award',
+  ],
   'African Cristal Festival': [
     'Film', 'Digital', 'Print & OOH', 'Ambient & Experiential',
     'Social & Influencer', 'Audio', 'Brand Content', 'Direct', 'Healthcare',
@@ -422,6 +443,7 @@ const BASE_WIN_RATES: Record<string, number> = {
   'Australian Effies': 18,
   'The Drum Awards Festival': 12,       // ~12% across discipline shows
   'African Cristal Festival': 9,        // One winner per category — scarce
+  'Loeries': 15,                        // Regional dominant; ~2,784 entries, 2025
   'Campaign UK Agency of the Year': 15, // Agency-tier; broad recognition
   'Campaign US Agency of the Year': 15,
   'Campaign Global Agency of the Year': 15,
@@ -460,6 +482,8 @@ const REGIONAL_SHOWS: Record<string, { market: string; rule: string }> = {
   'Effie Awards India':   { market: 'India', rule: 'Open to campaigns that ran in the Indian market only.' },
   'Effie Awards China':   { market: 'China', rule: 'Open to campaigns that ran in the Chinese market only.' },
   'MMA Smarties':         { market: 'Regional — check entry kit', rule: 'Regional chapters have specific market eligibility requirements.' },
+  'Loeries':              { market: 'Africa & Middle East', rule: 'Open to work created FOR the Africa/MENA region (Sub-Saharan Africa, MENA, Türkiye, island territories) OR FROM regionally-based companies. Global campaigns merely airing in the region are NOT eligible.' },
+  'African Cristal Festival': { market: 'Africa', rule: 'Open to work created for and disseminated on the African continent. Gulf/MENA eligibility unconfirmed — contact organiser.' },
 }
 
 function getRegionalShowWarnings(targetShows: string[]): { show: string; market: string; rule: string }[] {
@@ -2648,6 +2672,8 @@ export default function ProjectPage() {
       ['adma', 'ADMA Awards'],
       ['mumbrella', 'Mumbrella Awards'],
       ['adfest', 'ADFEST'],
+      ['loeries', 'Loeries'],
+      ['loerie', 'Loeries'],
       ['gerety', 'Gerety Awards'],
       ['andy awards', 'Andy Awards'],
       ['caples', 'Caples Awards'],
