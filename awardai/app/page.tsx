@@ -117,7 +117,7 @@ const Hero = ({ onCTA, m }: { onCTA: () => void; m: boolean }) => (
         </p>
         <div>
           <div style={{ display: 'flex', flexDirection: m ? 'column' : 'row', alignItems: m ? 'stretch' : 'center', gap: m ? 10 : 16 }}>
-            <PrimaryCTA onClick={onCTA} m={m}>Start free, no credit card</PrimaryCTA>
+            <PrimaryCTA onClick={onCTA} m={m}>Start free trial</PrimaryCTA>
             <GhostCTA tone="dark" m={m}>See what&apos;s built</GhostCTA>
           </div>
           <div className="sl-mono" style={{ marginTop: 16, fontSize: 12, color: 'var(--muted-dark)', letterSpacing: '0.04em' }}>
@@ -460,53 +460,45 @@ const Built = ({ m }: { m: boolean }) => (
    Pricing
    ========================================================================= */
 
-const Pricing = ({ onCTA, m }: { onCTA: () => void; m: boolean }) => {
-  const tiers = [
-    { name: 'Studio', price: 149, desc: 'For boutique agencies and indie shops running a focused awards calendar.', features: ['Full platform access', 'Up to 5 shows tracked', 'Unlimited entries', 'Shared workspace'] },
-    { name: 'Agency', price: 299, featured: true, desc: 'For agencies running a full international season across multiple regions.', features: ['Everything in Studio', '20+ shows tracked', 'Press kit generation', 'Video script scoring', 'Outcome tracking'] },
-    { name: 'Enterprise', price: 599, desc: 'For networks coordinating awards programs across markets and disciplines.', features: ['Everything in Agency', 'Multi-market workspaces', 'Priority features', 'Founder-led onboarding', 'SAML SSO'] },
-  ]
-  return (
-    <section id="pricing" style={{ background: 'var(--ink)', color: 'var(--bone)', padding: m ? '72px 0' : '120px 0' }}>
-      <Container m={m}>
-        <Eyebrow tone="light">Pricing</Eyebrow>
-        <div style={{ display: 'grid', gridTemplateColumns: m ? '1fr' : '1fr 1fr', gap: m ? 20 : 80, alignItems: 'end', marginTop: 24 }}>
-          <h2 className="sl-serif" style={{ margin: 0, fontSize: m ? 'clamp(28px, 8vw, 44px)' : 'clamp(36px, 4.4vw, 64px)', lineHeight: 1.05, letterSpacing: '-0.01em', fontWeight: 400 }}>
-            Built for organizations{' '}<span style={{ fontStyle: 'italic', color: 'var(--gold)' }}>serious about winning.</span>
-          </h2>
-          {!m && <p style={{ margin: 0, fontSize: 17, lineHeight: 1.6, color: 'var(--muted-dark)', maxWidth: 420 }}>Full platform access from day one. No seat limits. No project caps.</p>}
+const PLAN_FEATURES = ['Full platform access', '30+ shows tracked', 'Unlimited entries and projects', 'Unlimited team members', 'Entry directions with win likelihood scores', 'Jury mode + Coach mode evaluation', 'Press kit generation (LinkedIn, X, Instagram, PDF)', 'Video script generation and scoring', 'ROI Index and budget planner', 'Outcome tracking across seasons']
+
+const Pricing = ({ onCTA, m }: { onCTA: () => void; m: boolean }) => (
+  <section id="pricing" style={{ background: 'var(--ink)', color: 'var(--bone)', padding: m ? '72px 0' : '120px 0' }}>
+    <Container m={m}>
+      <Eyebrow tone="light">Pricing</Eyebrow>
+      <div style={{ display: 'grid', gridTemplateColumns: m ? '1fr' : '1fr 1fr', gap: m ? 20 : 80, alignItems: 'end', marginTop: 24 }}>
+        <h2 className="sl-serif" style={{ margin: 0, fontSize: m ? 'clamp(28px, 8vw, 44px)' : 'clamp(36px, 4.4vw, 64px)', lineHeight: 1.05, letterSpacing: '-0.01em', fontWeight: 400 }}>
+          Built for organizations{' '}<span style={{ fontStyle: 'italic', color: 'var(--gold)' }}>serious about winning.</span>
+        </h2>
+        {!m && <p style={{ margin: 0, fontSize: 17, lineHeight: 1.6, color: 'var(--muted-dark)', maxWidth: 420 }}>Full platform access from day one. No seat limits. No project caps.</p>}
+      </div>
+      <div style={{ marginTop: m ? 32 : 80, maxWidth: m ? '100%' : 480 }}>
+        <div style={{ border: '1px solid var(--rule-dark)', background: 'oklch(0.21 0.045 158)', padding: m ? '28px 24px' : '40px 36px', position: 'relative' }}>
+          <div className="sl-mono" style={{ position: 'absolute', top: -1, left: -1, background: 'var(--gold)', color: 'var(--ink)', padding: '5px 10px', fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase' }}>Agency</div>
+          <div style={{ marginTop: 16, display: 'flex', alignItems: 'baseline', gap: 8 }}>
+            <span className="sl-serif" style={{ fontSize: m ? 72 : 88, lineHeight: 0.95, letterSpacing: '-0.02em' }}>$299</span>
+            <span className="sl-mono" style={{ fontSize: 11, color: 'var(--muted-dark)', letterSpacing: '0.14em', textTransform: 'uppercase' }}>/ month</span>
+          </div>
+          <p style={{ margin: '16px 0 24px', fontSize: 15, lineHeight: 1.55, color: 'var(--muted-dark)' }}>For agencies running a full international season. One price, everything included.</p>
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 10 }}>
+            {PLAN_FEATURES.map((f, j) => (
+              <li key={j} style={{ display: 'grid', gridTemplateColumns: '16px 1fr', gap: 10, fontSize: 13, color: 'var(--bone)' }}>
+                <span style={{ width: 8, height: 8, background: 'var(--gold)', marginTop: 4 }} />
+                <span>{f}</span>
+              </li>
+            ))}
+          </ul>
+          <div style={{ marginTop: 32 }}>
+            <PrimaryCTA onClick={onCTA} m={m}>Start free trial</PrimaryCTA>
+          </div>
         </div>
-        <div style={{ marginTop: m ? 32 : 80, display: 'grid', gridTemplateColumns: m ? '1fr' : 'repeat(3, 1fr)', gap: m ? 2 : 0, border: m ? 'none' : '1px solid var(--rule-dark)' }}>
-          {tiers.map((t, i) => (
-            <div key={t.name} style={{ padding: '36px 28px 28px', borderRight: (!m && i < tiers.length - 1) ? '1px solid var(--rule-dark)' : 'none', border: m ? '1px solid var(--rule-dark)' : undefined, background: t.featured ? 'oklch(0.21 0.045 158)' : 'transparent', position: 'relative', display: 'flex', flexDirection: 'column', gap: 20, marginBottom: m ? 2 : 0 }}>
-              {t.featured && <div className="sl-mono" style={{ position: 'absolute', top: -1, left: -1, background: 'var(--gold)', color: 'var(--ink)', padding: '5px 10px', fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase' }}>RECOMMENDED</div>}
-              <div>
-                <div className="sl-mono" style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: t.featured ? 'var(--gold)' : 'var(--muted-dark)' }}>{t.name}</div>
-                <div style={{ marginTop: 12, display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                  <span className="sl-serif" style={{ fontSize: m ? 56 : 72, lineHeight: 0.95, letterSpacing: '-0.02em' }}>${t.price}</span>
-                  <span className="sl-mono" style={{ fontSize: 11, color: 'var(--muted-dark)', letterSpacing: '0.14em', textTransform: 'uppercase' }}>/ month</span>
-                </div>
-              </div>
-              <p style={{ margin: 0, fontSize: 14, lineHeight: 1.55, color: 'var(--muted-dark)' }}>{t.desc}</p>
-              <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 10, flex: 1 }}>
-                {t.features.map((f, j) => (
-                  <li key={j} style={{ display: 'grid', gridTemplateColumns: '16px 1fr', gap: 10, fontSize: 13, color: 'var(--bone)' }}>
-                    <span style={{ width: 8, height: 8, background: 'var(--gold)', marginTop: 4 }} />
-                    <span>{f}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-        <div style={{ marginTop: m ? 28 : 48, display: 'flex', flexDirection: m ? 'column' : 'row', justifyContent: 'space-between', alignItems: m ? 'stretch' : 'center', gap: m ? 16 : 0 }}>
-          <p className="sl-mono" style={{ margin: 0, fontSize: 12, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--muted-dark)' }}>Start free at gotshortlisted.com · No credit card required.</p>
-          <PrimaryCTA small onClick={onCTA} m={m}>Start free</PrimaryCTA>
-        </div>
-      </Container>
-    </section>
-  )
-}
+      </div>
+      <div style={{ marginTop: m ? 24 : 32 }}>
+        <p className="sl-mono" style={{ margin: 0, fontSize: 12, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--muted-dark)' }}>14-day free trial · Card required · Cancel anytime</p>
+      </div>
+    </Container>
+  </section>
+)
 
 /* =========================================================================
    Footer
@@ -521,7 +513,7 @@ const Footer = ({ onCTA, m }: { onCTA: () => void; m: boolean }) => (
         <span style={{ fontStyle: 'italic', color: 'var(--gold)' }}>is closer than you think.</span>
       </h2>
       <div style={{ marginTop: m ? 40 : 56, display: 'flex', flexDirection: m ? 'column' : 'row', alignItems: m ? 'stretch' : 'center', gap: m ? 16 : 18 }}>
-        <PrimaryCTA onClick={onCTA} m={m}>Start free, gotshortlisted.com</PrimaryCTA>
+        <PrimaryCTA onClick={onCTA} m={m}>Start free trial · gotshortlisted.com</PrimaryCTA>
         <a href="mailto:ben@positionadvisory.com" className="sl-mono" style={{ fontSize: 12, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--muted-dark)', textDecoration: 'underline', textUnderlineOffset: 4, textAlign: m ? 'center' : undefined }}>
           Questions? ben@positionadvisory.com
         </a>
