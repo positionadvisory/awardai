@@ -306,6 +306,14 @@ export const DEADLINES_2026: ShowDeadline[] = [
   // ── NEEDS CHECK — agent will pause, user must operate manually ──────────────
 
   {
+    show: 'Loeries', region: 'MENA',
+    finalDate: '', juryDate: '', ceremonyDate: '',
+    earlyBird: 'Typically ~March (15% off)', standard: 'Through ~June', final: 'Typically early July — 2026 dates TBC', ceremony: 'Typically late Sep / early Oct (Creative Week)',
+    prValue: 35,
+    note: 'The Loerie Awards — premier creative award for Africa and the Middle East (including Türkiye and island territories). Founded 1978; not-for-profit; CEO Preetesh Sewraj. Loeries 2025 completed Creative Week 5–10 Oct 2025, Cape Town (theme: "The Great Hunger"). 2,784 entries from 13 countries. Loeries 2026 entries open as of Jun 2026 — full calendar and fees NOT YET PUBLISHED here. Based on 2025 pattern: early bird (15% off) ~Mar–Apr; standard through ~Jun; late fee (+10%) through ~Jul; Creative Week late Sep / early Oct. 2025 standard fees: $294 single / $444.50 campaign / $219.50 craft (ZAR R4,700/R7,105/R3,505); R500 of each fee is annual membership. Geographic eligibility: work created FOR the Africa/MENA region (Sub-Saharan Africa, MENA, Türkiye, island territories) OR FROM regionally-based companies. Global campaigns merely airing in the region are NOT eligible. WARC Report and World Creative Ranking inclusion. Anonymous audited judging; self-promo capped at Silver. Included in independent rankings: The Odd Number #1 independent agency 2025.',
+    confidence: 'needs_check', lastVerified: '2026-06-04',
+  },
+  {
     show: 'London International Awards', region: 'Global',
     finalDate: '', juryDate: '2026-09-25', ceremonyDate: '',
     earlyBird: '30 Apr 2026 (PASSED — 35% off)', standard: '', final: 'Typically early September — 2026 date TBC', ceremony: 'No ceremony; results announced 28 Sep–5 Oct 2026 online',
@@ -481,6 +489,14 @@ export const WIN_RATES: Record<string, WinRateData> = {
     pr: { shortlist: 10000, metal: 50000, gold: 250000, grandprix: 900000 },
     fee: 1000,
   },
+  // ESTIMATE — Loeries does not publish shortlist/metal rates.
+  // 2,784 entries (2025); Finalist → Bronze → Silver → Gold → Grand Prix structure confirmed.
+  // Rates estimated from regional show comparison; do not use in client-facing materials without caveat.
+  'Loeries': {
+    shortlist: 25, metal: 12, gold: 4, grandprix: 0.5,
+    pr: { shortlist: 6000, metal: 20000, gold: 80000, grandprix: 300000 },
+    fee: 294,
+  },
   // ESTIMATE — LIA does not publish shortlist/metal rates. Tiered structure confirmed
   // (Finalist → Bronze → Silver → Gold → Grand LIA); percentages not released.
   // Rates derived from comparison with comparable global shows (D&AD/One Show tier).
@@ -535,6 +551,7 @@ export const ENTRY_FEES: Record<string, EntryFeeData> = {
   'ROI Festival':           { base: 450,  range: 'Not published in English', note: 'Fees appear in Chinese-language entry handbook only (roifestival.com/cn). Require login at entry.roifestival.com/en or handbook download to obtain. Do not commit budget until fees confirmed.' },
   'Tangrams':               { base: 400,  range: 'N/A — integrated into Spikes Asia', note: 'Use Spikes Asia Strategy & Effectiveness Spike.' },
   'Spikes Asia':            { base: 1000, range: 'Unknown — 2027 cycle not yet open', note: '2026 cycle closed Mar 2026. Await 2027 entry kit.' },
+  'Loeries':                { base: 294,  range: '$219.50–$444.50 USD (ZAR R3,505–R7,105; craft/single/campaign)', note: '2025 standard rates: $294 single (R4,700), $444.50 campaign (R7,105), $219.50 craft (R3,505). Early bird 15% off (~Mar–Apr); late fee +10% (~Jun–Jul). R500 of each fee is annual membership to 28 Feb. Young Creatives Award free. 2026 fees not yet confirmed — check loeries.com/fees/ before budgeting.' },
   'London International Awards': { base: 800,  range: 'USD (fee varies by medium — check live Entry Kit; not published on public pages)', note: '35% early-bird discount through 30 Apr 2026 (PASSED). Change fees: USD 250/entry (credit changes), USD 500/entry (material changes after locking). ESTIMATE — base fee of USD 800 derived from comparable global shows; verify against live entry system before budgeting.' },
   'ADFEST':                 { base: 500,  range: 'THB 15,500–27,000 (~USD 430–770; standard/INNOVA × early/regular/late)', note: 'Standard 19 categories: THB 15,500 early / 17,500 regular / 19,500 late. INNOVA Lotus + Lotus Roots: THB 23,000 / 25,000 / 27,000. Film School (sub of New Director Lotus): ~half standard rate. Post-submission changes THB 2,000/request. 2027 cycle fees not yet published. USD conversions approximate at 2026 FX rates.' },
   'Cristal Festival':       { base: 480,  range: 'N/A — show structure changed', note: 'See NYF Advertising Awards (Cristal Village) and African Cristal Festival.' },
@@ -683,6 +700,11 @@ export const KB_SHOW_ALIASES: Record<string, string | null> = {
 
   // ADFEST — map legacy KB variant (KB entries may use mixed case 'AdFest')
   'adfest':                                       'ADFEST',
+
+  // Loeries — map name variants
+  'loerie awards':                                'Loeries',
+  'the loerie awards':                            'Loeries',
+  'loeries awards':                               'Loeries',
 
   // ── Renames ──────────────────────────────────────────────────────────────────
   'digital a-list':                               'Campaign Greater China A List',
