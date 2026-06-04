@@ -306,6 +306,14 @@ export const DEADLINES_2026: ShowDeadline[] = [
   // ── NEEDS CHECK — agent will pause, user must operate manually ──────────────
 
   {
+    show: 'London International Awards', region: 'Global',
+    finalDate: '', juryDate: '2026-09-25', ceremonyDate: '',
+    earlyBird: '30 Apr 2026 (PASSED — 35% off)', standard: '', final: 'Typically early September — 2026 date TBC', ceremony: 'No ceremony; results announced 28 Sep–5 Oct 2026 online',
+    prValue: 45,
+    note: 'LIA 2026 entries open; judging 25 Sep–3 Oct 2026, Encore @ Wynn Las Vegas. Eligibility: work released 1 Jul 2025–31 Aug 2026. 2026 super early bird (35% off) through 30 Apr 2026 — PASSED. 2026 final entry deadline NOT YET PUBLISHED (typical pattern: early September; 2025 was ~4–11 Sep). Fees in USD; exact per-medium rates in entry system only — not published on public pages. Change fees: USD 250 per entry (credit/attribution), USD 500 per entry (material changes after lock). Results announced online in stages 28 Sep–5 Oct 2026; "Of The Year" titles ~Nov 2026. No physical gala ceremony. 33 media types for 2026 (27 established + 6 new: Sports, Gaming, Cultural Catalyst, Entertainment & Content, Business Transformation, Democracy and Human Rights). 180+ jurors including 35+ global CCOs. Genuinely global show — no geographic eligibility restriction. Included in WARC Creative 100 Rankings and Drum World Creative Rankings. Independently owned; founder/president Barbara Levy, chairperson Terry Savage (ex-Cannes Lions CEO). 40th anniversary 2025–2026.',
+    confidence: 'partial', lastVerified: '2026-06-04',
+  },
+  {
     show: 'ADFEST', region: 'APAC',
     finalDate: '', juryDate: '', ceremonyDate: '',
     earlyBird: '', standard: '', final: 'Closed — 2027 TBC', ceremony: 'Mar 2027, Pattaya (TBC)',
@@ -473,6 +481,15 @@ export const WIN_RATES: Record<string, WinRateData> = {
     pr: { shortlist: 10000, metal: 50000, gold: 250000, grandprix: 900000 },
     fee: 1000,
   },
+  // ESTIMATE — LIA does not publish shortlist/metal rates. Tiered structure confirmed
+  // (Finalist → Bronze → Silver → Gold → Grand LIA); percentages not released.
+  // Rates derived from comparison with comparable global shows (D&AD/One Show tier).
+  // Do not use in client-facing materials without caveat.
+  'London International Awards': {
+    shortlist: 15, metal: 8, gold: 2.5, grandprix: 0.4,
+    pr: { shortlist: 10000, metal: 40000, gold: 200000, grandprix: 700000 },
+    fee: 800,
+  },
   // ESTIMATE — ADFEST does not publish shortlist/metal rates. Derived from 2026 winner
   // analysis (~1,400 entries, 21 categories, multiple Grandes withheld).
   // Do not use in client-facing materials without caveat.
@@ -518,6 +535,7 @@ export const ENTRY_FEES: Record<string, EntryFeeData> = {
   'ROI Festival':           { base: 450,  range: 'Not published in English', note: 'Fees appear in Chinese-language entry handbook only (roifestival.com/cn). Require login at entry.roifestival.com/en or handbook download to obtain. Do not commit budget until fees confirmed.' },
   'Tangrams':               { base: 400,  range: 'N/A — integrated into Spikes Asia', note: 'Use Spikes Asia Strategy & Effectiveness Spike.' },
   'Spikes Asia':            { base: 1000, range: 'Unknown — 2027 cycle not yet open', note: '2026 cycle closed Mar 2026. Await 2027 entry kit.' },
+  'London International Awards': { base: 800,  range: 'USD (fee varies by medium — check live Entry Kit; not published on public pages)', note: '35% early-bird discount through 30 Apr 2026 (PASSED). Change fees: USD 250/entry (credit changes), USD 500/entry (material changes after locking). ESTIMATE — base fee of USD 800 derived from comparable global shows; verify against live entry system before budgeting.' },
   'ADFEST':                 { base: 500,  range: 'THB 15,500–27,000 (~USD 430–770; standard/INNOVA × early/regular/late)', note: 'Standard 19 categories: THB 15,500 early / 17,500 regular / 19,500 late. INNOVA Lotus + Lotus Roots: THB 23,000 / 25,000 / 27,000. Film School (sub of New Director Lotus): ~half standard rate. Post-submission changes THB 2,000/request. 2027 cycle fees not yet published. USD conversions approximate at 2026 FX rates.' },
   'Cristal Festival':       { base: 480,  range: 'N/A — show structure changed', note: 'See NYF Advertising Awards (Cristal Village) and African Cristal Festival.' },
   'Campaign Asia Women to Watch APAC': { base: 300,  range: 'HKD 3,600–4,100 (deadline dependent)', note: 'Early bird by 8 Jun: HKD 3,600. Standard by 14 Jul: HKD 3,900. Final by 28 Jul: HKD 4,100. Fees non-refundable; include one-year Campaign Asia-Pacific membership. Source: campaignwomentowatch.com (verified 3 Jun 2026).' },
