@@ -1,12 +1,26 @@
 'use client'
 // Deploy to: app/settings/billing/page.tsx
-// Redirects to /settings/account (consolidated account + billing page)
+// Redirects to /settings/account, preserving any query params (e.g. ?upgraded=1)
 
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+
+function BillingRedirectContent() {
+  const router = useRouter()
+  const params = useSearchParams()
+
+  useEffect(() => {
+    const qs = params.toString()
+    router.replace(qs ? `/settings/account?${qs}` : '/settings/account')
+  }, [router, params])
+
+  return null
+}
 
 export default function BillingRedirect() {
-  const router = useRouter()
-  useEffect(() => { router.replace('/settings/account') }, [router])
-  return null
+  return (
+    <Suspense fallback={null}>
+      <BillingRedirectContent />
+    </Suspense>
+  )
 }
