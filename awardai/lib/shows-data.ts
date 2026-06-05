@@ -314,6 +314,22 @@ export const DEADLINES_2026: ShowDeadline[] = [
     confidence: 'needs_check', lastVerified: '2026-06-04',
   },
   {
+    show: 'SABRE Awards Asia-Pacific', region: 'APAC',
+    finalDate: '', juryDate: '', ceremonyDate: '',
+    earlyBird: 'Closed — was 8 May 2026 (2026 cycle)', standard: '', final: 'Closed — late deadline was 1 Jun 2026 (2026 cycle)', ceremony: 'APAC ceremony date/city not confirmed; 2027 dates TBC',
+    prValue: 35,
+    note: 'SABRE Awards Asia-Pacific — APAC regional edition of the SABRE Awards (Superior Achievement in Branding, Reputation & Engagement), run by PRovoke Media (formerly The Holmes Report). 13th edition in 2026. Part of the global SABRE family; APAC winners are eligible for elevation to the Global SABRE (top 40 campaigns worldwide from 5,000+ total entries). 2026 cycle: CLOSED — early deadline 8 May 2026, late deadline 1 Jun 2026. 2027 dates not yet published. Entry fees: ~US$475–650+ (basic entry includes 3 category selections; each additional category US$125; late fees apply). Category architecture is matrixed: select Practice Area + Industry Sector + Geographic simultaneously. Industry Sector = client\'s sector, not campaign topic — e.g., a sustainability campaign for a tech company enters Technology. IN2 SABRE sub-competition requires a single genuine piece of earned coverage as anchor (paid content excluded). Diamond SABRE rewards long-term reputation programmes. Budget disclosure optional but valued. No membership requirement. WARC partnership: SABRE case studies published as effectiveness exemplars.',
+    confidence: 'needs_check', lastVerified: '2026-06-05',
+  },
+  {
+    show: 'Global SABRE Awards', region: 'Global',
+    finalDate: '', juryDate: '', ceremonyDate: '',
+    earlyBird: 'No direct entry — qualify via regional SABRE (e.g., SABRE Awards Asia-Pacific)', standard: '', final: 'No direct entry deadline', ceremony: '2026 ceremony date/city TBC — 2025 was 3 Nov, Chicago (at PRovoke Global Summit)',
+    prValue: 60,
+    note: 'Global SABRE Awards — worldwide capstone of the SABRE Awards programme by PRovoke Media. Honours the top 40 PR campaigns globally, selected from all regional SABRE competitions (EMEA, North America, APAC, South Asia, LatAm, Africa). No direct entry — qualification is via regional competition performance; PRovoke editorial leadership selects the global 40. 5,000+ total regional entries in 2025 produced 40 Global SABRE winners. Widely regarded as the single most prestigious PR-campaign honour in the world. WARC partnership publishes winning case studies as effectiveness benchmarks. Ceremony held at the annual PRovoke Global Summit (city rotates; 2025 was Chicago, 3 Nov). Global Agencies of the Year also recognised. For APAC-based agencies, the pathway is: enter SABRE Awards Asia-Pacific → perform strongly → PRovoke considers elevation to Global 40.',
+    confidence: 'needs_check', lastVerified: '2026-06-05',
+  },
+  {
     show: 'ICCO Global Awards', region: 'Global',
     finalDate: '', juryDate: '', ceremonyDate: '',
     earlyBird: '2026 dates not yet published — 2025 pattern: early bird 25 Jul', standard: '', final: '2026 date TBC — 2025 final was 29 Aug', ceremony: 'Nov 2026 at ICCO Global Summit (city TBC); 2025 was 12 Nov Mumbai',
@@ -513,6 +529,20 @@ export const WIN_RATES: Record<string, WinRateData> = {
     pr: { shortlist: 10000, metal: 50000, gold: 250000, grandprix: 900000 },
     fee: 1000,
   },
+  // ESTIMATE — SABRE does not publish per-region win rates. EMEA 2026: ~20% finalist
+  // rate (400 from 2,000+ entries). APAC volume lower; rates estimated from sector comparison.
+  // Global SABRE: 40 winners from 5,000+ total entries = ~0.8% — treated as prestige capstone.
+  // Do not use in client-facing materials without caveat.
+  'SABRE Awards Asia-Pacific': {
+    shortlist: 20, metal: 10, gold: 4, grandprix: 0.5,
+    pr: { shortlist: 6000, metal: 20000, gold: 70000, grandprix: 250000 },
+    fee: 500,
+  },
+  'Global SABRE Awards': {
+    shortlist: 5, metal: 2, gold: 1, grandprix: 0.1,
+    pr: { shortlist: 50000, metal: 150000, gold: 500000, grandprix: 1500000 },
+    fee: 0,
+  },
   // ESTIMATE — ICCO does not publish shortlist/metal rates. 64 shortlisted in 2024
   // across 30+ categories; field is small and selective. Rates estimated from PR show
   // comparisons. Do not use in client-facing materials without caveat.
@@ -597,6 +627,8 @@ export const ENTRY_FEES: Record<string, EntryFeeData> = {
   'ROI Festival':           { base: 450,  range: 'Not published in English', note: 'Fees appear in Chinese-language entry handbook only (roifestival.com/cn). Require login at entry.roifestival.com/en or handbook download to obtain. Do not commit budget until fees confirmed.' },
   'Tangrams':               { base: 400,  range: 'N/A — integrated into Spikes Asia', note: 'Use Spikes Asia Strategy & Effectiveness Spike.' },
   'Spikes Asia':            { base: 1000, range: 'Unknown — 2027 cycle not yet open', note: '2026 cycle closed Mar 2026. Await 2027 entry kit.' },
+  'SABRE Awards Asia-Pacific': { base: 500, range: 'US$475–US$650+ (USD; basic entry ~US$475–525 includes 3 category selections; +US$125 each additional category; late fees apply after early deadline)', note: 'ESTIMATE — APAC base fee assumed in the US$475–525 band (confirmed for EMEA at US$475, North America at US$525; APAC-specific fee unverified). Effective cost per campaign typically US$600–900+ once add-ons included. No membership discount — same price for all entrants. 2026 APAC cycle CLOSED (late deadline was 1 Jun 2026). Verify 2027 fees at sabre.provokemedia.com/ap when cycle opens.' },
+  'Global SABRE Awards':    { base: 0,   range: 'No direct entry fee — qualify via regional SABRE (APAC: ~US$475–650+)', note: 'Global SABRE winners are selected by PRovoke from regional competition performance. No separate entry or fee for the global programme. Cost of competing = cost of regional SABRE entry.' },
   'ICCO Global Awards':     { base: 300,  range: '€250–€500 (EUR; member vs non-member × early bird / standard / final)', note: 'ESTIMATE — 2024 fee table only. Early bird: €250 member / €350 non-member. Standard: €300 / €400. Final: €400 / €500. 2025/2026 fees not separately verified — 2024 table is best available proxy. ~€100 per-entry saving for ICCO members (28–40% cheaper). Late entry (final deadline) costs 60% more than early bird — strong incentive to enter early. EUR currency. Verify at awards.iccopr.com before budgeting.' },
   'PRCA UK Awards':         { base: 200,  range: 'GBP + VAT (not published for UK Awards; DARE proxy ~£150–£285 member/non-member — flagship likely higher)', note: 'Member vs non-member pricing — PRCA members pay materially less (~45% discount for non-members). 20% charity discount. Some individual/culture categories free. Verify at prca.global before budgeting. ESTIMATE — base fee is a directional proxy only.' },
   'PRCA APAC Awards':       { base: 150,  range: 'Not publicly published', note: 'Contact PRCA APAC chapter for entry fee information. 2026 cycle: early bird 5 Dec 2025, entry deadline 6 Feb 2026.' },
