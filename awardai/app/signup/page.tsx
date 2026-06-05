@@ -28,6 +28,7 @@ function SignupContent() {
     setLoading(true)
     setError('')
 
+    // 1. Create the Supabase auth user (triggers handle_new_user → creates org + profile)
     const { data: authData, error: signUpError } = await supabase.auth.signUp({
       email: email.trim(),
       password,
@@ -48,16 +49,40 @@ function SignupContent() {
       return
     }
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({
+    // 2. Sign in immediately to get a session token
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
     })
 
-    if (signInError) {
+    if (signInError || !signInData.session) {
+      // Account created but can't auto-sign-in — send to login
       window.location.href = '/login'
       return
     }
 
+    // 3. Create Stripe checkout session — card + 14-day trial
+    try {
+      const res = await fetch('/api/billing/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${signInData.session.access_token}`,
+        },
+      })
+
+      const data = await res.json()
+
+      if (res.ok && data.url) {
+        // Redirect to Stripe checkout
+        window.location.href = data.url
+        return
+      }
+    } catch {
+      // Checkout call failed — fall through to /projects
+    }
+
+    // 4. Fallback: checkout unavailable, send straight to the app
     window.location.href = '/projects'
   }
 
@@ -130,7 +155,7 @@ function SignupContent() {
               disabled={loading}
               className="w-full bg-green-800 hover:bg-green-700 disabled:opacity-50 text-white font-medium py-2.5 rounded-lg transition-colors text-sm mt-2"
             >
-              {loading ? 'Creating your account…' : 'Create account'}
+              {loading ? 'Setting up your account…' : 'Create account'}
             </button>
 
             <p className="text-xs text-gray-400 text-center leading-relaxed mt-3">
