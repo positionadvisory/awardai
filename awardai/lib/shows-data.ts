@@ -314,6 +314,14 @@ export const DEADLINES_2026: ShowDeadline[] = [
     confidence: 'needs_check', lastVerified: '2026-06-04',
   },
   {
+    show: 'ICCO Global Awards', region: 'Global',
+    finalDate: '', juryDate: '', ceremonyDate: '',
+    earlyBird: '2026 dates not yet published — 2025 pattern: early bird 25 Jul', standard: '', final: '2026 date TBC — 2025 final was 29 Aug', ceremony: 'Nov 2026 at ICCO Global Summit (city TBC); 2025 was 12 Nov Mumbai',
+    prValue: 30,
+    note: 'ICCO Global Awards — annual global PR awards run by ICCO (International Communications Consultancy Organisation), the umbrella federation of 30+ national PR associations. Active since 2015. Open globally — PR consultancies, freelancers, in-house teams, digital agencies, and media owners; ICCO membership not required. Judged purely on effectiveness and results (founding charter). Ceremony held at the ICCO Global Summit (city rotates; 2025 was Mumbai). 30+ categories across campaign, specialist, industry, geographic (Europe / APAC+MEA), and consultancy-performance tracks. Entry fees (2024): €250–500 EUR depending on membership status and deadline tier (early bird €250 member / €350 non-member; final €400 / €500); 2025/2026 fees unconfirmed. Jury: ~20 senior global leaders (2025), diverse EMEA/APAC/LATAM representation. Winner patterns: independent and mid-size consultancies from non-Anglo markets dominate — Lounge Group (Europe), Gambit (AMEA), Netprofile Finland, Kurio. Holding companies do not dominate. Date volatility warning: 2025 entry window moved ~2 months earlier vs 2024 — monitor iccopr.com/global-awards/ for 2026 announcement.',
+    confidence: 'needs_check', lastVerified: '2026-06-05',
+  },
+  {
     show: 'PRCA APAC Awards', region: 'APAC',
     finalDate: '', juryDate: '', ceremonyDate: '2026-04-23',
     earlyBird: 'Early bird closed 5 Dec 2025 (2026 cycle)', standard: '', final: 'Closed — 6 Feb 2026 (2026 cycle complete)', ceremony: '~23 Apr 2026 (location unconfirmed; likely Singapore)',
@@ -505,6 +513,14 @@ export const WIN_RATES: Record<string, WinRateData> = {
     pr: { shortlist: 10000, metal: 50000, gold: 250000, grandprix: 900000 },
     fee: 1000,
   },
+  // ESTIMATE — ICCO does not publish shortlist/metal rates. 64 shortlisted in 2024
+  // across 30+ categories; field is small and selective. Rates estimated from PR show
+  // comparisons. Do not use in client-facing materials without caveat.
+  'ICCO Global Awards': {
+    shortlist: 30, metal: 15, gold: 5, grandprix: 1,
+    pr: { shortlist: 5000, metal: 15000, gold: 50000, grandprix: 150000 },
+    fee: 300,
+  },
   // ESTIMATE — PRCA does not publish shortlist/metal rates for any programme.
   // Rates estimated from sector-specialist show comparison. PR shows tend to have
   // broader recognition rates than global creative shows.
@@ -581,6 +597,7 @@ export const ENTRY_FEES: Record<string, EntryFeeData> = {
   'ROI Festival':           { base: 450,  range: 'Not published in English', note: 'Fees appear in Chinese-language entry handbook only (roifestival.com/cn). Require login at entry.roifestival.com/en or handbook download to obtain. Do not commit budget until fees confirmed.' },
   'Tangrams':               { base: 400,  range: 'N/A — integrated into Spikes Asia', note: 'Use Spikes Asia Strategy & Effectiveness Spike.' },
   'Spikes Asia':            { base: 1000, range: 'Unknown — 2027 cycle not yet open', note: '2026 cycle closed Mar 2026. Await 2027 entry kit.' },
+  'ICCO Global Awards':     { base: 300,  range: '€250–€500 (EUR; member vs non-member × early bird / standard / final)', note: 'ESTIMATE — 2024 fee table only. Early bird: €250 member / €350 non-member. Standard: €300 / €400. Final: €400 / €500. 2025/2026 fees not separately verified — 2024 table is best available proxy. ~€100 per-entry saving for ICCO members (28–40% cheaper). Late entry (final deadline) costs 60% more than early bird — strong incentive to enter early. EUR currency. Verify at awards.iccopr.com before budgeting.' },
   'PRCA UK Awards':         { base: 200,  range: 'GBP + VAT (not published for UK Awards; DARE proxy ~£150–£285 member/non-member — flagship likely higher)', note: 'Member vs non-member pricing — PRCA members pay materially less (~45% discount for non-members). 20% charity discount. Some individual/culture categories free. Verify at prca.global before budgeting. ESTIMATE — base fee is a directional proxy only.' },
   'PRCA APAC Awards':       { base: 150,  range: 'Not publicly published', note: 'Contact PRCA APAC chapter for entry fee information. 2026 cycle: early bird 5 Dec 2025, entry deadline 6 Feb 2026.' },
   'Loeries':                { base: 294,  range: '$219.50–$444.50 USD (ZAR R3,505–R7,105; craft/single/campaign)', note: '2025 standard rates: $294 single (R4,700), $444.50 campaign (R7,105), $219.50 craft (R3,505). Early bird 15% off (~Mar–Apr); late fee +10% (~Jun–Jul). R500 of each fee is annual membership to 28 Feb. Young Creatives Award free. 2026 fees not yet confirmed — check loeries.com/fees/ before budgeting.' },
