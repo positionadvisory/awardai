@@ -520,7 +520,13 @@ const Footer = ({ onCTA, m }: { onCTA: () => void; m: boolean }) => (
       <div style={{ marginTop: m ? 56 : 120, paddingTop: 24, borderTop: '1px solid rgba(245,238,224,0.18)', display: 'flex', justifyContent: m ? 'center' : 'space-between', alignItems: 'center', gap: 24, fontSize: 11, flexDirection: m ? 'column' : 'row' }}>
         {!m && <span className="sl-mono" style={{ letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--muted-dark)' }}>Shortlist · Asia</span>}
         <Logo size={20} />
-        <span className="sl-mono" style={{ letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--muted-dark)', textAlign: m ? 'center' : 'right' }}>gotshortlisted.com · Edition 01</span>
+        <span className="sl-mono" style={{ letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--muted-dark)', textAlign: m ? 'center' : 'right' }}>
+          gotshortlisted.com · Edition 01
+          {' · '}
+          <a href="/terms" style={{ color: 'var(--muted-dark)', textDecoration: 'underline', textUnderlineOffset: 3 }}>Terms</a>
+          {' · '}
+          <a href="/privacy" style={{ color: 'var(--muted-dark)', textDecoration: 'underline', textUnderlineOffset: 3 }}>Privacy</a>
+        </span>
       </div>
     </Container>
   </section>
@@ -535,11 +541,12 @@ export default function Page() {
   const authed = usePublicAuth()
   const m = useIsMobile()
 
-  const handleCTA = () => router.push(authed ? '/projects' : '/login')
+  const handleCTA    = () => router.push(authed ? '/projects' : '/signup')
+  const handleSignIn = () => router.push(authed ? '/projects' : '/login')
 
   return (
     <div style={{ fontFamily: '"Geist", ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif', background: 'var(--bone)', color: 'var(--ink)', WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale' as const, lineHeight: 1.45 }}>
-      <Nav onCTA={handleCTA} m={m} />
+      <Nav onCTA={handleSignIn} m={m} />
       <Hero onCTA={handleCTA} m={m} />
       <Founder m={m} />
       <Problem m={m} />
