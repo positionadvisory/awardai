@@ -311,6 +311,45 @@ const SHOW_CATEGORIES: Record<string, string[]> = {
     'Branded Content', 'Integrated Campaign', 'Digital Campaign',
     'Interactive Online & Mobile', 'Experiential',
   ],
+  'SABRE Awards Asia-Pacific': [
+    'Consumer Marketing',
+    'Corporate Reputation & Brand Communications',
+    'Crisis & Issues Management',
+    'Digital, Social & Influencer',
+    'Employee Communications',
+    'Financial & Investor Relations',
+    'Government & Public Affairs',
+    'Healthcare & Wellness',
+    'Not-for-Profit & Social Impact',
+    'Sustainability & ESG',
+    'Technology',
+    'Diamond SABRE — Long-term Reputation / Sustained Programme',
+    'IN2 SABRE — Best Earned Media',
+    'IN2 SABRE — Best Content',
+    'IN2 SABRE — Best Data-Led Campaign',
+    'IN2 SABRE — Best Digital/Social Campaign',
+    'Innovation SABRE',
+    'Geographic: Southeast Asia',
+    'Geographic: North Asia',
+    'Geographic: Australia/New Zealand',
+    'Geographic: APAC Multi-Market',
+    'Agency of the Year',
+  ],
+  'Global SABRE Awards': [
+    'Best in Show (Top 40 Campaigns Worldwide)',
+    'Global Agency of the Year',
+    'Global Independent Agency of the Year',
+    'Consumer Marketing',
+    'Corporate Reputation',
+    'Crisis Management',
+    'Digital & Social',
+    'Employee Communications',
+    'Public Affairs',
+    'Healthcare',
+    'Sustainability & ESG',
+    'Diamond SABRE — Long-term Reputation',
+    'IN2 SABRE — Earned Media Excellence',
+  ],
   'ICCO Global Awards': [
     'Large Consultancy of the Year',
     'Mid-size Consultancy of the Year',
@@ -560,6 +599,8 @@ const BASE_WIN_RATES: Record<string, number> = {
   'Campaign Global Agency of the Year': 15,
   'Adweek Agency of the Year': 15,      // Editorial judged; paid entry new in 2025
   'One Show Indies': 8,                 // Inaugural 2026; high-bar One Show criteria
+  'SABRE Awards Asia-Pacific': 15,        // PR sector show; ~20% EMEA finalist rate proxy; APAC volume lower
+  'Global SABRE Awards': 5,              // Prestige capstone — top 40 from 5,000+ total entries; no direct entry
   'ICCO Global Awards': 15,              // PR sector show; effectiveness-purist; selective field (64 shortlisted 2024)
   'PRCA UK Awards': 15,                 // PR sector show; fee-banded tiers, outcomes-led
   'PRCA APAC Awards': 15,               // PR sector show; APAC regional
@@ -599,6 +640,7 @@ const REGIONAL_SHOWS: Record<string, { market: string; rule: string }> = {
   'Loeries':              { market: 'Africa & Middle East', rule: 'Open to work created FOR the Africa/MENA region (Sub-Saharan Africa, MENA, Türkiye, island territories) OR FROM regionally-based companies. Global campaigns merely airing in the region are NOT eligible.' },
   'PRCA UK Awards':       { market: 'United Kingdom', rule: 'Open to PR and communications work in the UK market. Consultancy categories require UK-based operations. Fee-income banding applies: Small ≤£2m, Medium £2.01–7.5m, Large >£7.5m.' },
   'PRCA APAC Awards':     { market: 'Asia Pacific', rule: 'Open to PR and communications agencies operating in the Asia Pacific region. Verify APAC-specific eligibility against official programme page.' },
+  'SABRE Awards Asia-Pacific': { market: 'Asia Pacific', rule: 'Open to PR, communications, and related-discipline work for the Asia Pacific region. Industry Sector categories are determined by the CLIENT\'s sector, not the campaign\'s topic. Verify APAC geographic category eligibility (single-market vs APAC Multi-Market) against official entry rules.' },
   'African Cristal Festival': { market: 'Africa', rule: 'Open to work created for and disseminated on the African continent. Gulf/MENA eligibility unconfirmed — contact organiser.' },
 }
 
@@ -2793,6 +2835,10 @@ export default function ProjectPage() {
       ['prca apac', 'PRCA APAC Awards'],
       ['prca', 'PRCA UK Awards'],
       ['icco', 'ICCO Global Awards'],
+      ['sabre apac', 'SABRE Awards Asia-Pacific'],
+      ['sabre asia', 'SABRE Awards Asia-Pacific'],
+      ['global sabre', 'Global SABRE Awards'],
+      ['sabre', 'SABRE Awards Asia-Pacific'],
       ['gerety', 'Gerety Awards'],
       ['andy awards', 'Andy Awards'],
       ['caples', 'Caples Awards'],
