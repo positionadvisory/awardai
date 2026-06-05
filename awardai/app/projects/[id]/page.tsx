@@ -311,6 +311,30 @@ const SHOW_CATEGORIES: Record<string, string[]> = {
     'Branded Content', 'Integrated Campaign', 'Digital Campaign',
     'Interactive Online & Mobile', 'Experiential',
   ],
+  'ICCO Global Awards': [
+    'Large Consultancy of the Year',
+    'Mid-size Consultancy of the Year',
+    'Championing Diversity Award',
+    'PR Leader of the Year',
+    'Rising Star of the Year',
+    'Automotive & Transport',
+    'Technology',
+    'Not-for-Profit or Charity',
+    'Health, Wellness & Wellbeing',
+    'Infrastructure (Construction, Energy, Manufacturing & Real Estate)',
+    'Consumer, Sports & Entertainment',
+    'Best Digital, New Media & Influencer',
+    'Best B2B',
+    'Best Internal Comms & Employer Branding',
+    'Best ESG',
+    'Best Strategy and Evaluation in a Campaign',
+    'Best Media Relations',
+    'Best Public Affairs',
+    'Best Event, Launch or Stunt',
+    'Best Crisis Management',
+    'Campaign of the Year: Europe',
+    'Campaign of the Year: Asia-Pacific, Middle East & Africa',
+  ],
   'PRCA UK Awards': [
     'Automotive & Transport',
     'B2B',
@@ -536,6 +560,7 @@ const BASE_WIN_RATES: Record<string, number> = {
   'Campaign Global Agency of the Year': 15,
   'Adweek Agency of the Year': 15,      // Editorial judged; paid entry new in 2025
   'One Show Indies': 8,                 // Inaugural 2026; high-bar One Show criteria
+  'ICCO Global Awards': 15,              // PR sector show; effectiveness-purist; selective field (64 shortlisted 2024)
   'PRCA UK Awards': 15,                 // PR sector show; fee-banded tiers, outcomes-led
   'PRCA APAC Awards': 15,               // PR sector show; APAC regional
 }
@@ -2767,6 +2792,7 @@ export default function ProjectPage() {
       ['loerie', 'Loeries'],
       ['prca apac', 'PRCA APAC Awards'],
       ['prca', 'PRCA UK Awards'],
+      ['icco', 'ICCO Global Awards'],
       ['gerety', 'Gerety Awards'],
       ['andy awards', 'Andy Awards'],
       ['caples', 'Caples Awards'],
