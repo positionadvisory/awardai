@@ -1685,13 +1685,18 @@ export default function ProjectPage() {
     const key = `${dirId}-${field}`
     setPressKitAiLoading(prev => ({ ...prev, [key]: true }))
     try {
+      // Session 47 audit fix S1: generate-press-copy now requires user auth —
+      // send the session access token, not the anon key.
+      const accessToken = await getToken()
+      if (!accessToken) { window.location.href = '/login'; return }
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-press-copy`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+            'Authorization': `Bearer ${accessToken}`,
+            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
           },
           body: JSON.stringify({ direction_id: dirId, format: formatMap[field], project_id: projectId }),
         }
@@ -1718,13 +1723,17 @@ export default function ProjectPage() {
       const fieldKey = `pressHook-${target}`
       setPressKitAiLoading(prev => ({ ...prev, [key]: true }))
       try {
+        // Session 47 audit fix S1: generate-press-copy now requires user auth.
+        const accessToken = await getToken()
+        if (!accessToken) { window.location.href = '/login'; return }
         const res = await fetch(
           `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-press-copy`,
           {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+              'Authorization': `Bearer ${accessToken}`,
+              'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
             },
             body: JSON.stringify({ direction_id: dirId, format: 'presshook', press_target: target, project_id: projectId }),
           }
