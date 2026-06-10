@@ -304,16 +304,30 @@ export default function ProjectsPage() {
     }
   }
 
+  // Session 50 (DM-16): all agency_profiles writes go through the service-role
+  // API route — client-side delete/update silently no-oped under SELECT-only RLS.
+  const getProfileApiToken = async (): Promise<string | null> => {
+    const { data: sessionData } = await supabase.auth.getSession()
+    return sessionData?.session?.access_token ?? null
+  }
+
   const handleRemoveProfile = async () => {
     if (!orgId) return
     setRemovingProfile(true)
     try {
-      await supabase.from('agency_profiles').delete().eq('org_id', orgId)
+      const token = await getProfileApiToken()
+      if (!token) throw new Error('No session')
+      const res = await fetch('/api/agency-profile', {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error('Delete failed')
       setAgencyProfile(null)
       setConfirmRemove(false)
       setProfileOpen(false)
-    } catch {
-      // silent — UI will still show profile if delete failed
+    } catch (err) {
+      console.error('Remove profile failed:', err)
+      // UI keeps showing the profile — delete did not happen
     } finally {
       setRemovingProfile(false)
     }
@@ -331,7 +345,14 @@ export default function ProjectsPage() {
         .from('org-logos')
         .upload(path, file, { upsert: true, contentType: file.type })
       if (uploadError) throw uploadError
-      await supabase.from('agency_profiles').update({ logo_url: path }).eq('org_id', orgId)
+      const token = await getProfileApiToken()
+      if (!token) throw new Error('No session')
+      const res = await fetch('/api/agency-profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ logo_url: path }),
+      })
+      if (!res.ok) throw new Error('Logo save failed')
       setAgencyProfile(prev => prev ? { ...prev, logo_url: path } : prev)
     } catch (err) {
       console.error('Logo upload failed:', err)
@@ -356,24 +377,32 @@ export default function ProjectsPage() {
   const handleSaveContact = async () => {
     if (!orgId) return
     setSavingContact(true)
-    const { data } = await supabase
-      .from('agency_profiles')
-      .update({
-        pr_contact_name:  contactDraft.pr_contact_name  || null,
-        pr_contact_email: contactDraft.pr_contact_email || null,
-        pr_contact_phone: contactDraft.pr_contact_phone || null,
-        website_url:      contactDraft.website_url      || null,
-        linkedin_url:     contactDraft.linkedin_url     || null,
-        x_handle:         contactDraft.x_handle         || null,
-        instagram_handle: contactDraft.instagram_handle || null,
-        updated_at:       new Date().toISOString(),
+    try {
+      const token = await getProfileApiToken()
+      if (!token) throw new Error('No session')
+      const res = await fetch('/api/agency-profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({
+          pr_contact_name:  contactDraft.pr_contact_name  || null,
+          pr_contact_email: contactDraft.pr_contact_email || null,
+          pr_contact_phone: contactDraft.pr_contact_phone || null,
+          website_url:      contactDraft.website_url      || null,
+          linkedin_url:     contactDraft.linkedin_url     || null,
+          x_handle:         contactDraft.x_handle         || null,
+          instagram_handle: contactDraft.instagram_handle || null,
+        }),
       })
-      .eq('org_id', orgId)
-      .select()
-      .single()
-    if (data) setAgencyProfile(data)
-    setSavingContact(false)
-    setEditingContact(false)
+      if (!res.ok) throw new Error('Save failed')
+      const result = await res.json()
+      if (result.profile) setAgencyProfile(result.profile)
+      setEditingContact(false)
+    } catch (err) {
+      console.error('Contact save failed:', err)
+      // keep edit mode open so the user does not lose their input
+    } finally {
+      setSavingContact(false)
+    }
   }
 
   // ── Derived data ───────────────────────────────────────────────────────────
