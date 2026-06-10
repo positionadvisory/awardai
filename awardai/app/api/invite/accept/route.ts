@@ -3,6 +3,10 @@
 // Called by the /invite/[token] page after the user has authenticated.
 // If the user already has a profile in a different org (fresh signup via trigger),
 // moves them to the inviting org and deletes the auto-created empty org.
+//
+// Session 51: seat limit re-checked at acceptance (an invite may have been
+// created before the cap existed, or several may be pending at once).
+// Also: the empty-org cleanup now checks for projects before deleting (audit DM-09).
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
@@ -52,6 +56,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'This invite was sent to a different email address' }, { status: 403 })
   }
 
+  // ── Seat limit re-check at acceptance (Session 51) ──────────────────────
+  // The invite may predate the seat cap, or several invites may be pending.
+  // trial_unlimited orgs are exempt; fails open if the org lookup errors.
+  const { data: targetOrg } = await admin
+    .from('organizations')
+    .select('max_seats, trial_unlimited')
+    .eq('id', invitation.org_id)
+    .single()
+
+  if (targetOrg && !targetOrg.trial_unlimited && typeof targetOrg.max_seats === 'number') {
+    const { count: memberCount } = await admin
+      .from('profiles')
+      .select('id', { count: 'exact', head: true })
+      .eq('org_id', invitation.org_id)
+
+    if ((memberCount ?? 0) >= targetOrg.max_seats) {
+      return NextResponse.json({
+        error: 'This team has no open seats. Ask the account owner to contact ben@positionadvisory.com to add seats.',
+      }, { status: 403 })
+    }
+  }
+
   // ── Check if user already has a profile ────────────────────────────────
   const { data: existingProfile } = await admin
     .from('profiles')
@@ -69,14 +95,22 @@ export async function POST(req: NextRequest) {
       .update({ org_id: invitation.org_id, role: invitation.role })
       .eq('id', user.id)
 
-    // Delete the auto-created org if this user was its only member
-    const { count } = await admin
+    // Delete the auto-created org only if it has no members AND no projects
+    // (audit DM-09: deleting an org with projects would orphan or cascade them)
+    const { count: remainingMembers } = await admin
       .from('profiles')
       .select('id', { count: 'exact', head: true })
       .eq('org_id', oldOrgId)
 
-    if (count === 0) {
-      await admin.from('organizations').delete().eq('id', oldOrgId)
+    if (remainingMembers === 0) {
+      const { count: projectCount } = await admin
+        .from('projects')
+        .select('id', { count: 'exact', head: true })
+        .eq('org_id', oldOrgId)
+
+      if (projectCount === 0) {
+        await admin.from('organizations').delete().eq('id', oldOrgId)
+      }
     }
   } else {
     // No profile yet (edge case: trigger didn't run). Create one now.
