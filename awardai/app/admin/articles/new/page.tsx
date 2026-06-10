@@ -1,7 +1,8 @@
 'use client'
 // app/admin/articles/new/page.tsx
 // Admin article posting form — gated to ben@positionadvisory.com
-// Uses supabase auth check + ADMIN_SECRET env var for API auth
+// Session 50: API auth now uses the session access token (Authorization Bearer).
+// NEXT_PUBLIC_ADMIN_SECRET is gone (audit A-06 — it shipped in the client bundle).
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
@@ -81,11 +82,21 @@ export default function AdminArticlesNewPage() {
     setResult(null)
 
     try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const accessToken = sessionData?.session?.access_token
+      if (!accessToken) {
+        setResult({ success: false, error: 'Session expired — please sign in again.' })
+        setSubmitting(false)
+        return
+      }
+
       const res = await fetch('/api/articles', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
         body: JSON.stringify({
-          secret: process.env.NEXT_PUBLIC_ADMIN_SECRET, // set in .env.local — NEXT_PUBLIC_ so it's available on client
           slug,
           title: title.trim(),
           subtitle: subtitle.trim() || undefined,
