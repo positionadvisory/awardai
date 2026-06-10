@@ -73,14 +73,27 @@ function formatDate(iso: string): string {
   })
 }
 
+// Escape raw HTML before any markdown transformation (audit S9 — Session 50).
+// Without this, HTML in article content goes straight into dangerouslySetInnerHTML:
+// stored XSS on the public site. Escaping first means the ONLY tags in the output
+// are the ones renderMarkdown itself emits (h1/h2/h3/p/strong/em).
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 // Very lightweight markdown → HTML converter for article body.
 // Handles: headings (##, ###), bold (**text**), paragraphs, blank lines.
-// For a production app, swap for remark/rehype or marked.
+// Input is HTML-escaped line by line BEFORE markdown is applied — do not remove.
 function renderMarkdown(md: string): string {
   return md
     .split('\n')
-    .map(line => {
-      const trimmed = line.trim()
+    .map(rawLine => {
+      const trimmed = escapeHtml(rawLine.trim())
       if (!trimmed) return '<p style="margin:0"></p>'
       if (trimmed.startsWith('### ')) return `<h3>${trimmed.slice(4)}</h3>`
       if (trimmed.startsWith('## ')) return `<h2>${trimmed.slice(3)}</h2>`
@@ -125,10 +138,10 @@ export default async function ArticlePage({ params }: { params: { slug: string }
   return (
     <div style={{ background: '#0b1120', minHeight: '100vh', color: '#f1f5f9', fontFamily: 'Inter, system-ui, sans-serif' }}>
 
-      {/* JSON-LD */}
+      {/* JSON-LD — < escape prevents </script> breakout from article fields (S9) */}
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }}
       />
 
       {/* Nav */}
