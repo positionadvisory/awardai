@@ -1,8 +1,14 @@
 // app/api/articles/route.ts
 // Articles CRUD — GET (all published, for ISR) + POST (admin create, service key)
+// Session 50: ADMIN_SECRET gate replaced with JWT admin check (audit A-06).
+// The old NEXT_PUBLIC_ADMIN_SECRET shipped in the client bundle — anyone could
+// read it from the JS and POST/DELETE articles. Auth is now: Authorization
+// Bearer <session access token> → auth.getUser(jwt) → email must be ADMIN_EMAIL.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+
+const ADMIN_EMAIL = 'ben@positionadvisory.com'
 
 // Service-role client — bypasses RLS. Used only for admin writes.
 function getServiceClient() {
@@ -10,6 +16,21 @@ function getServiceClient() {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY!
   if (!key) throw new Error('SUPABASE_SERVICE_ROLE_KEY not set')
   return createClient(url, key)
+}
+
+// JWT admin gate — returns null if authorized, or an error response.
+async function requireAdmin(req: NextRequest): Promise<NextResponse | null> {
+  const authHeader = req.headers.get('Authorization') ?? ''
+  const jwt = authHeader.replace('Bearer ', '')
+  if (!jwt) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  const supabase = getServiceClient()
+  const { data: { user }, error } = await supabase.auth.getUser(jwt)
+  if (error || !user || user.email !== ADMIN_EMAIL) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  return null
 }
 
 // Anon client — respects RLS (published=true only)
@@ -36,18 +57,14 @@ export async function GET() {
 }
 
 // ── POST /api/articles — create or update article (admin only) ──────────────
-// Body: { secret, slug, title, subtitle?, content, cover_image_url?, published?, published_at? }
-// Gated by ADMIN_SECRET env var — simple bearer token pattern. No OAuth needed.
+// Headers: Authorization: Bearer <session access token> (must resolve to ADMIN_EMAIL)
+// Body: { slug, title, subtitle?, content, cover_image_url?, published?, published_at? }
 export async function POST(req: NextRequest) {
   try {
+    const unauthorized = await requireAdmin(req)
+    if (unauthorized) return unauthorized
+
     const body = await req.json()
-
-    // Auth gate
-    const secret = process.env.ADMIN_SECRET
-    if (!secret || body.secret !== secret) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const { slug, title, subtitle, content, cover_image_url, published, published_at } = body
 
     if (!slug || !title || !content) {
@@ -97,15 +114,14 @@ export async function POST(req: NextRequest) {
 }
 
 // ── DELETE /api/articles — unpublish article (admin only) ───────────────────
-// Body: { secret, slug }
+// Headers: Authorization: Bearer <session access token> (must resolve to ADMIN_EMAIL)
+// Body: { slug }
 export async function DELETE(req: NextRequest) {
   try {
-    const body = await req.json()
+    const unauthorized = await requireAdmin(req)
+    if (unauthorized) return unauthorized
 
-    const secret = process.env.ADMIN_SECRET
-    if (!secret || body.secret !== secret) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const body = await req.json()
 
     if (!body.slug) {
       return NextResponse.json({ error: 'slug is required' }, { status: 400 })
