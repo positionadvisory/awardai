@@ -103,6 +103,24 @@ export async function POST(req: NextRequest) {
 
   const admin = createClient(SUPABASE_URL, SERVICE_KEY)
 
+  // ── Session 50 (audit P-7): idempotency ─────────────────────────────────────
+  // Stripe delivers at-least-once - replays and retries can re-deliver the same
+  // event.id, and a replayed stale "subscription.updated: active" could
+  // resurrect a deleted subscription's pro plan. Claim the event id BEFORE
+  // processing; a unique violation (23505) means it was already handled.
+  // Any OTHER insert error fails open (process anyway) - dropping a legitimate
+  // billing event is worse than the rare double-process of an idempotent update.
+  // Requires session-50-webhook-idempotency-migration.sql.
+  const { error: claimError } = await admin
+    .from('stripe_webhook_events')
+    .insert({ event_id: event.id, event_type: event.type })
+  if (claimError) {
+    if (claimError.code === '23505') {
+      return NextResponse.json({ received: true, duplicate: true })
+    }
+    console.error('Webhook event claim failed (processing anyway):', claimError)
+  }
+
   switch (event.type) {
 
     case 'checkout.session.completed': {
