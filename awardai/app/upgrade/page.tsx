@@ -31,8 +31,8 @@ const features: { label: string; detail: string }[] = [
   { label: 'Video script scoring', detail: 'AI feedback on your case study film script, calibrated to what juries actually respond to.' },
   { label: 'Press kit generation', detail: 'LinkedIn, X, and Instagram copy, plus a press hook — ready to announce the shortlist before it happens.' },
   { label: 'Agency profile',     detail: 'Upload your credentials once. Every entry pulls your positioning, voice, and sector strengths automatically.' },
-  { label: 'Unlimited entries',  detail: 'No per-entry charges. Work across as many campaigns and shows as you need.' },
-  { label: '30+ shows covered',  detail: 'Cannes Lions, D&AD, One Show, Clio, Effies, WARC, Spikes, SMARTIES, and more. Show data is baked in.' },
+  { label: 'Unlimited entries',  detail: 'No per-entry charges. Unlimited drafts, evaluations, and press kits within each of your 5 active projects.' },
+  { label: '30+ shows covered',  detail: 'Cannes Lions, D&AD, One Show, Clio, Effies, SABRE, PRCA, Spikes, SMARTIES, and more. Show data is baked in.' },
 ]
 
 /* ── Page ────────────────────────────────────────────────────────────────── */
@@ -172,6 +172,7 @@ export default function UpgradePage() {
                 'Credit card required to start trial',
                 'Cancel anytime before trial ends',
                 'No per-entry charges',
+                'Up to 5 active projects, one user seat',
                 'Full access from day one',
               ].map((point, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
