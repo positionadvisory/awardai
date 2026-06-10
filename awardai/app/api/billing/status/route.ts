@@ -3,6 +3,11 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import Stripe from 'stripe'
 
+// This route reads the Authorization header, so it can never be prerendered.
+// Declaring it dynamic stops Next from attempting static generation at build
+// time (the red DYNAMIC_SERVER_USAGE noise in Vercel build logs — Session 50).
+export const dynamic = 'force-dynamic'
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2024-06-20' })
 
 const supabaseAdmin = createClient(
