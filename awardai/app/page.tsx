@@ -427,7 +427,7 @@ const Privacy = ({ m }: { m: boolean }) => (
    Built
    ========================================================================= */
 
-const WHATS_BUILT = ['Entry directions with win likelihood scores per show and category', 'ROI Index: return on entry investment per show and direction', 'AI co-writing across all entry fields, in your agency voice', 'Show-specific jury intelligence for 20+ international festivals', 'Jury mode: scored like a judge, catches weaknesses before submission', 'Coach mode: untapped potential score and prioritized fix list', 'Press kit generation: LinkedIn, X, Instagram, press release, PDF', 'Score comparison and delta tracking across draft iterations', 'Agency profile uploaded once, applied to every output', 'Budget planner: model entry spend across your target calendar', 'Team invites and shared workspace, no seat limits', 'Video script generation, review, and category-specific guidance', 'Multi-season historical context in all direction generation', 'Deadline calendar with urgency alerts across all shows', 'Outcome tracking: shortlisted, finalist, medals']
+const WHATS_BUILT = ['Entry directions with win likelihood scores per show and category', 'ROI Index: return on entry investment per show and direction', 'AI co-writing across all entry fields, in your agency voice', 'Show-specific jury intelligence for 30+ international shows', 'Jury mode: scored like a judge, catches weaknesses before submission', 'Coach mode: untapped potential score and prioritized fix list', 'Press kit generation: LinkedIn, X, Instagram, press release, PDF', 'Score comparison and delta tracking across draft iterations', 'Agency profile uploaded once, applied to every output', 'Budget planner: model entry spend across your target calendar', 'Quick Evaluate: upload a finished entry, get a scored jury read in minutes','Video script generation, review, and category-specific guidance', 'Multi-season historical context in all direction generation', 'Deadline calendar with urgency alerts across all shows', 'Outcome tracking: shortlisted, finalist, medals']
 
 const Built = ({ m }: { m: boolean }) => (
   <section id="built" style={{ background: 'var(--bone)', padding: m ? '72px 0' : '120px 0' }}>
@@ -460,7 +460,7 @@ const Built = ({ m }: { m: boolean }) => (
    Pricing
    ========================================================================= */
 
-const PLAN_FEATURES = ['Full platform access', '30+ shows tracked', 'Up to 5 active projects', 'Unlimited entries per project', 'Unlimited team members', 'Entry directions with win likelihood scores', 'Jury mode + Coach mode evaluation', 'Press kit generation (LinkedIn, X, Instagram, PDF)', 'Video script generation and scoring', 'ROI Index and budget planner', 'Outcome tracking across seasons']
+const PLAN_FEATURES = ['Show-specific jury intelligence: judging philosophy, scoring emphasis, common entry mistakes', 'Entry directions with win likelihood scores', 'AI first drafts across every entry field', 'Jury mode + Coach mode evaluation', 'Video script generation and scoring', 'Press kit generation (LinkedIn, X, Instagram, PDF)', 'Agency profile applied to every output', 'ROI Index and budget planner', 'Outcome tracking across seasons', '30+ shows covered, including the major PR and comms programs', 'Up to 5 active projects, unlimited entries within each', 'One user seat']
 
 const Pricing = ({ onCTA, m }: { onCTA: () => void; m: boolean }) => (
   <section id="pricing" style={{ background: 'var(--ink)', color: 'var(--bone)', padding: m ? '72px 0' : '120px 0' }}>
