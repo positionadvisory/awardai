@@ -3,6 +3,10 @@
 // Called by the team settings page when an owner/admin sends an invite.
 // Creates an invitations row and returns the invite link.
 // Email delivery is a stub — swap in Resend/SendGrid when ready.
+//
+// Session 51: seat limit enforcement. Pro = 1 user seat (organizations.max_seats,
+// default 1). Members + pending unexpired invites must stay under max_seats.
+// trial_unlimited orgs are exempt. Also fixed stale fallback domain (audit A-15).
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
@@ -10,7 +14,7 @@ import { createClient } from '@supabase/supabase-js'
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const ANON_KEY     = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY!
-const APP_URL      = process.env.NEXT_PUBLIC_APP_URL ?? 'https://awardai-opal.vercel.app'
+const APP_URL      = process.env.NEXT_PUBLIC_APP_URL ?? 'https://gotshortlisted.com'
 
 export async function POST(req: NextRequest) {
   // ── Auth ────────────────────────────────────────────────────────────────
@@ -84,6 +88,41 @@ export async function POST(req: NextRequest) {
 
     const link = `${APP_URL}/invite/${inv?.token}`
     return NextResponse.json({ ok: true, link, note: 'Existing pending invite' })
+  }
+
+  // ── Seat limit check (Session 51) ───────────────────────────────────────
+  // Runs AFTER the existing-pending-invite re-use path: re-fetching a link for
+  // an invite that's already counted consumes no new seat and must not 403.
+  // Counts current members + pending unexpired invites against max_seats.
+  // trial_unlimited orgs are exempt. Fails open if the org lookup errors
+  // (consistent with the paywall philosophy).
+  const { data: org } = await admin
+    .from('organizations')
+    .select('max_seats, trial_unlimited')
+    .eq('id', profile.org_id)
+    .single()
+
+  if (org && !org.trial_unlimited && typeof org.max_seats === 'number') {
+    const { count: memberCount } = await admin
+      .from('profiles')
+      .select('id', { count: 'exact', head: true })
+      .eq('org_id', profile.org_id)
+
+    const { count: pendingCount } = await admin
+      .from('invitations')
+      .select('id', { count: 'exact', head: true })
+      .eq('org_id', profile.org_id)
+      .is('accepted_at', null)
+      .gt('expires_at', new Date().toISOString())
+
+    const seatsUsed = (memberCount ?? 0) + (pendingCount ?? 0)
+
+    if (seatsUsed >= org.max_seats) {
+      const seatWord = org.max_seats === 1 ? 'seat' : 'seats'
+      return NextResponse.json({
+        error: `Your plan includes ${org.max_seats} user ${seatWord}. Contact ben@positionadvisory.com to add seats to your account.`,
+      }, { status: 403 })
+    }
   }
 
   // ── Create the invitation ───────────────────────────────────────────────
