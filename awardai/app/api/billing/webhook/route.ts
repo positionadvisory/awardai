@@ -1,7 +1,7 @@
 // Deploy to: app/api/billing/webhook/route.ts
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import Stripe from 'stripe'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -60,18 +60,21 @@ async function hasEverPaid(stripe: Stripe, customerId: string): Promise<boolean>
 }
 
 async function sendOwnerEmail(
-  admin: ReturnType<typeof createClient>,
+  admin: SupabaseClient,
   orgId: number,
   subject: string,
   html: string,
 ) {
   if (!process.env.RESEND_API_KEY) return
-  const { data: profile } = await admin
+  // Explicit cast: with an untyped client, supabase-js can infer .single() data
+  // as 'never' (build failure, Session 50). Do not remove the cast.
+  const { data } = await admin
     .from('profiles')
     .select('email, full_name')
     .eq('org_id', orgId)
     .eq('role', 'owner')
     .single()
+  const profile = data as { email: string | null; full_name: string | null } | null
   if (!profile?.email) return
   await fetch('https://api.resend.com/emails', {
     method: 'POST',
