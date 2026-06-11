@@ -787,6 +787,22 @@ export const KB_SHOW_ALIASES: Record<string, string | null> = {
   'the loerie awards':                            'Loeries',
   'loeries awards':                               'Loeries',
 
+  // Effie — unify variants to the platform's canonical Effie program (Session 52).
+  // Without these, KB rows like "Effies 2024" normalised to bare "Effies", which
+  // matched no canonical show and no SHOW_CATEGORIES key — users who picked it
+  // got an empty category list and a dead-end Quick Eval modal.
+  'effies':                                       'Effie APAC',
+  'effie awards':                                 'Effie APAC',
+  'effies apac':                                  'Effie APAC',
+  'effie asia pacific':                           'Effie APAC',
+  'asia pacific effie awards':                    'Effie APAC',
+  'apac effie awards':                            'Effie APAC',
+
+  // New York Festivals — map short variants to the full canonical name (Session 52)
+  'new york festivals':                           'New York Festivals Advertising Awards',
+  'nyf advertising awards':                       'New York Festivals Advertising Awards',
+  'nyf':                                          'New York Festivals Advertising Awards',
+
   // ── Renames ──────────────────────────────────────────────────────────────────
   'digital a-list':                               'Campaign Greater China A List',
   'digital media awards (campaign asia)':         'Campaign Greater China Digital Media Awards',
