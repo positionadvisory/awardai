@@ -11,10 +11,18 @@
 //   2. Jury run, Coach never run      → score framing + "you have run the
 //      Jury Evaluation N times, Coach Review shows the potential you are
 //      leaving on the table" + run-coach CTA, then placements.
-//   3. Both modes run                 → score framing + "have you considered
-//      alternative categories?" + placements + Generate Alt Categories CTA
-//      (wired by the page to the same generateSmartDirections call as the
-//      header button, so the button and the nudge are ONE system).
+//   3. Both modes run, score < 7      → the rewrite loop has not closed the
+//      gap → "have you considered alternative categories?" + Generate Alt
+//      Categories CTA (wired by the page to the same generateSmartDirections
+//      call as the header button, so the button and the nudge are ONE system).
+//   4. Both modes run, score ≥ 7      → entry is placed right; next move is
+//      the Video Script (drafting the case film from available assets
+//      sharpens where the entry should go — and exposes a weak direction
+//      when nothing visual explains the key point). Script already drafted
+//      → Press Kit (now the LAST workflow step) so the work is ready to
+//      announce the moment results land.
+//   At any state, 3+ total evaluation runs adds the iteration caution: do
+//   not re-run without material changes to the entry (Ben, Session 57).
 //
 // Rules (binding, from the v3 brief — unchanged by the rework):
 // - This card is PRODUCT OUTPUT, not guidance. It does NOT respect the
@@ -55,6 +63,8 @@ export type NextStepAction =
   | { type: 'run_coach' }
   | { type: 'run_jury' }
   | { type: 'alt_categories' }
+  | { type: 'video_script' }
+  | { type: 'press_kit' }
   | { type: 'view_direction'; directionId: number; source: 'opportunity' | 'existing'; show?: string; category?: string }
 
 type NextStepCardProps = {
@@ -64,10 +74,13 @@ type NextStepCardProps = {
   evaluatedShow: string
   // Active judge eval score; null when no judge eval exists (coach-only state)
   overallScore: number | null
-  // Total judge evals run for this direction (active + history)
+  // Total judge / coach evals run for this direction (active + history)
   judgeRunCount: number
+  coachRunCount: number
   hasJudge: boolean
   hasCoach: boolean
+  // true when a video script already exists for the project
+  hasScript: boolean
   // true when the project has at least one generated (non-quick-eval) direction
   hasDirections: boolean
   // Strongest existing directions by category fit (page filters to those
@@ -104,8 +117,10 @@ export default function NextStepCard({
   evaluatedShow,
   overallScore,
   judgeRunCount,
+  coachRunCount,
   hasJudge,
   hasCoach,
+  hasScript,
   hasDirections,
   strongerDirections,
   altCategoriesLoading,
@@ -127,6 +142,12 @@ export default function NextStepCard({
   const hasStronger = strongerDirections.length > 0
   const framing = scoreSentence(overallScore, evaluatedShow)
   const runsLabel = judgeRunCount <= 1 ? 'once' : `${judgeRunCount} times`
+  const totalRuns = judgeRunCount + coachRunCount
+  // Ben, Session 57: past three runs, re-running without material changes to
+  // the entry stops telling you anything new — say so plainly.
+  const iterationCaution = totalRuns >= 3
+    ? `You have run ${totalRuns} evaluations on this entry. We do not recommend re-running more than three times without making material changes to the entry first: rewrite, then re-evaluate.`
+    : null
 
   // ── State 1: coach only — placements need a judge score first ─────────────
   if (!hasJudge) {
@@ -169,6 +190,12 @@ export default function NextStepCard({
         <p className="text-sm text-gray-800 mb-3 leading-relaxed">{framing}</p>
       )}
 
+      {iterationCaution && (
+        <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-3 leading-relaxed">
+          {iterationCaution}
+        </p>
+      )}
+
       {/* Ladder step — the single highest-value next action */}
       {!hasCoach ? (
         <div className="bg-white border border-green-200 rounded-lg px-4 py-3 mb-4">
@@ -186,11 +213,45 @@ export default function NextStepCard({
             ✦ Run Coach Review
           </button>
         </div>
+      ) : overallScore !== null && overallScore >= 7 ? (
+        !hasScript ? (
+          <div className="bg-white border border-green-200 rounded-lg px-4 py-3 mb-4">
+            <p className="text-sm text-gray-800 leading-relaxed mb-2">
+              You have run both lenses and this entry holds at {overallScore.toFixed(1)}. The next move is
+              the Video Script: drafting the case film from your available assets sharpens where the entry
+              should go, and shows quickly whether you have the material to tell the story visually. If
+              nothing visual explains the key point, that is a signal this direction may not be the right home.
+            </p>
+            <button
+              type="button"
+              onClick={() => onAction({ type: 'video_script' })}
+              className="px-4 py-2 bg-green-800 hover:bg-green-700 text-white text-sm font-medium rounded-md"
+              style={TAP_TARGET}
+            >
+              ✦ Draft the Video Script
+            </button>
+          </div>
+        ) : (
+          <div className="bg-white border border-green-200 rounded-lg px-4 py-3 mb-4">
+            <p className="text-sm text-gray-800 leading-relaxed mb-2">
+              You have run both lenses, this entry holds at {overallScore.toFixed(1)}, and the video script
+              is drafted. Generate the Press Kit so the work is ready to announce the moment results land.
+            </p>
+            <button
+              type="button"
+              onClick={() => onAction({ type: 'press_kit' })}
+              className="px-4 py-2 bg-green-800 hover:bg-green-700 text-white text-sm font-medium rounded-md"
+              style={TAP_TARGET}
+            >
+              ✦ Go to the Press Kit
+            </button>
+          </div>
+        )
       ) : (
         <div className="bg-white border border-green-200 rounded-lg px-4 py-3 mb-4">
           <p className="text-sm text-gray-800 leading-relaxed mb-2">
-            You have run both the jury and coach lenses on this entry. The next gain is placement:
-            have you considered alternative categories?
+            You have run both the jury and coach lenses and the score is still below 7. Before another
+            rewrite, check the placement: have you considered alternative categories?
           </p>
           <button
             type="button"
