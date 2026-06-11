@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/useAuth'
 import { useEngagement } from '@/lib/useEngagement'
 import GeneratingBar from '@/components/GeneratingBar'
 import ProjectProgressSpine, { SpineStep } from '@/components/ProjectProgressSpine'
-import NextStepCard, { NextStepAction, NextStepOpportunity } from '@/components/NextStepCard'
+import NextStepCard, { NextStepAction, NextStepOpportunity, NextStepDirectionRef } from '@/components/NextStepCard'
 
 /* ── Avatar dropdown (top-right nav) ─────────────────────────────────────── */
 function AvatarMenu({ email, onSignOut }: { email: string; onSignOut: () => void }) {
@@ -937,6 +937,19 @@ export default function ProjectPage() {
   // session — the card remounts on tab switches, so the component-level guard
   // alone would inflate the metric.
   const nextstepShownRef = useRef<Set<number>>(new Set())
+  // Build 2 (Session 55, feedback round): Next Step deep links spotlight the
+  // target direction card (ring + scroll). Auto-clears after 8s.
+  const [spotlightDirectionId, setSpotlightDirectionId] = useState<number | null>(null)
+  const spotlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const spotlightDirection = (directionId: number) => {
+    setSpotlightDirectionId(directionId)
+    if (spotlightTimerRef.current) clearTimeout(spotlightTimerRef.current)
+    spotlightTimerRef.current = setTimeout(() => setSpotlightDirectionId(null), 8000)
+    // Scroll after the Directions tab has rendered
+    setTimeout(() => {
+      document.getElementById(`direction-card-${directionId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 150)
+  }
 
   const [project, setProject] = useState<Project | null>(null)
   const [directions, setDirections] = useState<Direction[]>([])
@@ -4510,7 +4523,7 @@ export default function ProjectPage() {
                           <div className="flex-1 border-t border-gray-200" />
                         </div>
                       )}
-                    <div className={`bg-white border rounded-xl p-5 ${d.chosen ? 'border-green-700' : isNew ? 'border-green-400' : hasDraft ? 'border-blue-200' : 'border-gray-200'}`} style={{ borderLeftColor: '#c9a95c', borderLeftWidth: '3px' }}>
+                    <div id={`direction-card-${d.id}`} className={`bg-white border rounded-xl p-5 ${spotlightDirectionId === d.id ? 'border-green-600 ring-2 ring-green-500' : d.chosen ? 'border-green-700' : isNew ? 'border-green-400' : hasDraft ? 'border-blue-200' : 'border-gray-200'}`} style={{ borderLeftColor: '#c9a95c', borderLeftWidth: '3px' }}>
                       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -5164,45 +5177,60 @@ export default function ProjectPage() {
                                             ignores the guidance toggle. Renders ONLY when the eval
                                             carries next_opportunities (pre-Build-2 evals: no card).
                                             Suggestions were candidate-enforced server-side. */}
-                                        <NextStepCard
-                                          opportunities={Array.isArray(o.next_opportunities)
-                                            ? o.next_opportunities.map((opp): NextStepOpportunity => ({
-                                                ...opp,
-                                                existingDirectionId:
-                                                  directions.find(dd =>
-                                                    dd.angle !== 'Uploaded entry — direct evaluation' &&
-                                                    dd.best_show === opp.show &&
-                                                    (dd.best_category ?? '') === opp.category
-                                                  )?.id ??
-                                                  directions.find(dd =>
-                                                    dd.angle !== 'Uploaded entry — direct evaluation' &&
-                                                    dd.best_show === opp.show
-                                                  )?.id ?? null,
-                                              }))
-                                            : null}
-                                          evaluatedShow={dirShow ?? ''}
-                                          overallScore={evaluation.overall_score}
-                                          hasDirections={directions.some(dd => dd.angle !== 'Uploaded entry — direct evaluation')}
-                                          onShown={(count) => {
-                                            if (nextstepShownRef.current.has(dirId)) return
-                                            nextstepShownRef.current.add(dirId)
-                                            track('nextstep_shown', { project_id: Number(projectId), direction_id: dirId, opportunity_count: count })
-                                          }}
-                                          onAction={(action: NextStepAction) => {
-                                            track('nextstep_clicked', {
-                                              project_id: Number(projectId),
-                                              direction_id: dirId,
-                                              cta: action.type,
-                                              ...(action.type === 'view_direction'
-                                                ? { show: action.opportunity.show, category: action.opportunity.category }
-                                                : {}),
-                                            })
-                                            setTab('directions')
-                                            if (action.type === 'generate_directions') {
-                                              generateDirections()
-                                            }
-                                          }}
-                                        />
+                                        {(() => {
+                                          const realDirs = directions.filter(dd => dd.angle !== 'Uploaded entry — direct evaluation')
+                                          // Existing directions ranking a stronger placement: higher
+                                          // category fit than the evaluated direction's own fit (any
+                                          // numeric fit qualifies when the evaluated direction has
+                                          // none, e.g. quick-eval directions). Top 2, excluding self.
+                                          const evalDirFit = directions.find(dd => dd.id === dirId)?.win_likelihood ?? null
+                                          const strongerDirections: NextStepDirectionRef[] = realDirs
+                                            .filter(dd => dd.id !== dirId && typeof dd.win_likelihood === 'number')
+                                            .filter(dd => evalDirFit === null || (dd.win_likelihood as number) > evalDirFit)
+                                            .sort((a, b) => (b.win_likelihood ?? 0) - (a.win_likelihood ?? 0))
+                                            .slice(0, 2)
+                                            .map(dd => ({ id: dd.id, name: dd.name, show: dd.best_show, category: dd.best_category, fit: dd.win_likelihood }))
+                                          return (
+                                            <NextStepCard
+                                              opportunities={Array.isArray(o.next_opportunities)
+                                                ? o.next_opportunities.map((opp): NextStepOpportunity => ({
+                                                    ...opp,
+                                                    existingDirectionId:
+                                                      realDirs.find(dd =>
+                                                        dd.best_show === opp.show &&
+                                                        (dd.best_category ?? '') === opp.category
+                                                      )?.id ??
+                                                      realDirs.find(dd => dd.best_show === opp.show)?.id ?? null,
+                                                  }))
+                                                : null}
+                                              evaluatedShow={dirShow ?? ''}
+                                              overallScore={evaluation.overall_score}
+                                              hasDirections={realDirs.length > 0}
+                                              strongerDirections={strongerDirections}
+                                              onShown={(count) => {
+                                                if (nextstepShownRef.current.has(dirId)) return
+                                                nextstepShownRef.current.add(dirId)
+                                                track('nextstep_shown', { project_id: Number(projectId), direction_id: dirId, opportunity_count: count })
+                                              }}
+                                              onAction={(action: NextStepAction) => {
+                                                track('nextstep_clicked', {
+                                                  project_id: Number(projectId),
+                                                  direction_id: dirId,
+                                                  cta: action.type,
+                                                  ...(action.type === 'view_direction'
+                                                    ? { target_direction_id: action.directionId, source: action.source, show: action.show ?? null, category: action.category ?? null }
+                                                    : {}),
+                                                })
+                                                setTab('directions')
+                                                if (action.type === 'view_direction') {
+                                                  spotlightDirection(action.directionId)
+                                                } else if (action.type === 'generate_directions') {
+                                                  generateDirections()
+                                                }
+                                              }}
+                                            />
+                                          )
+                                        })()}
                                       </>
                                     )
                                   })()
