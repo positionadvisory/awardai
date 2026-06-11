@@ -47,12 +47,12 @@ export default function ProjectProgressSpine({ steps, activeKey, onStepClick }: 
             <button
               onClick={() => onStepClick(step)}
               title={step.done ? `Open ${step.label}` : `${step.label}: not started yet`}
-              className={`flex items-center gap-1.5 px-2 sm:px-2.5 text-xs whitespace-nowrap transition-colors ${
+              className={`flex items-center gap-1.5 px-2 sm:px-3 text-sm whitespace-nowrap border-b-2 transition-colors ${
                 activeKey === step.key
-                  ? 'text-gray-900'
+                  ? 'border-green-700 text-gray-900 font-medium'
                   : step.done
-                    ? 'text-gray-600 hover:text-gray-900'
-                    : 'text-gray-400 hover:text-gray-700'
+                    ? 'border-transparent text-gray-600 hover:text-gray-900'
+                    : 'border-transparent text-gray-400 hover:text-gray-700'
               }`}
               style={{ minHeight: '44px' }}
             >
