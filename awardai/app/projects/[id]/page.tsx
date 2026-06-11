@@ -3769,8 +3769,10 @@ export default function ProjectPage() {
       summary: spineMaxDraftGen > 0 ? `Gen ${spineMaxDraftGen}` : undefined },
     { key: 'evaluated', label: 'Evaluated', done: spineHasEval,
       summary: spineBestJudge !== null ? spineBestJudge.toFixed(1) : undefined },
-    { key: 'presskit', label: 'Press Kit', done: spinePressKitStarted },
+    // Session 57 (Ben): Press Kit is the LAST step — the script crystalises
+    // the story first; the press kit announces the finished entry.
     { key: 'script', label: 'Video Script', done: spineScriptDone },
+    { key: 'presskit', label: 'Press Kit', done: spinePressKitStarted },
   ]
 
   const spineActiveKey = tab === 'entries' ? 'draft' : tab
@@ -3854,8 +3856,8 @@ export default function ProjectPage() {
     <div className="min-h-screen bg-gray-100 text-gray-900 overflow-x-hidden">
 
       {/* Header */}
-      <header className="border-b border-gray-200 bg-white px-4 sm:px-6 py-3 sm:py-4">
-        <div className="w-full max-w-5xl mx-auto">
+      <header className="border-b border-gray-200 bg-white py-3 sm:py-4">
+        <div className="w-full max-w-5xl mx-auto px-4 sm:px-6">
 
           {/* ── Mobile layout: two rows ─────────────────────────────────────── */}
           <div className="sm:hidden">
@@ -4762,8 +4764,10 @@ export default function ProjectPage() {
                     return (
                       <div key={dirId} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
 
-                        {/* Direction header */}
-                        <div className="px-5 py-4 border-b border-gray-200 flex items-start justify-between gap-4">
+                        {/* Direction header — Session 57: stacks on mobile. The old
+                            single-row flex (right block flex-shrink-0) crushed the
+                            title to one word per line on phones. */}
+                        <div className="px-5 py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                           {/* Left: direction label + name + show/category subline.
                               Subline only shown when d.name exists — when it doesn't, dirName
                               already falls back to "Show — Category" so the subline would duplicate it. */}
@@ -4783,11 +4787,11 @@ export default function ProjectPage() {
                             </button>
                           </div>
 
-                          {/* Right: two rows of buttons */}
-                          <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                          {/* Right: two rows of buttons (full-width + left-aligned on mobile) */}
+                          <div className="flex flex-col items-start sm:items-end gap-2 w-full sm:w-auto sm:flex-shrink-0">
 
                             {/* Row 1 — Evaluate + Download */}
-                            <div className="flex items-center gap-2 flex-wrap justify-end">
+                            <div className="flex items-center gap-2 flex-wrap justify-start sm:justify-end">
                               {/* Jury Evaluation */}
                               <button
                                 onClick={() => evaluateEntry(dirId, 'judge', evalBoth.judge?.id)}
@@ -4837,7 +4841,7 @@ export default function ProjectPage() {
                             </div>
 
                             {/* Row 2 — Smart Directions + Regenerate */}
-                            <div className="flex items-center gap-2 flex-wrap justify-end">
+                            <div className="flex items-center gap-2 flex-wrap justify-start sm:justify-end">
                               {/* Alt Categories / Other Shows (post-eval) or Suggest Directions (pre-eval) */}
                               {(hasJudge || hasCoach) ? (
                                 <>
@@ -5071,9 +5075,10 @@ export default function ProjectPage() {
                                 .sort((a, b) => (b.win_likelihood ?? 0) - (a.win_likelihood ?? 0))
                                 .slice(0, 2)
                                 .map(dd => ({ id: dd.id, name: dd.name, show: dd.best_show, category: dd.best_category, fit: dd.win_likelihood }))
-                              // Total jury runs for this direction: active slot + history rows
+                              // Run counts for this direction: active slot + history rows
                               // (evaluation_mode null on legacy rows counts as judge)
                               const judgeRunCount = (evalBoth.judge ? 1 : 0) + dirHistory.filter(h => h.evaluation_mode !== 'coach').length
+                              const coachRunCount = (evalBoth.coach ? 1 : 0) + dirHistory.filter(h => h.evaluation_mode === 'coach').length
                               const opportunities = judgeEval && judgeOut && Array.isArray(judgeOut.next_opportunities)
                                 ? judgeOut.next_opportunities.map((opp): NextStepOpportunity => ({
                                     ...opp,
@@ -5091,8 +5096,10 @@ export default function ProjectPage() {
                                   evaluatedShow={dirShow ?? ''}
                                   overallScore={judgeEval ? judgeEval.overall_score : null}
                                   judgeRunCount={judgeRunCount}
+                                  coachRunCount={coachRunCount}
                                   hasJudge={hasJudge}
                                   hasCoach={hasCoach}
+                                  hasScript={!!((scriptText && scriptText.trim()) || project?.script_text)}
                                   hasDirections={realDirs.length > 0}
                                   strongerDirections={strongerDirections}
                                   altCategoriesLoading={smartDirectionsLoading[dirId] === 'alternatives'}
@@ -5113,6 +5120,8 @@ export default function ProjectPage() {
                                     })
                                     if (action.type === 'run_coach') { evaluateEntry(dirId, 'coach', evalBoth.coach?.id); return }
                                     if (action.type === 'run_jury') { evaluateEntry(dirId, 'judge', evalBoth.judge?.id); return }
+                                    if (action.type === 'video_script') { setTab('script'); return }
+                                    if (action.type === 'press_kit') { setTab('presskit'); return }
                                     if (action.type === 'alt_categories') {
                                       const evalForSmart = evalBoth.judge ?? evalBoth.coach
                                       if (evalForSmart) generateSmartDirections(dirId, evalForSmart.id, 'alternatives')
