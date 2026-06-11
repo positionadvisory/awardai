@@ -561,13 +561,16 @@ export default function ProjectsPage() {
     <div className="min-h-screen bg-gray-100 text-gray-900 overflow-x-hidden">
 
       {/* Header */}
-      <header className="border-b border-gray-200 bg-white px-4 sm:px-6 py-4">
-        <div className="w-full max-w-5xl mx-auto flex items-center justify-between gap-3">
+      {/* Session 57: padding moved INSIDE the max-w container so the header
+          content shares the exact same width as <main> below (it previously
+          sat one padding-width wider on desktop); wordmark now sl-serif. */}
+      <header className="border-b border-gray-200 bg-white py-4">
+        <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 shrink-0">
             <div className="w-7 h-7 rounded-lg bg-green-800 flex items-center justify-center">
               <span className="text-xs font-bold text-white">S</span>
             </div>
-            <span className="font-semibold text-gray-900">Shortlist</span>
+            <span className="sl-serif text-gray-900" style={{ fontSize: '1.2rem', letterSpacing: '-0.01em' }}>Shortlist</span>
           </div>
           <div className="flex items-center gap-4 shrink-0">
             {user?.email === 'ben@positionadvisory.com' && (
