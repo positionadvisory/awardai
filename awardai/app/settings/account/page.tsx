@@ -472,11 +472,14 @@ export default function AccountPage() {
           </div>
         </Card>
 
-        {/* ── Help & Guidance (Build 2, Session 55) ────────────────────────── */}
+        {/* ── Help & Guidance (Build 2 Session 55; tour added Session 56) ──── */}
         {/* Master guidance switch: gates empty-state copy and (from Build 3)
             nudges + the Welcome Router re-offer. The Progress Spine and Next
             Step card are navigation/product output and stay on regardless.
-            "Take the tour" ships with the Welcome Router in Build 3. */}
+            "Take the tour" navigates to /projects?tour=settings — the wizard
+            mounts on the projects page, which logs tour_restarted on open
+            (logging there, not here, so the event is never lost to the
+            navigation cancelling an in-flight insert). */}
         <Card title="Help & Guidance">
           {guidanceError && (
             <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 12px', color: '#dc2626', fontSize: 13, marginBottom: 8 }}>
@@ -500,6 +503,20 @@ export default function AccountPage() {
               <span style={{ width: 46, height: 26, borderRadius: 99, background: guidanceEnabled ? '#166534' : '#d1d5db', position: 'relative', display: 'inline-block', transition: 'background 0.15s ease', opacity: guidanceSaving || !stateLoaded ? 0.6 : 1 }}>
                 <span style={{ position: 'absolute', top: 3, left: guidanceEnabled ? 23 : 3, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: 'left 0.15s ease', boxShadow: '0 1px 2px rgba(0,0,0,0.2)' }} />
               </span>
+            </button>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, padding: '12px 0', borderBottom: '1px solid #f3f4f6' }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 500, color: '#374151' }}>Take the tour</div>
+              <div style={{ fontSize: 13, color: '#9ca3af', marginTop: 2 }}>
+                Replay the three-frame welcome tour at any time.
+              </div>
+            </div>
+            <button
+              onClick={() => router.push('/projects?tour=settings')}
+              style={{ fontSize: 13, fontWeight: 500, color: '#374151', background: 'none', border: '1px solid #d1d5db', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', minHeight: 36, flexShrink: 0 }}
+            >
+              Start tour
             </button>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, padding: '12px 0' }}>
