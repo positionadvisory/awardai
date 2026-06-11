@@ -16,8 +16,10 @@
 //   • Every step is clickable (switches tab via onStepClick). Filled steps
 //     show a one-datum summary (count, generation, score). Empty steps
 //     show ○ and land on that tab's empty state.
-//   • Mobile: horizontal scroll within the bar, tap targets ≥ 44px,
-//     no hover-dependent content (platform device rule).
+//   • Mobile (Session 57, Ben): the bar WRAPS onto extra rows instead of
+//     horizontally scrolling — all steps visible at once on a phone. Tap
+//     targets ≥ 44px, no hover-dependent content (platform device rule).
+//     Do not reintroduce overflow-x scrolling.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type SpineStep = {
@@ -37,13 +39,13 @@ export default function ProjectProgressSpine({ steps, activeKey, onStepClick }: 
   return (
     <div className="border-b border-gray-200 bg-white">
       <div
-        className="w-full max-w-5xl mx-auto px-2 sm:px-6 flex items-center overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+        className="w-full max-w-5xl mx-auto px-2 sm:px-6 flex flex-wrap items-center"
         role="navigation"
         aria-label="Project progress"
       >
         {steps.map((step, i) => (
-          <div key={step.key} className="flex items-center shrink-0">
-            {i > 0 && <span className="text-gray-300 text-xs px-1 select-none">·</span>}
+          <div key={step.key} className="flex items-center">
+            {i > 0 && <span className="hidden sm:inline text-gray-300 text-xs px-1 select-none">·</span>}
             <button
               onClick={() => onStepClick(step)}
               title={step.done ? `Open ${step.label}` : `${step.label}: not started yet`}
