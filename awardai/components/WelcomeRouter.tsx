@@ -1,11 +1,15 @@
 'use client'
 // ─────────────────────────────────────────────────────────────────────────────
-// WelcomeRouter — Session 56 (Build 3 / C5, Brief-Onboarding-Engagement-v3 §8)
+// WelcomeRouter — Session 56 (Build 3 / C5) + Session 57 UX polish
 //
 // Three-frame first-login flow that routes, not tours.
 //   Frame 1 — credibility + the power-user one-click exit
-//   Frame 2 — the workflow, mapped (echoed forever by the Progress Spine)
-//   Frame 3 — intent routing (evaluate / new entry / scope the season)
+//   Frame 2 — the workflow, mapped (echoed forever by the Progress Spine).
+//             Session 57: every stage pill is clickable and swaps the
+//             snapshot copy below (Directions stays the default).
+//   Frame 3 — intent routing (evaluate / new entry / scope the season).
+//             Session 57: route selection fades the modal out (250ms)
+//             before the parent navigates — no hard jump.
 //
 // Deploys to: components/WelcomeRouter.tsx
 //
@@ -20,7 +24,11 @@
 //     "Go to your projects" finish (v3 brief, resolved decision #3).
 //   • Show counts are DERIVED, never hardcoded — the parent passes
 //     showCountLabel (e.g. "30+"). Do not write a literal count in copy.
-//   • No hover-dependent content; every control ≥ 44px tap target.
+//   • No hover-dependent CONTENT (hover is feedback only — everything is
+//     reachable by tap/click); every control keeps a ≥ 44px-tall hit area
+//     (pills and dots use transparent padding to preserve the visual size).
+//   • Session 57: nav dots are clickable (free movement between viewed-able
+//     frames). Frame-view logging stays once per open via viewedFrames.
 //   • Visual treatment: dark green / bone / gold — the guidance-layer
 //     treatment (v2, retained). Deliberately distinct from product output
 //     (Next Step card is green-50/green-700). C4 nudges reuse these values.
@@ -49,6 +57,42 @@ type Props = {
   onInviteeDone: () => void              // invitee variant finish
 }
 
+// Small hover-feedback wrapper. All styles inline (Tailwind hover: classes are
+// unavailable in this inline-styled component). Hover styles are FEEDBACK ONLY
+// — never content. Focus mirrors hover for keyboard users.
+function HoverButton({
+  baseStyle,
+  hoverStyle,
+  onClick,
+  ariaLabel,
+  children,
+}: {
+  baseStyle: React.CSSProperties
+  hoverStyle: React.CSSProperties
+  onClick: () => void
+  ariaLabel?: string
+  children: React.ReactNode
+}) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      aria-label={ariaLabel}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={() => setHovered(true)}
+      onBlur={() => setHovered(false)}
+      style={{
+        transition: 'transform 150ms ease, background 150ms ease, border-color 150ms ease, filter 150ms ease, box-shadow 150ms ease, color 150ms ease',
+        ...baseStyle,
+        ...(hovered ? hoverStyle : {}),
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
 export default function WelcomeRouter({
   open,
   variant,
@@ -61,15 +105,27 @@ export default function WelcomeRouter({
   onInviteeDone,
 }: Props) {
   const [frame, setFrame] = useState(1)
+  const [selectedStep, setSelectedStep] = useState('Directions')
+  const [closing, setClosing] = useState(false)
+  const [entered, setEntered] = useState(false)
   const viewedFrames = useRef<Set<number>>(new Set())
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Reset to frame 1 each time the wizard opens
+  // Reset each time the wizard opens; fade in on the next tick
   useEffect(() => {
     if (open) {
       setFrame(1)
+      setSelectedStep('Directions')
+      setClosing(false)
+      setEntered(false)
       viewedFrames.current = new Set()
+      const t = setTimeout(() => setEntered(true), 20)
+      return () => clearTimeout(t)
     }
   }, [open])
+
+  // Clear any pending close timer on unmount
+  useEffect(() => () => { if (closeTimer.current) clearTimeout(closeTimer.current) }, [])
 
   // Log each frame view once per open
   useEffect(() => {
@@ -79,13 +135,13 @@ export default function WelcomeRouter({
     onFrameViewed(frame)
   }, [open, frame, onFrameViewed])
 
-  // Escape = soft skip
+  // Escape = soft skip (ignored mid-close)
   useEffect(() => {
     if (!open) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onSoftSkip() }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !closing) onSoftSkip() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [open, onSoftSkip])
+  }, [open, closing, onSoftSkip])
 
   // Body scroll lock while open
   useEffect(() => {
@@ -98,6 +154,13 @@ export default function WelcomeRouter({
   if (!open) return null
 
   const lastFrame = variant === 'invitee' ? 2 : 3
+
+  // Fade the modal out, THEN hand off to the parent. Guards double-fires.
+  const closeThen = (fn: () => void) => {
+    if (closing) return
+    setClosing(true)
+    closeTimer.current = setTimeout(fn, 250)
+  }
 
   // ── Shared bits ────────────────────────────────────────────────────────────
 
@@ -114,6 +177,11 @@ export default function WelcomeRouter({
     cursor: 'pointer',
     padding: '12px 20px',
   }
+  const primaryButtonHover: React.CSSProperties = {
+    filter: 'brightness(1.07)',
+    transform: 'translateY(-1px)',
+    boxShadow: '0 4px 14px rgba(0,0,0,0.25)',
+  }
 
   const quietButtonStyle: React.CSSProperties = {
     display: 'block',
@@ -128,6 +196,12 @@ export default function WelcomeRouter({
     cursor: 'pointer',
     padding: '10px 20px',
   }
+  const quietButtonHover: React.CSSProperties = {
+    background: 'rgba(245, 242, 234, 0.08)',
+    color: BONE,
+    borderColor: 'rgba(245, 242, 234, 0.4)',
+    transform: 'translateY(-1px)',
+  }
 
   const routeButtonStyle: React.CSSProperties = {
     display: 'block',
@@ -140,30 +214,36 @@ export default function WelcomeRouter({
     cursor: 'pointer',
     padding: '14px 18px',
   }
+  const routeButtonHover: React.CSSProperties = {
+    background: 'rgba(245, 242, 234, 0.12)',
+    borderColor: 'rgba(201, 169, 92, 0.65)',
+    transform: 'translateY(-1px)',
+    boxShadow: '0 4px 14px rgba(0,0,0,0.2)',
+  }
 
+  // Clickable nav dots — 44px-tall hit areas, dot rendered inside
   const dots = (
-    <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+    <div style={{ display: 'flex', alignItems: 'center' }}>
       {Array.from({ length: lastFrame }, (_, i) => i + 1).map(n => (
-        <span
-          key={n}
-          style={{
-            width: 7,
-            height: 7,
-            borderRadius: '50%',
-            background: n === frame ? GOLD : 'rgba(245, 242, 234, 0.25)',
-            display: 'inline-block',
-          }}
-        />
+        <DotButton key={n} n={n} active={n === frame} onClick={() => { if (!closing) setFrame(n) }} />
       ))}
     </div>
   )
 
-  // Workflow map (Frame 2) — the visual the Progress Spine echoes forever
+  // Frame 2 — workflow stages + one-line snapshots (Session 57: clickable)
   const workflowSteps = ['Brief', 'Directions', 'Draft', 'Evaluate / Coach', 'Press Kit', 'Video Script']
+  const stepSnapshots: Record<string, string> = {
+    'Brief': `The Brief holds the campaign story and what you want the entry to achieve. Everything Shortlist generates draws on it, so a sharper brief means sharper output at every step after.`,
+    'Directions': `Directions maps which of the ${showCountLabel} covered shows are worth entering and where the strongest angle is. Everything after that, drafts, evaluations, press kit, script, builds on it.`,
+    'Draft': `Draft turns a chosen direction into three written versions of the entry, built to the word limits and conventions of the show and category you targeted.`,
+    'Evaluate / Coach': `Evaluate scores the entry the way a jury would. Coach flips the lens and shows the potential the entry is leaving on the table. Run both before you submit.`,
+    'Press Kit': `Press Kit turns a finished entry into ready-to-send press copy, social posts, and a PDF, with your agency details and logo built in.`,
+    'Video Script': `Video Script drafts the case-study film script from the same campaign material, matched to the show you are entering.`,
+  }
 
   return (
     <div
-      onClick={onSoftSkip}
+      onClick={() => { if (!closing) onSoftSkip() }}
       style={{
         position: 'fixed',
         inset: 0,
@@ -173,6 +253,8 @@ export default function WelcomeRouter({
         alignItems: 'center',
         justifyContent: 'center',
         padding: 16,
+        opacity: closing ? 0 : entered ? 1 : 0,
+        transition: 'opacity 250ms ease',
       }}
     >
       <div
@@ -190,6 +272,8 @@ export default function WelcomeRouter({
           overflowY: 'auto',
           padding: '36px 32px 24px',
           boxShadow: '0 12px 40px rgba(0,0,0,0.35)',
+          transform: closing ? 'scale(0.98)' : 'scale(1)',
+          transition: 'transform 250ms ease',
         }}
       >
         {/* ── Frame 1 — credibility + exit ───────────────────────────────── */}
@@ -208,12 +292,12 @@ export default function WelcomeRouter({
               Shortlist tells you where your work can win before you spend a word.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <button onClick={() => setFrame(2)} style={primaryButtonStyle}>
+              <HoverButton baseStyle={primaryButtonStyle} hoverStyle={primaryButtonHover} onClick={() => setFrame(2)}>
                 Show me how it works
-              </button>
-              <button onClick={onExploreAlone} style={quietButtonStyle}>
+              </HoverButton>
+              <HoverButton baseStyle={quietButtonStyle} hoverStyle={quietButtonHover} onClick={onExploreAlone}>
                 I&apos;ll explore on my own
-              </button>
+              </HoverButton>
             </div>
             <p style={{ margin: '14px 0 0', fontSize: 12, color: 'rgba(245, 242, 234, 0.45)', textAlign: 'center' }}>
               Exploring on your own turns guidance off everywhere. You can turn it back on in Settings.
@@ -229,42 +313,33 @@ export default function WelcomeRouter({
             </h2>
             <p style={{ margin: '0 0 22px', fontSize: 14, lineHeight: 1.55, color: BONE_MUTED }}>
               Most people start at Evaluate. The wins start at <span style={{ color: GOLD, fontWeight: 600 }}>Directions</span>.
+              Click any stage to see what it does.
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 10 }}>
               {workflowSteps.map((step, i) => (
                 <span key={step} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                  <span
-                    style={{
-                      fontSize: 13,
-                      fontWeight: step === 'Directions' ? 700 : 500,
-                      color: step === 'Directions' ? '#1f2937' : BONE,
-                      background: step === 'Directions' ? GOLD : 'rgba(245, 242, 234, 0.08)',
-                      border: step === 'Directions' ? `1px solid ${GOLD}` : `1px solid ${DEEP_GREEN_EDGE}`,
-                      borderRadius: 99,
-                      padding: '6px 12px',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {step}
-                  </span>
+                  <StepPill
+                    label={step}
+                    selected={step === selectedStep}
+                    onClick={() => setSelectedStep(step)}
+                  />
                   {i < workflowSteps.length - 1 && (
                     <span style={{ color: 'rgba(245, 242, 234, 0.4)', fontSize: 13 }}>→</span>
                   )}
                 </span>
               ))}
             </div>
-            <p style={{ margin: '0 0 26px', fontSize: 13, lineHeight: 1.55, color: BONE_MUTED }}>
-              Directions maps which of the {showCountLabel} covered shows are worth entering and where the strongest
-              angle is. Everything after that, drafts, evaluations, press kit, script, builds on it.
+            <p style={{ margin: '0 0 26px', fontSize: 13, lineHeight: 1.55, color: BONE_MUTED, minHeight: 60 }}>
+              {stepSnapshots[selectedStep]}
             </p>
             {variant === 'invitee' ? (
-              <button onClick={onInviteeDone} style={primaryButtonStyle}>
+              <HoverButton baseStyle={primaryButtonStyle} hoverStyle={primaryButtonHover} onClick={() => closeThen(onInviteeDone)}>
                 Go to your projects
-              </button>
+              </HoverButton>
             ) : (
-              <button onClick={() => setFrame(3)} style={primaryButtonStyle}>
+              <HoverButton baseStyle={primaryButtonStyle} hoverStyle={primaryButtonHover} onClick={() => setFrame(3)}>
                 Next
-              </button>
+              </HoverButton>
             )}
           </div>
         )}
@@ -276,30 +351,30 @@ export default function WelcomeRouter({
               What brings you in?
             </h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <button onClick={() => onRoute('evaluate')} style={routeButtonStyle}>
+              <HoverButton baseStyle={routeButtonStyle} hoverStyle={routeButtonHover} onClick={() => closeThen(() => onRoute('evaluate'))}>
                 <span style={{ display: 'block', fontSize: 15, fontWeight: 600, color: BONE }}>
                   Evaluate an entry I already have
                 </span>
                 <span style={{ display: 'block', fontSize: 13, color: BONE_MUTED, marginTop: 3 }}>
                   Upload the entry and get a jury-standard score in minutes.
                 </span>
-              </button>
-              <button onClick={() => onRoute('new_entry')} style={routeButtonStyle}>
+              </HoverButton>
+              <HoverButton baseStyle={routeButtonStyle} hoverStyle={routeButtonHover} onClick={() => closeThen(() => onRoute('new_entry'))}>
                 <span style={{ display: 'block', fontSize: 15, fontWeight: 600, color: BONE }}>
                   Start a new entry
                 </span>
                 <span style={{ display: 'block', fontSize: 13, color: BONE_MUTED, marginTop: 3 }}>
                   Begin from the campaign brief. Shortlist maps the angles before you write.
                 </span>
-              </button>
-              <button onClick={() => onRoute('scope_season')} style={routeButtonStyle}>
+              </HoverButton>
+              <HoverButton baseStyle={routeButtonStyle} hoverStyle={routeButtonHover} onClick={() => closeThen(() => onRoute('scope_season'))}>
                 <span style={{ display: 'block', fontSize: 15, fontWeight: 600, color: BONE }}>
                   Scope the season
                 </span>
                 <span style={{ display: 'block', fontSize: 13, color: BONE_MUTED, marginTop: 3 }}>
                   Deadlines, fees, and budget modelling across {showCountLabel} shows.
                 </span>
-              </button>
+              </HoverButton>
             </div>
           </div>
         )}
@@ -307,9 +382,8 @@ export default function WelcomeRouter({
         {/* ── Footer: dots + explicit skip ───────────────────────────────── */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 26 }}>
           {dots}
-          <button
-            onClick={onExplicitSkip}
-            style={{
+          <HoverButton
+            baseStyle={{
               background: 'none',
               border: 'none',
               color: 'rgba(245, 242, 234, 0.45)',
@@ -318,11 +392,92 @@ export default function WelcomeRouter({
               padding: '12px 8px',
               minHeight: 44,
             }}
+            hoverStyle={{ color: BONE }}
+            onClick={onExplicitSkip}
           >
             Skip
-          </button>
+          </HoverButton>
         </div>
       </div>
     </div>
+  )
+}
+
+// ── Clickable nav dot — transparent 28×44 hit area, 7px dot inside ──────────
+function DotButton({ n, active, onClick }: { n: number; active: boolean; onClick: () => void }) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      aria-label={`Go to step ${n}`}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={() => setHovered(true)}
+      onBlur={() => setHovered(false)}
+      style={{
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        width: 28,
+        minHeight: 44,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 0,
+      }}
+    >
+      <span
+        style={{
+          width: 7,
+          height: 7,
+          borderRadius: '50%',
+          background: active ? GOLD : hovered ? 'rgba(245, 242, 234, 0.55)' : 'rgba(245, 242, 234, 0.25)',
+          display: 'inline-block',
+          transform: hovered && !active ? 'scale(1.45)' : 'scale(1)',
+          transition: 'background 150ms ease, transform 150ms ease',
+        }}
+      />
+    </button>
+  )
+}
+
+// ── Clickable workflow stage pill — transparent 44px-tall hit area ──────────
+function StepPill({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={selected}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={() => setHovered(true)}
+      onBlur={() => setHovered(false)}
+      style={{
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        padding: '6px 0',
+        minHeight: 44,
+        display: 'inline-flex',
+        alignItems: 'center',
+      }}
+    >
+      <span
+        style={{
+          fontSize: 13,
+          fontWeight: selected ? 700 : 500,
+          color: selected ? '#1f2937' : BONE,
+          background: selected ? GOLD : hovered ? 'rgba(245, 242, 234, 0.16)' : 'rgba(245, 242, 234, 0.08)',
+          border: selected ? `1px solid ${GOLD}` : hovered ? '1px solid rgba(201, 169, 92, 0.6)' : `1px solid ${DEEP_GREEN_EDGE}`,
+          borderRadius: 99,
+          padding: '6px 12px',
+          whiteSpace: 'nowrap',
+          transform: hovered && !selected ? 'translateY(-1px)' : 'none',
+          transition: 'background 150ms ease, border-color 150ms ease, transform 150ms ease',
+        }}
+      >
+        {label}
+      </span>
+    </button>
   )
 }
