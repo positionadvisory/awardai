@@ -966,7 +966,8 @@ export default function ProjectPage() {
   const [directions, setDirections] = useState<Direction[]>([])
   const [entries, setEntries] = useState<EntryDraft[]>([])
   const [evaluations, setEvaluations] = useState<Record<number, { judge?: Evaluation; coach?: Evaluation }>>({})
-  const [evalDisplayMode, setEvalDisplayMode] = useState<Record<number, 'judge' | 'coach'>>({})
+  // Session 57: third view 'nextsteps' = the Recommended Next Steps tab
+  const [evalDisplayMode, setEvalDisplayMode] = useState<Record<number, 'judge' | 'coach' | 'nextsteps'>>({})
   const [evalHistory, setEvalHistory] = useState<Record<number, Evaluation[]>>({})
   const [evalHistoryOpen, setEvalHistoryOpen] = useState<Record<number, boolean>>({})
   const [tab, setTab] = useState<Tab>('brief')
@@ -2881,6 +2882,9 @@ export default function ProjectPage() {
         setDirections(prev => [...smartNewDirs, ...prev])
         setNewDirectionIds(prev => new Set(Array.from(prev).concat(smartNewDirs.map(d => d.id))))
         track('directions_generated', { project_id: Number(projectId), count: smartNewDirs.length, suggest_mode: mode })
+        // Session 57 (Ben): land on Directions sorted by Category Fit so the
+        // alternatives read in a logical order, not insertion order
+        setDirSortKey('category_fit')
         setTab('directions')
       }
     } catch (err) {
@@ -3548,7 +3552,9 @@ export default function ProjectPage() {
 
   // Send a message to the evaluation chat for a given direction
   const sendEvalChat = async (dirId: number) => {
-    const activeMode = evalDisplayMode[dirId] ?? 'judge'
+    // Session 57: 'nextsteps' is a view, not a mode — chat targets judge then
+    const viewSel = evalDisplayMode[dirId] ?? 'judge'
+    const activeMode: 'judge' | 'coach' = viewSel === 'coach' ? 'coach' : 'judge'
     const evaluation = evaluations[dirId]?.[activeMode]
     if (!evaluation) return
     const msg = (evalChatInput[dirId] || '').trim()
@@ -4516,9 +4522,11 @@ export default function ProjectPage() {
                   const dirDraftEntries = entries.filter(e => e.direction_id === d.id && e.field_key !== 'entry')
                   const hasDraft = dirDraftEntries.length > 0
                   const dirMaxGen = hasDraft ? Math.max(...dirDraftEntries.map(e => e.draft_generation ?? 1)) : 0
-                  // Show a divider when transitioning from new → existing directions
+                  // Show a divider when transitioning from new → existing directions.
+                  // Session 57: only under default sort — under fit/chance/roi sorts
+                  // new and old directions interleave and the divider misleads.
                   const prevIsNew = idx > 0 ? newDirectionIds.has(arr[idx - 1].id) : isNew
-                  const showDivider = !isNew && prevIsNew && newDirectionIds.size > 0
+                  const showDivider = dirSortKey === 'default' && !isNew && prevIsNew && newDirectionIds.size > 0
                   return (
                     <Fragment key={d.id}>
                       {showDivider && (
@@ -4718,11 +4726,19 @@ export default function ProjectPage() {
                     const dirShow = d?.best_show || fields[0]?.award_show || null
                     const dirCategory = d?.best_category || fields[0]?.category || null
                     const evalBoth = evaluations[dirId] ?? {}
-                    const activeMode: 'judge' | 'coach' = evalDisplayMode[dirId] ?? 'judge'
-                    const evaluation = evalBoth[activeMode]
                     const hasJudge = !!evalBoth.judge
                     const hasCoach = !!evalBoth.coach
-                    const hasBothModes = hasJudge && hasCoach
+                    // Session 57: three views on the eval panel — judge / coach /
+                    // the Recommended Next Steps tab. Falls back to whichever
+                    // mode actually exists when the stored view does not.
+                    const requestedView = evalDisplayMode[dirId] ?? (hasJudge ? 'judge' : 'coach')
+                    const activeView: 'judge' | 'coach' | 'nextsteps' =
+                      requestedView === 'nextsteps' ? 'nextsteps'
+                        : requestedView === 'coach' && hasCoach ? 'coach'
+                        : requestedView === 'judge' && hasJudge ? 'judge'
+                        : hasJudge ? 'judge' : 'coach'
+                    const activeMode: 'judge' | 'coach' = activeView === 'coach' ? 'coach' : 'judge'
+                    const evaluation = evalBoth[activeMode]
                     const dirHistory = evalHistory[dirId] ?? []
                     const isEvaluatingThis = evaluatingForDirectionId === dirId
                     const isGeneratingThis = generatingForDirectionId === dirId
@@ -5004,27 +5020,118 @@ export default function ProjectPage() {
                         )}
 
                         {/* Evaluation panel */}
-                        {evaluation && (hasJudge || hasCoach) && (
+                        {(hasJudge || hasCoach) && (
                           <div className="border-b border-gray-200 bg-gray-50">
 
-                            {/* Mode toggle tab strip — only shown when both modes have been run */}
-                            {hasBothModes && (
-                              <div className="px-5 pt-4 flex items-center gap-1 border-b border-gray-200">
+                            {/* Eval view tab strip — Session 57: shown once ANY eval exists.
+                                Tabs render per existing mode, plus the always-present
+                                Recommended Next Steps tab (the Build 2 card's new home).
+                                Larger targets than the Session 55 strip per Ben's review. */}
+                            <div className="px-5 pt-4 flex items-center gap-1 border-b border-gray-200 flex-wrap">
+                              {hasJudge && (
                                 <button
                                   onClick={() => setEvalDisplayMode(prev => ({ ...prev, [dirId]: 'judge' }))}
-                                  className={`text-xs font-medium px-3 py-1.5 rounded-t-lg border-b-2 transition-colors -mb-px ${activeMode === 'judge' ? 'border-gray-800 text-gray-900 bg-white' : 'border-transparent text-gray-400 hover:text-gray-700'}`}
+                                  className={`text-sm font-medium px-4 py-2 rounded-t-lg border-b-2 transition-colors -mb-px ${activeView === 'judge' ? 'border-gray-800 text-gray-900 bg-white' : 'border-transparent text-gray-400 hover:text-gray-700'}`}
+                                  style={{ minHeight: '44px' }}
                                 >
                                   ⚖ Jury Evaluation
                                 </button>
+                              )}
+                              {hasCoach && (
                                 <button
                                   onClick={() => setEvalDisplayMode(prev => ({ ...prev, [dirId]: 'coach' }))}
-                                  className={`text-xs font-medium px-3 py-1.5 rounded-t-lg border-b-2 transition-colors -mb-px ${activeMode === 'coach' ? 'border-green-700 text-green-800 bg-white' : 'border-transparent text-gray-400 hover:text-gray-700'}`}
+                                  className={`text-sm font-medium px-4 py-2 rounded-t-lg border-b-2 transition-colors -mb-px ${activeView === 'coach' ? 'border-green-700 text-green-800 bg-white' : 'border-transparent text-gray-400 hover:text-gray-700'}`}
+                                  style={{ minHeight: '44px' }}
                                 >
                                   ✦ Coach Review
                                 </button>
-                              </div>
-                            )}
+                              )}
+                              <button
+                                onClick={() => setEvalDisplayMode(prev => ({ ...prev, [dirId]: 'nextsteps' }))}
+                                className={`text-sm font-semibold px-4 py-2 rounded-t-lg border-b-2 transition-colors -mb-px ${activeView === 'nextsteps' ? 'border-green-700 text-green-800 bg-green-50' : 'border-transparent text-green-700 hover:text-green-600 hover:bg-green-50'}`}
+                                style={{ minHeight: '44px' }}
+                              >
+                                ✦ Recommended Next Steps
+                              </button>
+                            </div>
 
+                          {activeView === 'nextsteps' ? (
+                          <div className="px-5 py-5">
+                            {(() => {
+                              // Session 57: the Build 2 Next Step card, relocated from the
+                              // bottom of the judge output into this tab and made state-aware.
+                              // Still PRODUCT OUTPUT — ignores the guidance toggle.
+                              const judgeEval = evalBoth.judge ?? null
+                              const judgeOut = (judgeEval?.output ?? null) as JudgeOutput | null
+                              const realDirs = directions.filter(dd => dd.angle !== 'Uploaded entry — direct evaluation')
+                              const evalDirFit = directions.find(dd => dd.id === dirId)?.win_likelihood ?? null
+                              const strongerDirections: NextStepDirectionRef[] = realDirs
+                                .filter(dd => dd.id !== dirId && typeof dd.win_likelihood === 'number')
+                                .filter(dd => evalDirFit === null || (dd.win_likelihood as number) > evalDirFit)
+                                .sort((a, b) => (b.win_likelihood ?? 0) - (a.win_likelihood ?? 0))
+                                .slice(0, 2)
+                                .map(dd => ({ id: dd.id, name: dd.name, show: dd.best_show, category: dd.best_category, fit: dd.win_likelihood }))
+                              // Total jury runs for this direction: active slot + history rows
+                              // (evaluation_mode null on legacy rows counts as judge)
+                              const judgeRunCount = (evalBoth.judge ? 1 : 0) + dirHistory.filter(h => h.evaluation_mode !== 'coach').length
+                              const opportunities = judgeEval && judgeOut && Array.isArray(judgeOut.next_opportunities)
+                                ? judgeOut.next_opportunities.map((opp): NextStepOpportunity => ({
+                                    ...opp,
+                                    existingDirectionId:
+                                      realDirs.find(dd =>
+                                        sameShow(dd.best_show, opp.show) &&
+                                        (dd.best_category ?? '').trim().toLowerCase() === opp.category.trim().toLowerCase()
+                                      )?.id ??
+                                      realDirs.find(dd => sameShow(dd.best_show, opp.show))?.id ?? null,
+                                  }))
+                                : null
+                              return (
+                                <NextStepCard
+                                  opportunities={opportunities}
+                                  evaluatedShow={dirShow ?? ''}
+                                  overallScore={judgeEval ? judgeEval.overall_score : null}
+                                  judgeRunCount={judgeRunCount}
+                                  hasJudge={hasJudge}
+                                  hasCoach={hasCoach}
+                                  hasDirections={realDirs.length > 0}
+                                  strongerDirections={strongerDirections}
+                                  altCategoriesLoading={smartDirectionsLoading[dirId] === 'alternatives'}
+                                  actionsDisabled={evaluating || generatingDraft}
+                                  onShown={(count) => {
+                                    if (nextstepShownRef.current.has(dirId)) return
+                                    nextstepShownRef.current.add(dirId)
+                                    track('nextstep_shown', { project_id: Number(projectId), direction_id: dirId, opportunity_count: count, view: 'tab' })
+                                  }}
+                                  onAction={(action: NextStepAction) => {
+                                    track('nextstep_clicked', {
+                                      project_id: Number(projectId),
+                                      direction_id: dirId,
+                                      cta: action.type,
+                                      ...(action.type === 'view_direction'
+                                        ? { target_direction_id: action.directionId, source: action.source, show: action.show ?? null, category: action.category ?? null }
+                                        : {}),
+                                    })
+                                    if (action.type === 'run_coach') { evaluateEntry(dirId, 'coach', evalBoth.coach?.id); return }
+                                    if (action.type === 'run_jury') { evaluateEntry(dirId, 'judge', evalBoth.judge?.id); return }
+                                    if (action.type === 'alt_categories') {
+                                      const evalForSmart = evalBoth.judge ?? evalBoth.coach
+                                      if (evalForSmart) generateSmartDirections(dirId, evalForSmart.id, 'alternatives')
+                                      return
+                                    }
+                                    // Directions-bound CTAs land on the list sorted by fit (Ben, Session 57)
+                                    if (action.type === 'view_directions' || action.type === 'view_direction') setDirSortKey('category_fit')
+                                    setTab('directions')
+                                    if (action.type === 'view_direction') {
+                                      spotlightDirection(action.directionId)
+                                    } else if (action.type === 'generate_directions') {
+                                      generateDirections()
+                                    }
+                                  }}
+                                />
+                              )
+                            })()}
+                          </div>
+                          ) : evaluation ? (
                           <div className="px-5 py-5">
                             {(() => {
                               const isCoach = evaluation.evaluation_mode === 'coach'
@@ -5178,64 +5285,9 @@ export default function ProjectPage() {
                                           </div>
                                         )}
 
-                                        {/* Build 2 (Session 55): Next Step card — product output,
-                                            ignores the guidance toggle. Renders ONLY when the eval
-                                            carries next_opportunities (pre-Build-2 evals: no card).
-                                            Suggestions were candidate-enforced server-side. */}
-                                        {(() => {
-                                          const realDirs = directions.filter(dd => dd.angle !== 'Uploaded entry — direct evaluation')
-                                          // Existing directions ranking a stronger placement: higher
-                                          // category fit than the evaluated direction's own fit (any
-                                          // numeric fit qualifies when the evaluated direction has
-                                          // none, e.g. quick-eval directions). Top 2, excluding self.
-                                          const evalDirFit = directions.find(dd => dd.id === dirId)?.win_likelihood ?? null
-                                          const strongerDirections: NextStepDirectionRef[] = realDirs
-                                            .filter(dd => dd.id !== dirId && typeof dd.win_likelihood === 'number')
-                                            .filter(dd => evalDirFit === null || (dd.win_likelihood as number) > evalDirFit)
-                                            .sort((a, b) => (b.win_likelihood ?? 0) - (a.win_likelihood ?? 0))
-                                            .slice(0, 2)
-                                            .map(dd => ({ id: dd.id, name: dd.name, show: dd.best_show, category: dd.best_category, fit: dd.win_likelihood }))
-                                          return (
-                                            <NextStepCard
-                                              opportunities={Array.isArray(o.next_opportunities)
-                                                ? o.next_opportunities.map((opp): NextStepOpportunity => ({
-                                                    ...opp,
-                                                    existingDirectionId:
-                                                      realDirs.find(dd =>
-                                                        sameShow(dd.best_show, opp.show) &&
-                                                        (dd.best_category ?? '').trim().toLowerCase() === opp.category.trim().toLowerCase()
-                                                      )?.id ??
-                                                      realDirs.find(dd => sameShow(dd.best_show, opp.show))?.id ?? null,
-                                                  }))
-                                                : null}
-                                              evaluatedShow={dirShow ?? ''}
-                                              overallScore={evaluation.overall_score}
-                                              hasDirections={realDirs.length > 0}
-                                              strongerDirections={strongerDirections}
-                                              onShown={(count) => {
-                                                if (nextstepShownRef.current.has(dirId)) return
-                                                nextstepShownRef.current.add(dirId)
-                                                track('nextstep_shown', { project_id: Number(projectId), direction_id: dirId, opportunity_count: count })
-                                              }}
-                                              onAction={(action: NextStepAction) => {
-                                                track('nextstep_clicked', {
-                                                  project_id: Number(projectId),
-                                                  direction_id: dirId,
-                                                  cta: action.type,
-                                                  ...(action.type === 'view_direction'
-                                                    ? { target_direction_id: action.directionId, source: action.source, show: action.show ?? null, category: action.category ?? null }
-                                                    : {}),
-                                                })
-                                                setTab('directions')
-                                                if (action.type === 'view_direction') {
-                                                  spotlightDirection(action.directionId)
-                                                } else if (action.type === 'generate_directions') {
-                                                  generateDirections()
-                                                }
-                                              }}
-                                            />
-                                          )
-                                        })()}
+                                        {/* Session 57: the Next Step card moved from here into the
+                                            "✦ Recommended Next Steps" tab on the eval view strip
+                                            (activeView === 'nextsteps'). Do not reintroduce it inline. */}
                                       </>
                                     )
                                   })()
@@ -5388,6 +5440,7 @@ export default function ProjectPage() {
                               </p>
                             </div>
                           </div>
+                          ) : null}
                           </div>
                         )}
 
