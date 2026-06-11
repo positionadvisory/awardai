@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/useAuth'
 import { useEngagement } from '@/lib/useEngagement'
 import GeneratingBar from '@/components/GeneratingBar'
 import ProjectProgressSpine, { SpineStep } from '@/components/ProjectProgressSpine'
+import NextStepCard, { NextStepAction, NextStepOpportunity } from '@/components/NextStepCard'
 
 /* ── Avatar dropdown (top-right nav) ─────────────────────────────────────── */
 function AvatarMenu({ email, onSignOut }: { email: string; onSignOut: () => void }) {
@@ -205,6 +206,20 @@ const categoriesForShow = (showName: string): string[] => {
   const alias = SHOW_CATEGORY_ALIASES[lower]
   if (alias && SHOW_CATEGORIES[alias]) return SHOW_CATEGORIES[alias]
   return []
+}
+
+// Build 2 (Session 55): candidate list sent to evaluate-entry for the
+// next_opportunities field (judge mode). Only shows with verified category
+// lists qualify (SHOW_CATEGORIES keys) — the no-category-list shows are
+// automatically excluded, and the show being evaluated is excluded here AND
+// re-enforced server-side (Session 52 suggest-mode pattern). Old edge
+// functions ignore the param; old frontends send nothing — deploy-order safe
+// in both directions.
+const buildNextCandidates = (excludeShow: string): { show: string; categories: string[] }[] => {
+  const ex = (excludeShow || '').trim().toLowerCase()
+  return Object.keys(SHOW_CATEGORIES)
+    .filter(s => s.toLowerCase() !== ex)
+    .map(s => ({ show: s, categories: SHOW_CATEGORIES[s] }))
 }
 
 const SHOW_CATEGORIES: Record<string, string[]> = {
@@ -809,6 +824,9 @@ type JudgeOutput = {
   kills_it: string[]
   recommendations: string
   campaign_name_note?: string
+  // Build 2 (Session 55): present only on evals run with candidates supplied.
+  // [] is a valid "no stronger placements" answer; absent = pre-Build-2 eval.
+  next_opportunities?: { show: string; category: string; rationale: string }[]
 }
 type PriorityFix = { fix: string; why: string; action: string }
 type CoachOutput = {
@@ -914,6 +932,11 @@ export default function ProjectPage() {
   // never awaited in UI paths; guidanceEnabled gates guidance copy ONLY
   // (tracking continues regardless of the toggle, per the v3 brief).
   const { track, trackSectionView, guidanceEnabled } = useEngagement(user?.id)
+
+  // Build 2 (Session 55): nextstep_shown fires once per direction per browser
+  // session — the card remounts on tab switches, so the component-level guard
+  // alone would inflate the metric.
+  const nextstepShownRef = useRef<Set<number>>(new Set())
 
   const [project, setProject] = useState<Project | null>(null)
   const [directions, setDirections] = useState<Direction[]>([])
@@ -2919,6 +2942,12 @@ export default function ProjectPage() {
       if (!accessToken) return
       const body: Record<string, unknown> = { project_id: project.id, direction_id: directionId, mode }
       if (previousEvaluationId) body.previous_evaluation_id = previousEvaluationId
+      // Build 2 (Session 55): judge mode gets the next-opportunity candidate
+      // list (Next Step card). Coach mode is out of scope (resolved decision #5).
+      if (mode === 'judge') {
+        const bodyDir = directions.find(d => d.id === directionId)
+        body.next_candidates = buildNextCandidates(bodyDir?.best_show ?? '')
+      }
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/evaluate-entry`,
         {
@@ -3262,7 +3291,9 @@ export default function ProjectPage() {
             'Authorization': `Bearer ${accessToken}`,
             'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
           },
-          body: JSON.stringify({ project_id: project.id, direction_id: dir.id }),
+          // Build 2 (Session 55): quick eval runs judge mode — send candidates
+          // so the Next Step card renders (quick eval users need it most).
+          body: JSON.stringify({ project_id: project.id, direction_id: dir.id, next_candidates: buildNextCandidates(quickEvalShow.trim()) }),
         }
       )
       const data = await res.json()
@@ -5128,6 +5159,50 @@ export default function ProjectPage() {
                                             <p className="text-sm text-gray-700 leading-relaxed">{o.campaign_name_note}</p>
                                           </div>
                                         )}
+
+                                        {/* Build 2 (Session 55): Next Step card — product output,
+                                            ignores the guidance toggle. Renders ONLY when the eval
+                                            carries next_opportunities (pre-Build-2 evals: no card).
+                                            Suggestions were candidate-enforced server-side. */}
+                                        <NextStepCard
+                                          opportunities={Array.isArray(o.next_opportunities)
+                                            ? o.next_opportunities.map((opp): NextStepOpportunity => ({
+                                                ...opp,
+                                                existingDirectionId:
+                                                  directions.find(dd =>
+                                                    dd.angle !== 'Uploaded entry — direct evaluation' &&
+                                                    dd.best_show === opp.show &&
+                                                    (dd.best_category ?? '') === opp.category
+                                                  )?.id ??
+                                                  directions.find(dd =>
+                                                    dd.angle !== 'Uploaded entry — direct evaluation' &&
+                                                    dd.best_show === opp.show
+                                                  )?.id ?? null,
+                                              }))
+                                            : null}
+                                          evaluatedShow={dirShow ?? ''}
+                                          overallScore={evaluation.overall_score}
+                                          hasDirections={directions.some(dd => dd.angle !== 'Uploaded entry — direct evaluation')}
+                                          onShown={(count) => {
+                                            if (nextstepShownRef.current.has(dirId)) return
+                                            nextstepShownRef.current.add(dirId)
+                                            track('nextstep_shown', { project_id: Number(projectId), direction_id: dirId, opportunity_count: count })
+                                          }}
+                                          onAction={(action: NextStepAction) => {
+                                            track('nextstep_clicked', {
+                                              project_id: Number(projectId),
+                                              direction_id: dirId,
+                                              cta: action.type,
+                                              ...(action.type === 'view_direction'
+                                                ? { show: action.opportunity.show, category: action.opportunity.category }
+                                                : {}),
+                                            })
+                                            setTab('directions')
+                                            if (action.type === 'generate_directions') {
+                                              generateDirections()
+                                            }
+                                          }}
+                                        />
                                       </>
                                     )
                                   })()
