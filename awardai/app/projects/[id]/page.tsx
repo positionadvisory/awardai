@@ -166,6 +166,45 @@ type TonalBrief = {
 const CANONICAL_SHOWS = DEADLINES_2026.map(d => d.show).sort((a, b) => a.localeCompare(b))
 
 // Comprehensive category lists per award show — used in Script tab dropdowns
+// Session 52: tolerant category lookup. SHOW_CATEGORIES is keyed by exact
+// canonical names, but show fields are free text and detection's keyword map
+// historically emitted variants ('Effies', 'New York Festivals') that matched
+// no key — the user saw an empty category dropdown and a dead end. ALWAYS use
+// categoriesForShow() to read category lists; never index SHOW_CATEGORIES
+// directly.
+const SHOW_CATEGORY_ALIASES: Record<string, string> = {
+  'effies': 'Effie APAC',
+  'effie': 'Effie APAC',
+  'effies apac': 'Effie APAC',
+  'effie awards': 'Effie APAC',
+  'asia pacific effie awards': 'Effie APAC',
+  'new york festivals': 'New York Festivals Advertising Awards',
+  'nyf': 'New York Festivals Advertising Awards',
+  'cannes': 'Cannes Lions',
+  'spikes': 'Spikes Asia',
+  'warc': 'WARC Awards',
+  'one show': 'One Show',
+  'mma smarties': 'MMA Smarties APAC',
+  'smarties': 'MMA Smarties APAC',
+  'smarties apac': 'MMA Smarties APAC',
+  // SMARTIES uses one global category framework — Global reuses the APAC list
+  'mma smarties global': 'MMA Smarties APAC',
+  'smarties global': 'MMA Smarties APAC',
+  'andy awards': 'ANDY Awards',
+}
+
+const categoriesForShow = (showName: string): string[] => {
+  const name = (showName || '').trim()
+  if (!name) return []
+  if (SHOW_CATEGORIES[name]) return SHOW_CATEGORIES[name]
+  const lower = name.toLowerCase()
+  const ciKey = Object.keys(SHOW_CATEGORIES).find(k => k.toLowerCase() === lower)
+  if (ciKey) return SHOW_CATEGORIES[ciKey]
+  const alias = SHOW_CATEGORY_ALIASES[lower]
+  if (alias && SHOW_CATEGORIES[alias]) return SHOW_CATEGORIES[alias]
+  return []
+}
+
 const SHOW_CATEGORIES: Record<string, string[]> = {
   'Cannes Lions': [
     'Film Lions', 'Film Craft Lions', 'Titanium Lions', 'Grand Prix for Good',
@@ -2931,11 +2970,11 @@ export default function ProjectPage() {
       ['spikes', 'Spikes Asia'],
       ['clio', 'Clio Awards'],
       ['one show', 'One Show'],
-      ['effie', 'Effies'],
+      ['effie', 'Effie APAC'],
       ['warc', 'WARC Awards'],
       ['dubai lynx', 'Dubai Lynx'],
       ['eurobest', 'Eurobest'],
-      ['new york festivals', 'New York Festivals'],
+      ['new york festivals', 'New York Festivals Advertising Awards'],
       ['london international', 'London International Awards'],
       ['campaign big', 'Campaign Big Awards'],
       ['webby', 'Webby Awards'],
@@ -2953,7 +2992,7 @@ export default function ProjectPage() {
       ['global sabre', 'Global SABRE Awards'],
       ['sabre', 'SABRE Awards Asia-Pacific'],
       ['gerety', 'Gerety Awards'],
-      ['andy awards', 'Andy Awards'],
+      ['andy awards', 'ANDY Awards'],
       ['caples', 'Caples Awards'],
       ['epica', 'Epica Awards'],
     ]
@@ -3055,7 +3094,7 @@ export default function ProjectPage() {
             text,
             mode: 'suggest_category',
             show,
-            candidate_categories: SHOW_CATEGORIES[show] ?? [],
+            candidate_categories: categoriesForShow(show),
           }),
         }
       )
@@ -3557,7 +3596,7 @@ export default function ProjectPage() {
     : `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 
   // Derive the available categories for the chosen script show
-  const availableCategories = scriptShow ? (SHOW_CATEGORIES[scriptShow] || []) : []
+  const availableCategories = scriptShow ? categoriesForShow(scriptShow) : []
 
   if (loading || fetching) return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center">
@@ -7106,7 +7145,7 @@ export default function ProjectPage() {
                   className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
                 />
                 <datalist id="quickeval-categories">
-                  {(SHOW_CATEGORIES[quickEvalShow] ?? []).map((cat: string) => (
+                  {categoriesForShow(quickEvalShow).map((cat: string) => (
                     <option key={cat} value={cat} />
                   ))}
                 </datalist>
