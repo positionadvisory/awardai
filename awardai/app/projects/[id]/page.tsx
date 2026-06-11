@@ -1067,6 +1067,9 @@ export default function ProjectPage() {
   const [quickEvalError, setQuickEvalError] = useState('')
   const [quickEvalDetecting, setQuickEvalDetecting] = useState(false)
   const [quickEvalDetectedFields, setQuickEvalDetectedFields] = useState<{ show: boolean; category: boolean; confidence?: string }>({ show: false, category: false })
+  // Session 52 — "Suggest for me" on the category field (recommendation, not detection)
+  const [quickEvalSuggesting, setQuickEvalSuggesting] = useState(false)
+  const [quickEvalSuggestion, setQuickEvalSuggestion] = useState<{ rationale: string; confidence: string } | null>(null)
 
   useEffect(() => {
     if (!user || !projectId) return
@@ -2906,6 +2909,7 @@ export default function ProjectPage() {
     setQuickEvalCategory('')
     setQuickEvalError('')
     setQuickEvalDetectedFields({ show: false, category: false, confidence: undefined })
+    setQuickEvalSuggestion(null)
     setShowQuickEvalModal(true)
 
     if (!material || !materialHasText(material)) return
@@ -3012,6 +3016,65 @@ export default function ProjectPage() {
       console.warn('detect-entry-context error:', err)
     } finally {
       setQuickEvalDetecting(false)
+    }
+  }
+
+  // Session 52 — "Suggest for me": recommends the best-fit CATEGORY for the
+  // chosen show based on the entry content. Distinct from detection (which
+  // reads what the document says it targets) — this answers "what should it
+  // target?" for users who don't know. Fills the field only; the user still
+  // confirms by clicking Evaluate Entry, because category drives the score.
+  const suggestQuickEvalCategory = async () => {
+    if (!project || quickEvalMaterialIdx === null) return
+    const show = quickEvalShow.trim()
+    if (!show) {
+      setQuickEvalError('Choose an award show first — the right category depends on the show.')
+      return
+    }
+    setQuickEvalSuggesting(true)
+    setQuickEvalError('')
+    try {
+      const text = await fetchMaterialText(project.materials[quickEvalMaterialIdx])
+      if (!text) {
+        setQuickEvalError('Could not load the material text — please refresh the page and try again.')
+        return
+      }
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token
+      if (!token) return
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/detect-entry-context`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          },
+          body: JSON.stringify({
+            text,
+            mode: 'suggest_category',
+            show,
+            candidate_categories: SHOW_CATEGORIES[show] ?? [],
+          }),
+        }
+      )
+      if (!res.ok) {
+        setQuickEvalError('Suggestion unavailable right now — you can still type a category.')
+        return
+      }
+      const data = await res.json()
+      if (data.category) {
+        setQuickEvalCategory(data.category)
+        setQuickEvalSuggestion({ rationale: data.rationale || '', confidence: data.confidence || 'low' })
+        setQuickEvalDetectedFields(prev => ({ ...prev, category: false }))
+      } else {
+        setQuickEvalError('No clear category match for this entry — please pick from the list or type your own.')
+      }
+    } catch {
+      setQuickEvalError('Suggestion failed — you can still type a category.')
+    } finally {
+      setQuickEvalSuggesting(false)
     }
   }
 
@@ -3155,6 +3218,7 @@ export default function ProjectPage() {
       setQuickEvalCategory('')
       setQuickEvalDetecting(false)
       setQuickEvalDetectedFields({ show: false, category: false, confidence: undefined })
+      setQuickEvalSuggestion(null)
       setQuickEvalMaterialIdx(null)
       setTab('entries')
 
@@ -6984,7 +7048,7 @@ export default function ProjectPage() {
                       <button
                         key={show}
                         type="button"
-                        onClick={() => { setQuickEvalShow(show); setQuickEvalCategory(''); setQuickEvalDetectedFields(prev => ({ ...prev, show: false, category: false })) }}
+                        onClick={() => { setQuickEvalShow(show); setQuickEvalCategory(''); setQuickEvalDetectedFields(prev => ({ ...prev, show: false, category: false })); setQuickEvalSuggestion(null) }}
                         className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
                           quickEvalShow === show
                             ? 'bg-green-100 text-green-800 border-green-300 font-medium'
@@ -7000,7 +7064,7 @@ export default function ProjectPage() {
                   type="text"
                   list="quickeval-shows"
                   value={quickEvalShow}
-                  onChange={e => { setQuickEvalShow(e.target.value); setQuickEvalDetectedFields(prev => ({ ...prev, show: false })) }}
+                  onChange={e => { setQuickEvalShow(e.target.value); setQuickEvalDetectedFields(prev => ({ ...prev, show: false })); setQuickEvalSuggestion(null) }}
                   placeholder={(project.target_shows ?? []).length > 0 ? 'Or type another show…' : 'e.g. Cannes Lions, Effies APAC, WARC…'}
                   className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
                 />
@@ -7016,13 +7080,28 @@ export default function ProjectPage() {
                       {quickEvalDetectedFields.confidence === 'low' ? '? verify' : '✓ detected'}
                     </span>
                   )}
+                  {quickEvalSuggestion && quickEvalCategory && !quickEvalSuggesting && (
+                    <span className={`text-xs font-medium ${quickEvalSuggestion.confidence === 'low' ? 'text-amber-600' : 'text-green-600'}`}>
+                      ✦ suggested
+                    </span>
+                  )}
+                  {/* Session 52 — for users who don't know the right category */}
+                  <button
+                    type="button"
+                    onClick={suggestQuickEvalCategory}
+                    disabled={quickEvalSuggesting || quickEvaluating || quickEvalDetecting || !quickEvalShow.trim()}
+                    title={!quickEvalShow.trim() ? 'Choose an award show first' : 'Recommend the best-fit category based on the entry content'}
+                    className="ml-auto text-xs font-medium text-green-700 hover:text-green-600 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {quickEvalSuggesting ? 'Suggesting…' : "Don't know? Suggest for me"}
+                  </button>
                 </div>
                 {/* Free-text category input with optional suggestions for known shows */}
                 <input
                   type="text"
                   list="quickeval-categories"
                   value={quickEvalCategory}
-                  onChange={e => { setQuickEvalCategory(e.target.value); setQuickEvalDetectedFields(prev => ({ ...prev, category: false })) }}
+                  onChange={e => { setQuickEvalCategory(e.target.value); setQuickEvalDetectedFields(prev => ({ ...prev, category: false })); setQuickEvalSuggestion(null) }}
                   placeholder="e.g. Seasonal Marketing, Film Craft, Creative Effectiveness…"
                   className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
                 />
@@ -7031,6 +7110,11 @@ export default function ProjectPage() {
                     <option key={cat} value={cat} />
                   ))}
                 </datalist>
+                {quickEvalSuggestion && quickEvalCategory && (
+                  <p className={`text-xs mt-1.5 ${quickEvalSuggestion.confidence === 'low' ? 'text-amber-600' : 'text-gray-500'}`}>
+                    {quickEvalSuggestion.rationale || 'Suggested from the entry content — review before evaluating.'}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -7061,7 +7145,7 @@ export default function ProjectPage() {
                 ) : 'Evaluate Entry'}
               </button>
               <button
-                onClick={() => { setShowQuickEvalModal(false); setQuickEvalError(''); setQuickEvalDetecting(false); setQuickEvalDetectedFields({ show: false, category: false, confidence: undefined }) }}
+                onClick={() => { setShowQuickEvalModal(false); setQuickEvalError(''); setQuickEvalDetecting(false); setQuickEvalDetectedFields({ show: false, category: false, confidence: undefined }); setQuickEvalSuggestion(null) }}
                 disabled={quickEvaluating}
                 className="px-4 py-2.5 text-sm text-gray-500 hover:text-gray-900 disabled:opacity-40 transition-colors"
               >
