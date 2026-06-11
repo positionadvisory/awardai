@@ -70,20 +70,23 @@ export type UserProductState = {
 let cachedOrgId: number | null = null
 let orgIdPromise: Promise<number | null> | null = null
 
+// NOTE: async IIFE (not builder.then) — a Supabase query builder's .then()
+// types as PromiseLike, which is not assignable to Promise and can fail the
+// Vercel build depending on the installed @supabase/supabase-js typings
+// (same failure class as the Session 50 webhook build break).
 function resolveOrgId(): Promise<number | null> {
   if (cachedOrgId !== null) return Promise.resolve(cachedOrgId)
   if (orgIdPromise) return orgIdPromise
-  orgIdPromise = supabase
-    .rpc('get_my_org_id')
-    .then(({ data, error }) => {
-      if (error || !data) {
-        console.warn('engagement: org lookup failed', error)
-        orgIdPromise = null // allow retry on next event
-        return null
-      }
-      cachedOrgId = data as number
-      return cachedOrgId
-    })
+  orgIdPromise = (async () => {
+    const { data, error } = await supabase.rpc('get_my_org_id')
+    if (error || !data) {
+      console.warn('engagement: org lookup failed', error)
+      orgIdPromise = null // allow retry on next event
+      return null
+    }
+    cachedOrgId = data as number
+    return cachedOrgId
+  })()
   return orgIdPromise
 }
 
