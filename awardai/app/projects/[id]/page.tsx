@@ -656,9 +656,21 @@ type Material = {
   type: string
   size: number
   uploaded_at: string
-  extracted_text?: string
+  extracted_text?: string      // only present on materials uploaded THIS session — page load returns slim metadata (Session 52, P-03)
   chart_image_paths?: string[]
+  has_text?: boolean           // server-computed (get_project_materials_meta) — extracted_text exists in DB
+  text_words?: number          // server-computed word count of extracted_text
 }
+
+// Session 52 (P-03): page load no longer fetches extracted_text — materials
+// arrive as slim metadata with has_text/text_words. Fresh uploads this session
+// still carry extracted_text in memory. ALWAYS use these helpers instead of
+// checking m.extracted_text directly for gating/badges/word counts.
+const materialHasText = (m: Material): boolean => !!m.extracted_text || !!m.has_text
+const materialWordCount = (m: Material): number =>
+  typeof m.text_words === 'number'
+    ? m.text_words
+    : (m.extracted_text || '').trim().split(/\s+/).filter(Boolean).length
 
 type ScriptChange = {
   section: string
@@ -1140,16 +1152,31 @@ export default function ProjectPage() {
         }
       })
 
+    // Session 52 (P-03) payload diet:
+    //  - projects: explicit columns, NO materials JSONB (extracted_text alone
+    //    can be 250KB) — slim materials metadata comes from the
+    //    get_project_materials_meta RPC instead (has_text/text_words per item)
+    //  - entry_drafts: get_project_entry_drafts RPC — current generation full,
+    //    older generations slimmed server-side to one resolved content each
+    //    (version_b/c/selected/custom_text/chat_history NULL)
+    //  - evaluations: explicit columns, NO eval_chat_history — chat for the
+    //    active judge eval per direction is backfilled by a targeted query below
     Promise.all([
-      supabase.from('projects').select('*').eq('id', projectId).single(),
+      supabase.from('projects')
+        .select('id, campaign_name, client_name, combined_text, target_shows, status, script_text, script_analysis, tonal_brief')
+        .eq('id', projectId).single(),
       supabase.from('directions').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
-      // Secondary sort by id ensures deterministic ordering across generations
-      supabase.from('entry_drafts').select('*').eq('project_id', projectId).order('sort_order').order('id'),
-      supabase.from('evaluations').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
-    ]).then(([{ data: proj }, { data: dirs }, { data: drafts }, { data: evals }]) => {
+      // RPC preserves the old ordering: sort_order ASC, id ASC (deterministic across generations)
+      supabase.rpc('get_project_entry_drafts', { p_project_id: projectId }),
+      supabase.from('evaluations')
+        .select('id, entry_draft_id, overall_score, scores, strengths, gaps, recommendations, output, model_used, evaluation_mode, changes_analysis, created_at')
+        .eq('project_id', projectId).order('created_at', { ascending: false }),
+      supabase.rpc('get_project_materials_meta', { p_project_id: projectId }),
+    ]).then(([{ data: proj }, { data: dirs }, { data: drafts }, { data: evals }, { data: matsMeta, error: matsErr }]) => {
       if (cancelled) return
+      if (matsErr) console.error('materials meta fetch failed', matsErr)
       if (proj) {
-        setProject(proj)
+        setProject({ ...proj, materials: ((matsMeta as Material[] | null) ?? []) })
         setBriefText(proj.combined_text || '')
         setTargetShows(proj.target_shows || [])
         if (proj.script_text) setScriptText(proj.script_text)
@@ -1181,7 +1208,6 @@ export default function ProjectPage() {
         const evalMap: Record<number, { judge?: Evaluation; coach?: Evaluation }> = {}
         const historyMap: Record<number, Evaluation[]> = {}
         const displayModeMap: Record<number, 'judge' | 'coach'> = {}
-        const chatMap: Record<number, ChatMessage[]> = {}
         // Track most-recent created_at per direction to set display mode
         const latestByDir: Record<number, { ts: string; mode: 'judge' | 'coach' }> = {}
 
@@ -1201,11 +1227,6 @@ export default function ProjectPage() {
             if (!latestByDir[direction_id] || ev.created_at > latestByDir[direction_id].ts) {
               latestByDir[direction_id] = { ts: ev.created_at, mode }
             }
-
-            // Restore chat history from most-recent judge eval
-            if (mode === 'judge' && ev.eval_chat_history && Array.isArray(ev.eval_chat_history) && ev.eval_chat_history.length > 0) {
-              chatMap[direction_id] = ev.eval_chat_history
-            }
           } else {
             // Older generation or second eval of same mode → history
             if (!historyMap[direction_id]) historyMap[direction_id] = []
@@ -1221,7 +1242,34 @@ export default function ProjectPage() {
         setEvaluations(evalMap)
         setEvalHistory(historyMap)
         setEvalDisplayMode(displayModeMap)
-        if (Object.keys(chatMap).length > 0) setEvalChatHistory(chatMap)
+
+        // Session 52 (P-03): eval_chat_history is no longer in the bulk fetch —
+        // backfill it only for the ACTIVE judge eval of each direction (the only
+        // place the page ever reads it). Fire-and-forget; chat panels are
+        // collapsed by default so a late arrival is invisible.
+        const judgeEvalToDir: Record<number, number> = {}
+        for (const [dirId, slot] of Object.entries(evalMap)) {
+          if (slot.judge?.id !== undefined) judgeEvalToDir[slot.judge.id] = Number(dirId)
+        }
+        const activeJudgeIds = Object.keys(judgeEvalToDir).map(Number)
+        if (activeJudgeIds.length > 0) {
+          supabase.from('evaluations')
+            .select('id, eval_chat_history')
+            .in('id', activeJudgeIds)
+            .then(({ data: chats, error: chatErr }) => {
+              if (cancelled) return
+              if (chatErr) { console.error('eval chat backfill failed', chatErr); return }
+              if (!chats) return
+              const chatMap: Record<number, ChatMessage[]> = {}
+              for (const row of chats as Array<{ id: number; eval_chat_history?: ChatMessage[] }>) {
+                const dirId = judgeEvalToDir[row.id]
+                if (dirId !== undefined && Array.isArray(row.eval_chat_history) && row.eval_chat_history.length > 0) {
+                  chatMap[dirId] = row.eval_chat_history
+                }
+              }
+              if (Object.keys(chatMap).length > 0) setEvalChatHistory(chatMap)
+            })
+        }
       }
 
       setFetching(false)
@@ -2541,17 +2589,33 @@ export default function ProjectPage() {
     }
 
     setUploadProgress('Saving…')
+    // Session 52 (P-03): the DB write goes through the atomic append RPC.
+    // NEVER reinstate the old read-modify-write of the whole materials array —
+    // in-memory materials are now SLIM (no extracted_text), so writing the
+    // array back would destroy extracted_text for every material in the project.
     const newMaterial: Material = {
       name: file.name, path, type: ext || '', size: file.size,
       uploaded_at: new Date().toISOString(),
       ...(extractedText ? { extracted_text: extractedText } : {}),
       ...(chartImagePaths.length > 0 ? { chart_image_paths: chartImagePaths } : {}),
     }
-    const updatedMaterials = [...(project.materials || []), newMaterial]
-    await supabase.from('projects')
-      .update({ materials: updatedMaterials, updated_at: new Date().toISOString() })
-      .eq('id', projectId)
-    setProject(p => p ? { ...p, materials: updatedMaterials } : p)
+    const { error: saveErr } = await supabase.rpc('append_project_material', {
+      p_project_id: project.id,
+      p_material: newMaterial,
+    })
+    if (saveErr) {
+      setUploadError('The file uploaded but could not be saved to the project — please try again.')
+    } else {
+      // Local copy keeps full extracted_text (this session) plus the derived
+      // slim fields so all helpers behave consistently after upload.
+      if (extractedText) materialTextCache.current[path] = extractedText
+      const localMaterial: Material = {
+        ...newMaterial,
+        has_text: !!extractedText,
+        text_words: extractedText.trim().split(/\s+/).filter(Boolean).length,
+      }
+      setProject(p => p ? { ...p, materials: [...(p.materials || []), localMaterial] } : p)
+    }
     setUploading(false)
     setUploadProgress('')
     e.target.value = ''
@@ -2564,11 +2628,17 @@ export default function ProjectPage() {
     if (material.chart_image_paths?.length) {
       await supabase.storage.from('project-materials').remove(material.chart_image_paths)
     }
-    const updatedMaterials = project.materials.filter((_, i) => i !== index)
-    await supabase.from('projects')
-      .update({ materials: updatedMaterials, updated_at: new Date().toISOString() })
-      .eq('id', projectId)
-    setProject(p => p ? { ...p, materials: updatedMaterials } : p)
+    // Session 52 (P-03): removal by PATH via RPC — see upload note; the old
+    // filtered-array write-back must never come back. Local state only updates
+    // on success so the in-memory list never desyncs from the DB.
+    const { error: removeErr } = await supabase.rpc('remove_project_material', {
+      p_project_id: project.id,
+      p_path: material.path,
+    })
+    if (!removeErr) {
+      delete materialTextCache.current[material.path]
+      setProject(p => p ? { ...p, materials: (p.materials || []).filter((_, i) => i !== index) } : p)
+    }
   }
 
   const getToken = async (): Promise<string | null> => {
@@ -2578,6 +2648,28 @@ export default function ProjectPage() {
     if (session?.access_token) return session.access_token
     window.location.href = '/login'
     return null
+  }
+
+  // Session 52 (P-03): extracted_text is no longer loaded with the page.
+  // Fetch a single material's text on demand, cached by storage path (path is
+  // unique and stable — index addressing would silently return the WRONG
+  // material's text if another tab deleted a material). Fresh uploads this
+  // session still carry extracted_text in memory and skip the round trip.
+  const materialTextCache = useRef<Record<string, string>>({})
+  const fetchMaterialText = async (material: Material | undefined): Promise<string> => {
+    if (!material) return ''
+    if (material.extracted_text) return material.extracted_text
+    if (!material.has_text) return ''
+    const cached = materialTextCache.current[material.path]
+    if (cached !== undefined) return cached
+    const { data, error } = await supabase.rpc('get_project_material_text', {
+      p_project_id: projectId,
+      p_path: material.path,
+    })
+    if (error) { console.error('material text fetch failed', error); return '' }
+    const text = (data as string | null) ?? ''
+    materialTextCache.current[material.path] = text
+    return text
   }
 
   const generateDirections = async (skipChecks = false) => {
@@ -2602,10 +2694,13 @@ export default function ProjectPage() {
       if (!accessToken) return
 
       // Resolve context_override from source selector (same pattern as generateScript)
+      // Session 52 (P-03): material text fetched on demand. The filtered-list
+      // index (dirSourceMaterialIdx) matches the selector render, which filters
+      // with the same materialHasText predicate.
       let dirContextOverride: string | undefined
       if (dirSourceType === 'material') {
-        const mats = (project.materials || []).filter((m: { extracted_text?: string }) => m.extracted_text)
-        dirContextOverride = mats[dirSourceMaterialIdx]?.extracted_text || undefined
+        const mats = (project.materials || []).filter(materialHasText)
+        dirContextOverride = (await fetchMaterialText(mats[dirSourceMaterialIdx])) || undefined
       } else if (dirSourceType === 'entry' && dirSourceEntryDirectionId > -1) {
         dirContextOverride = getEntryDraftContent(dirSourceEntryDirectionId) || undefined
       }
@@ -2813,8 +2908,13 @@ export default function ProjectPage() {
     setQuickEvalDetectedFields({ show: false, category: false, confidence: undefined })
     setShowQuickEvalModal(true)
 
-    if (!material?.extracted_text) return
-    const text = material.extracted_text
+    if (!material || !materialHasText(material)) return
+    // Session 52 (P-03): text is fetched on demand (cached by path). The
+    // detecting spinner covers the fetch — pass 1 is no longer instant on
+    // first open, but the modal itself still opens immediately.
+    setQuickEvalDetecting(true)
+    const text = await fetchMaterialText(material)
+    if (!text) { setQuickEvalDetecting(false); return }
     const lowerText = text.toLowerCase()
 
     // ── PASS 1: instant client-side show name scan ──────────────────────────
@@ -2918,7 +3018,7 @@ export default function ProjectPage() {
   const evaluateUploadedEntry = async () => {
     if (!project || quickEvalMaterialIdx === null || !user) return
     const material = project.materials[quickEvalMaterialIdx]
-    if (!material.extracted_text) return
+    if (!material || !materialHasText(material)) return
     if (!quickEvalShow.trim() || !quickEvalCategory.trim()) {
       setQuickEvalError('Please enter both an award show and category.')
       return
@@ -2928,6 +3028,13 @@ export default function ProjectPage() {
     setQuickEvalError('')
 
     try {
+      // Session 52 (P-03): on-demand text fetch (cache hit — modal open already fetched it)
+      const entryText = await fetchMaterialText(material)
+      if (!entryText) {
+        setQuickEvalError('Could not load the material text — please refresh the page and try again.')
+        return
+      }
+
       const accessToken = await getToken()
       if (!accessToken) return
 
@@ -2989,7 +3096,7 @@ export default function ProjectPage() {
           created_by: user.id,
           field_key: 'entry',
           field_label: 'Entry',
-          version_a: material.extracted_text.slice(0, 50000),
+          version_a: entryText.slice(0, 50000),
           selected: 'a',
           award_show: quickEvalShow.trim(),
           category: quickEvalCategory.trim(),
@@ -3305,11 +3412,13 @@ export default function ProjectPage() {
         : customScriptCategory.trim() || undefined
 
       // Resolve source override (generate mode only)
+      // Session 52 (P-03): material text fetched on demand — filtered-list index
+      // matches the selector render (same materialHasText predicate).
       let contextOverride: string | undefined
       if (scriptMode === 'generate' && scriptSourceType !== 'all') {
         if (scriptSourceType === 'material') {
-          const mats = (project.materials || []).filter(m => m.extracted_text)
-          contextOverride = mats[scriptSourceMaterialIdx]?.extracted_text || undefined
+          const mats = (project.materials || []).filter(materialHasText)
+          contextOverride = (await fetchMaterialText(mats[scriptSourceMaterialIdx])) || undefined
         } else if (scriptSourceType === 'entry' && scriptSourceEntryDirectionId > -1) {
           contextOverride = getEntryDraftContent(scriptSourceEntryDirectionId) || undefined
         }
@@ -3986,14 +4095,14 @@ export default function ProjectPage() {
                         <p className="text-sm text-gray-900 truncate">{m.name}</p>
                         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                           <p className="text-xs text-gray-400">{formatBytes(m.size)} · {new Date(m.uploaded_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
-                          {m.extracted_text ? <span className="text-xs text-green-700">✓ text extracted</span> : m.type === 'pdf' ? <span className="text-xs text-gray-400">image-only PDF</span> : null}
+                          {materialHasText(m) ? <span className="text-xs text-green-700">✓ text extracted</span> : m.type === 'pdf' ? <span className="text-xs text-gray-400">image-only PDF</span> : null}
                           {m.chart_image_paths && m.chart_image_paths.length > 0 && (
                             <span className="text-xs text-green-700">+ {m.chart_image_paths.length} chart{m.chart_image_paths.length > 1 ? 's' : ''}</span>
                           )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        {m.extracted_text && (
+                        {materialHasText(m) && (
                           <button
                             onClick={() => openQuickEvalModal(i)}
                             className="bg-green-800 hover:bg-green-700 text-white text-xs font-medium px-3 py-1.5 rounded transition-colors"
@@ -4023,8 +4132,8 @@ export default function ProjectPage() {
                 <h2 className="text-sm font-medium text-gray-700">Award Directions</h2>
                 <p className="text-gray-400 text-xs mt-0.5">AI-recommended show and category combinations. Generate a draft from any direction, then evaluate it.</p>
               </div>
-              <button onClick={() => generateDirections()} disabled={generating || (!project.combined_text && !(project.materials || []).some((m: { extracted_text?: string }) => m.extracted_text))}
-                title={(!project.combined_text && !(project.materials || []).some((m: { extracted_text?: string }) => m.extracted_text)) ? 'Add a brief or upload materials first' : ''}
+              <button onClick={() => generateDirections()} disabled={generating || (!project.combined_text && !(project.materials || []).some(materialHasText))}
+                title={(!project.combined_text && !(project.materials || []).some(materialHasText)) ? 'Add a brief or upload materials first' : ''}
                 className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded transition-colors flex items-center gap-2">
                 {generating ? (
                   <><svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Generating…</>
@@ -4040,7 +4149,7 @@ export default function ProjectPage() {
 
             {/* Directions source selector — only when materials or entries exist */}
             {(() => {
-              const mats = (project.materials || []).filter((m: { extracted_text?: string }) => m.extracted_text)
+              const mats = (project.materials || []).filter(materialHasText)
               const entryDirIds = Array.from(new Set(entries.map(e => e.direction_id)))
               if (mats.length === 0 && entryDirIds.length === 0) return null
               return (
@@ -4055,7 +4164,7 @@ export default function ProjectPage() {
                         <p className="text-xs text-gray-400">Brief + all uploaded materials</p>
                       </div>
                     </label>
-                    {mats.map((m: { name: string; extracted_text?: string }, i: number) => (
+                    {mats.map((m: Material, i: number) => (
                       <label key={i} className="flex items-start gap-3 cursor-pointer">
                         <input type="radio" name="dirSource"
                           checked={dirSourceType === 'material' && dirSourceMaterialIdx === i}
@@ -4063,7 +4172,7 @@ export default function ProjectPage() {
                           className="mt-0.5 accent-green-700" />
                         <div>
                           <p className="text-sm text-gray-900">{m.name}</p>
-                          <p className="text-xs text-gray-400">{(m.extracted_text || '').trim().split(/\s+/).filter(Boolean).length.toLocaleString()} words</p>
+                          <p className="text-xs text-gray-400">{materialWordCount(m).toLocaleString()} words</p>
                         </div>
                       </label>
                     ))}
@@ -4091,7 +4200,7 @@ export default function ProjectPage() {
             {generateError && <ErrorBanner error={generateError} />}
             {generateDraftError && <ErrorBanner error={generateDraftError} />}
 
-            {!project.combined_text && !(project.materials || []).some(m => m.extracted_text) && directions.length === 0 && (
+            {!project.combined_text && !(project.materials || []).some(materialHasText) && directions.length === 0 && (
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
                 <p className="text-amber-700 text-sm">Add a campaign brief on the Brief tab, or upload campaign materials, before generating directions.</p>
               </div>
@@ -4100,7 +4209,7 @@ export default function ProjectPage() {
             {directions.length === 0 && !generating ? (
               <div className="bg-white border border-gray-200 rounded-xl p-10 text-center max-w-lg">
                 <p className="text-gray-400 text-sm">
-                  {(project.combined_text || (project.materials || []).some(m => m.extracted_text))
+                  {(project.combined_text || (project.materials || []).some(materialHasText))
                     ? 'Click Generate Directions to get started.'
                     : 'Add a brief or upload materials first, then generate directions.'}
                 </p>
@@ -5496,7 +5605,7 @@ export default function ProjectPage() {
 
             {/* Source selector — generate mode only */}
             {scriptMode === 'generate' && (() => {
-              const materialsWithText = (project.materials || []).filter(m => m.extracted_text)
+              const materialsWithText = (project.materials || []).filter(materialHasText)
               const entryDirectionIds = Array.from(new Set(entries.map(e => e.direction_id)))
               if (materialsWithText.length === 0 && entryDirectionIds.length === 0) return null
               return (
@@ -5520,7 +5629,7 @@ export default function ProjectPage() {
                           className="mt-0.5 accent-green-700" />
                         <div>
                           <p className="text-sm text-gray-900">{m.name}</p>
-                          <p className="text-xs text-gray-400">Uploaded material · {(m.extracted_text || '').trim().split(/\s+/).filter(Boolean).length.toLocaleString()} words</p>
+                          <p className="text-xs text-gray-400">Uploaded material · {materialWordCount(m).toLocaleString()} words</p>
                         </div>
                       </label>
                     ))}
@@ -5651,14 +5760,14 @@ export default function ProjectPage() {
                       )}
                       <button
                         onClick={suggestCategories}
-                        disabled={suggestingCategories || (!project.combined_text && !(project.materials || []).some(m => m.extracted_text))}
+                        disabled={suggestingCategories || (!project.combined_text && !(project.materials || []).some(materialHasText))}
                         className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded transition-colors flex items-center gap-2"
                       >
                         {suggestingCategories ? (
                           <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Analysing…</>
                         ) : 'Suggest Best Fit Categories'}
                       </button>
-                      {!project.combined_text && !(project.materials || []).some(m => m.extracted_text) && (
+                      {!project.combined_text && !(project.materials || []).some(materialHasText) && (
                         <p className="text-xs text-amber-700 mt-2">Add a brief or upload materials first.</p>
                       )}
                     </div>
@@ -5731,7 +5840,7 @@ export default function ProjectPage() {
             )}
 
             {/* Generate mode guard */}
-            {scriptMode === 'generate' && !project.combined_text && !(project.materials || []).some(m => m.extracted_text) && (
+            {scriptMode === 'generate' && !project.combined_text && !(project.materials || []).some(materialHasText) && (
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-5">
                 <p className="text-amber-700 text-sm">Add a campaign brief on the Brief tab, or upload materials, before generating a script.</p>
               </div>
@@ -5819,7 +5928,7 @@ export default function ProjectPage() {
               onClick={generateScript}
               disabled={
                 generatingScript ||
-                (scriptMode === 'generate' && !project.combined_text && !(project.materials || []).some(m => m.extracted_text)) ||
+                (scriptMode === 'generate' && !project.combined_text && !(project.materials || []).some(materialHasText)) ||
                 (scriptMode === 'review' && !uploadedScriptText.trim()) ||
                 scriptCategory === 'suggest'
               }
