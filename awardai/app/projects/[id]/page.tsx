@@ -4,7 +4,9 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
+import { useEngagement } from '@/lib/useEngagement'
 import GeneratingBar from '@/components/GeneratingBar'
+import ProjectProgressSpine, { SpineStep } from '@/components/ProjectProgressSpine'
 
 /* ── Avatar dropdown (top-right nav) ─────────────────────────────────────── */
 function AvatarMenu({ email, onSignOut }: { email: string; onSignOut: () => void }) {
@@ -656,6 +658,15 @@ function calculateWinLikelihood(show: string | null, evalScore?: number): number
   return base
 }
 
+// Session 54 — slim score band for engagement_events context (never the raw
+// score: keep event context coarse). Thresholds match the UI score colors.
+function scoreBand(score: number | null | undefined): 'high' | 'mid' | 'low' | null {
+  if (score === null || score === undefined) return null
+  const n = Number(score)
+  if (Number.isNaN(n)) return null
+  return n >= 8 ? 'high' : n >= 6 ? 'mid' : 'low'
+}
+
 // Geographic eligibility constraints for regionally-restricted award shows.
 // requiredKeywords: at least one must appear in the brief for the campaign to be eligible.
 // conflictKeywords: if these appear WITHOUT any requiredKeywords, flag a mismatch.
@@ -898,6 +909,11 @@ export default function ProjectPage() {
   const router = useRouter()
   const params = useParams()
   const projectId = params?.id as string
+
+  // Session 54 (Build 1) — engagement tracking. track() is fire-and-forget and
+  // never awaited in UI paths; guidanceEnabled gates guidance copy ONLY
+  // (tracking continues regardless of the toggle, per the v3 brief).
+  const { track, trackSectionView, guidanceEnabled } = useEngagement(user?.id)
 
   const [project, setProject] = useState<Project | null>(null)
   const [directions, setDirections] = useState<Direction[]>([])
@@ -1321,6 +1337,14 @@ export default function ProjectPage() {
 
     return () => { cancelled = true }
   }, [user?.id, projectId])
+
+  // Session 54 — section_view engagement event per workspace tab.
+  // The hook debounces to once per tab per browser session; gated on the
+  // initial fetch so the default 'brief' tab is not logged during loading.
+  useEffect(() => {
+    if (!user || fetching) return
+    trackSectionView(tab, { project_id: Number(projectId) })
+  }, [tab, fetching, user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-restore saved press kit drafts into pressKitAiCopy when there are saved drafts.
   // Runs whenever pressKitDrafts loads or tab changes to 'presskit'.
@@ -2150,6 +2174,9 @@ export default function ProjectPage() {
     setPressKitOutputs(prev => ({ ...prev, ...outputs }))
     setPressKitExtras(prev => ({ ...prev, ...extras }))
     setPressKitGenerating(false)
+    if (Object.keys(outputs).length > 0) {
+      track('presskit_generated', { project_id: Number(projectId), direction_count: Object.keys(outputs).length })
+    }
   }
 
   // Upsert an AI-generated copy string into press_kit_drafts.
@@ -2766,6 +2793,7 @@ export default function ProjectPage() {
       const newDirs: Direction[] = data.directions || []
       setDirections(prev => [...newDirs, ...prev])
       setNewDirectionIds(prev => new Set(Array.from(prev).concat(newDirs.map(d => d.id))))
+      if (newDirs.length > 0) track('directions_generated', { project_id: Number(projectId), count: newDirs.length })
     } catch (err) {
       setGenerateError(formatError({ message: 'Network error — check your connection and try again.', retryable: true, code: 'DIR-NET' }))
     } finally { setGenerating(false) }
@@ -2805,6 +2833,7 @@ export default function ProjectPage() {
         const smartNewDirs: Direction[] = data.directions
         setDirections(prev => [...smartNewDirs, ...prev])
         setNewDirectionIds(prev => new Set(Array.from(prev).concat(smartNewDirs.map(d => d.id))))
+        track('directions_generated', { project_id: Number(projectId), count: smartNewDirs.length, suggest_mode: mode })
         setTab('directions')
       }
     } catch (err) {
@@ -2871,6 +2900,7 @@ export default function ProjectPage() {
         // Append new generation — old drafts remain in state for history display
         setEntries(prev => [...prev, ...data.entry_drafts])
         // Note: evaluations are NOT cleared — they belong to their specific generation rows
+        track('draft_generated', { project_id: Number(projectId), direction_id: directionId, generation: data.entry_drafts[0]?.draft_generation ?? null })
       }
       setTab('entries')
     } catch (err) {
@@ -2928,6 +2958,14 @@ export default function ProjectPage() {
         // Reset eval chat when a fresh evaluation is run
         setEvalChatHistory(prev => { const next = { ...prev }; delete next[directionId]; return next })
         setEvalChatOpen(prev => { const next = { ...prev }; delete next[directionId]; return next })
+        const evalDir = directions.find(d => d.id === directionId)
+        track('eval_completed', {
+          project_id: Number(projectId),
+          direction_id: directionId,
+          mode: evalMode,
+          score_band: scoreBand(newEval.overall_score),
+          show: evalDir?.best_show ?? null,
+        })
       }
     } catch (err) {
       setEvaluateError(formatError({ message: 'Network error — check your connection and try again.', retryable: true, code: 'EVAL-NET' }))
@@ -3250,6 +3288,17 @@ export default function ProjectPage() {
         // Reset eval chat on fresh quick-evaluation
         setEvalChatHistory(prev => { const next = { ...prev }; delete next[dir.id]; return next })
         setEvalChatOpen(prev => { const next = { ...prev }; delete next[dir.id]; return next })
+        // Session 54 — quick eval fires BOTH events: quick_eval_used marks the
+        // loop pattern (brief_first nudge, Build 3); eval_completed keeps
+        // evaluation counting uniform for the Phase 2 wrap.
+        track('quick_eval_used', { project_id: Number(projectId), direction_id: dir.id, show: quickEvalShow.trim() })
+        track('eval_completed', {
+          project_id: Number(projectId),
+          direction_id: dir.id,
+          mode: evalMode,
+          score_band: scoreBand(newEval.overall_score),
+          show: quickEvalShow.trim(),
+        })
       }
 
       setShowQuickEvalModal(false)
@@ -3582,6 +3631,7 @@ export default function ProjectPage() {
         setScriptChatHistory([])
         setBriefChatHistory([])
         generateTonalBrief(data.script)
+        track('script_generated', { project_id: Number(projectId), mode: scriptMode, show: scriptShow.trim() || null })
       }
     } catch (err) {
       setScriptError(err instanceof Error ? err.message : 'Network error.')
@@ -3619,6 +3669,45 @@ export default function ProjectPage() {
     { key: 'presskit', label: 'Press Kit' },
     { key: 'script', label: 'Video Script' },
   ]
+
+  // ── Session 54 (Build 1) — Project Progress Spine ──────────────────────────
+  // Derived ENTIRELY from data the page already loads under the Session 52
+  // payload diet (slim project, materials meta, drafts RPC, slim evaluations,
+  // mount-time press_kit_drafts fetch). Zero new queries — keep it that way.
+  const spineMaxDraftGen = entries.length > 0
+    ? Math.max(...entries.map(e => e.draft_generation ?? 1))
+    : 0
+  const spineJudgeScores: number[] = []
+  for (const slot of Object.values(evaluations)) {
+    const s = slot.judge?.overall_score
+    if (s !== undefined && s !== null && !Number.isNaN(Number(s))) spineJudgeScores.push(Number(s))
+  }
+  const spineHasEval = Object.keys(evaluations).length > 0
+  const spineBestJudge = spineJudgeScores.length > 0 ? Math.max(...spineJudgeScores) : null
+  const spinePressKitStarted = Object.keys(pressKitDrafts).length > 0 || Object.keys(pressKitOutputs).length > 0
+  const spineScriptDone = !!(scriptText && scriptText.trim()) || !!project.script_text
+
+  const spineSteps: SpineStep[] = [
+    { key: 'brief', label: 'Brief', done: !!((project.combined_text || briefText || '').trim()) },
+    { key: 'materials', label: 'Materials', done: (project.materials?.length ?? 0) > 0,
+      summary: project.materials?.length ? String(project.materials.length) : undefined },
+    { key: 'directions', label: 'Directions', done: directions.length > 0,
+      summary: directions.length > 0 ? String(directions.length) : undefined },
+    { key: 'draft', label: 'Draft', done: entries.length > 0,
+      summary: spineMaxDraftGen > 0 ? `Gen ${spineMaxDraftGen}` : undefined },
+    { key: 'evaluated', label: 'Evaluated', done: spineHasEval,
+      summary: spineBestJudge !== null ? spineBestJudge.toFixed(1) : undefined },
+    { key: 'presskit', label: 'Press Kit', done: spinePressKitStarted },
+    { key: 'script', label: 'Video Script', done: spineScriptDone },
+  ]
+
+  const spineActiveKey = tab === 'entries' ? 'draft' : tab
+
+  const handleSpineStepClick = (step: SpineStep) => {
+    const target: Tab = (step.key === 'draft' || step.key === 'evaluated') ? 'entries' : (step.key as Tab)
+    track('spine_step_clicked', { project_id: Number(projectId), step: step.key, was_empty: !step.done })
+    setTab(target)
+  }
 
   // Effective script category label for display
   const effectiveCategoryLabel = scriptCategory === 'suggest'
@@ -3802,6 +3891,10 @@ export default function ProjectPage() {
 
         </div>
       </header>
+
+      {/* Session 54 — Project Progress Spine: workflow state, always on
+          (navigation, not guidance — does NOT respect the guidance toggle) */}
+      <ProjectProgressSpine steps={spineSteps} activeKey={spineActiveKey} onStepClick={handleSpineStepClick} />
 
       {/* Tabs — horizontally scrollable on mobile */}
       <div className="border-b border-gray-200 bg-white relative">
@@ -4311,6 +4404,13 @@ export default function ProjectPage() {
 
             {directions.length === 0 && !generating ? (
               <div className="bg-white border border-gray-200 rounded-xl p-10 text-center max-w-lg">
+                {/* Session 54 — guidance-flavored empty state (v3 brief §10).
+                    Respects the toggle: guidance off = plain empty state. */}
+                {guidanceEnabled && (
+                  <p className="text-gray-700 text-sm mb-2">
+                    Start here, not with the draft. Directions maps which shows are worth entering and where the strongest angle is before you spend a word.
+                  </p>
+                )}
                 <p className="text-gray-400 text-sm">
                   {(project.combined_text || (project.materials || []).some(materialHasText))
                     ? 'Click Generate Directions to get started.'
@@ -4536,6 +4636,12 @@ export default function ProjectPage() {
                     <span className="text-green-700 text-lg">✦</span>
                   </div>
                   <h3 className="text-sm font-medium text-gray-900 mb-2">No entry drafts yet</h3>
+                  {/* Session 54 — guidance-flavored empty state (v3 brief §10) */}
+                  {guidanceEnabled && (
+                    <p className="text-gray-700 text-sm mb-2">
+                      Your agency profile is loaded. First drafts come out in your team's voice. Revise inline or in chat. Earlier drafts are never deleted.
+                    </p>
+                  )}
                   <p className="text-gray-400 text-sm mb-6">
                     {directions.length === 0
                       ? 'Generate directions first, then click Generate Draft on any direction.'
@@ -5682,6 +5788,14 @@ export default function ProjectPage() {
           <div className="max-w-3xl">
             {showsStrip}
 
+            {/* Session 54 — guidance-flavored first-visit line (v3 brief §10).
+                Shown only while no script exists; respects the toggle. */}
+            {guidanceEnabled && !spineScriptDone && (
+              <p className="text-gray-700 text-sm mb-4">
+                A two-minute case study script, scored for win likelihood, in about twenty minutes.
+              </p>
+            )}
+
             {/* Mode toggle */}
             <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl p-1 w-fit mb-6">
               {(['generate', 'review'] as const).map(m => (
@@ -6622,8 +6736,16 @@ export default function ProjectPage() {
 
             {/* Direction list */}
             {directions.length === 0 ? (
-              <div className="bg-white border border-gray-200 rounded-xl p-8 text-center text-sm text-gray-400">
-                No directions yet. Generate directions first, then create entry drafts before producing press kits.
+              <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
+                {/* Session 54 — guidance-flavored empty state (v3 brief §10) */}
+                {guidanceEnabled && (
+                  <p className="text-gray-700 text-sm mb-2">
+                    One click after the entry. The press materials are often what travels farthest.
+                  </p>
+                )}
+                <p className="text-sm text-gray-400">
+                  No directions yet. Generate directions first, then create entry drafts before producing press kits.
+                </p>
               </div>
             ) : (
               <div className="space-y-2 mb-6">
