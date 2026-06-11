@@ -3729,16 +3729,12 @@ export default function ProjectPage() {
     </div>
   )
 
-  const uniqueDirectionsWithEntries = Array.from(new Set(entries.map(e => e.direction_id)))
-
-  const TABS: { key: Tab; label: string; count?: number }[] = [
-    { key: 'brief', label: 'Brief' },
-    { key: 'materials', label: 'Materials', count: project.materials?.length || 0 },
-    { key: 'directions', label: 'Directions', count: directions.length },
-    { key: 'entries', label: 'Entries', count: uniqueDirectionsWithEntries.length },
-    { key: 'presskit', label: 'Press Kit' },
-    { key: 'script', label: 'Video Script' },
-  ]
+  // Session 55: the TABS const + tab strip were REMOVED — the spine and the
+  // strip read as near-duplicate rows (Ben). The Progress Spine is now the
+  // workspace's ONLY navigation row (it always was fully clickable; draft and
+  // evaluated steps route to the Entries tab). Do not reintroduce a second
+  // tab row; if a named "Entries" destination is ever needed again, rename a
+  // spine step instead.
 
   // ── Session 54 (Build 1) — Project Progress Spine ──────────────────────────
   // Derived ENTIRELY from data the page already loads under the Session 52
@@ -3963,27 +3959,10 @@ export default function ProjectPage() {
       </header>
 
       {/* Session 54 — Project Progress Spine: workflow state, always on
-          (navigation, not guidance — does NOT respect the guidance toggle) */}
+          (navigation, not guidance — does NOT respect the guidance toggle).
+          Session 55: the spine is now the workspace's ONLY navigation row —
+          the old tab strip was removed as a near-duplicate (Ben). */}
       <ProjectProgressSpine steps={spineSteps} activeKey={spineActiveKey} onStepClick={handleSpineStepClick} />
-
-      {/* Tabs — horizontally scrollable on mobile */}
-      <div className="border-b border-gray-200 bg-white relative">
-        <div className="w-full max-w-5xl mx-auto px-2 sm:px-6 flex overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-          {TABS.map(t => (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              className={`shrink-0 px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
-                tab === t.key ? 'border-green-700 text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-700'
-              }`}>
-              {t.label}
-              {t.count !== undefined && t.count > 0 && (
-                <span className="bg-gray-100 text-gray-500 text-xs px-1.5 py-0.5 rounded-full leading-none">{t.count}</span>
-              )}
-            </button>
-          ))}
-        </div>
-        {/* Right-edge fade — signals more tabs available by scrolling (mobile only) */}
-        <div className="sm:hidden pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-white to-transparent" />
-      </div>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
 
