@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
+import { useEngagement } from '@/lib/useEngagement'
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 
@@ -78,6 +79,15 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 export default function AccountPage() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
+
+  // Build 2 (Session 55): Help & Guidance section. updateState checks the
+  // returned row (DM-16 silent no-op class) — a null return MUST surface as
+  // an error here, never as a pretend-save. Tracking is independent of the
+  // guidance toggle (Ben, Session 53): the toggle gates guidance UI only.
+  const { stateLoaded, updateState, guidanceEnabled, track } = useEngagement(user?.id)
+  const [guidanceSaving, setGuidanceSaving] = useState(false)
+  const [guidanceError, setGuidanceError] = useState('')
+  const [tipsReset, setTipsReset] = useState(false)
 
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [billing, setBilling] = useState<BillingStatus | null>(null)
@@ -206,6 +216,35 @@ export default function AccountPage() {
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     window.location.href = '/login'
+  }
+
+  // ── Help & Guidance handlers (Build 2, Session 55) ────────────────────────
+  const handleToggleGuidance = async () => {
+    if (guidanceSaving || !stateLoaded) return
+    setGuidanceSaving(true)
+    setGuidanceError('')
+    const next = !guidanceEnabled
+    const saved = await updateState({ guidance_enabled: next })
+    if (!saved) {
+      // DM-16 class: never pretend the save happened
+      setGuidanceError('Your preference could not be saved. Please try again.')
+    } else {
+      track(next ? 'guidance_enabled' : 'guidance_disabled', { source: 'settings' })
+    }
+    setGuidanceSaving(false)
+  }
+
+  const handleResetTips = async () => {
+    if (guidanceSaving) return
+    setGuidanceSaving(true)
+    setGuidanceError('')
+    const saved = await updateState({ nudges: {} })
+    if (!saved) {
+      setGuidanceError('Tips could not be reset. Please try again.')
+    } else {
+      setTipsReset(true)
+    }
+    setGuidanceSaving(false)
   }
 
   if (authLoading || loading) {
@@ -430,6 +469,56 @@ export default function AccountPage() {
             <Link href="/settings/team" style={{ fontSize: 14, fontWeight: 500, color: '#166534', textDecoration: 'none' }}>
               Team settings →
             </Link>
+          </div>
+        </Card>
+
+        {/* ── Help & Guidance (Build 2, Session 55) ────────────────────────── */}
+        {/* Master guidance switch: gates empty-state copy and (from Build 3)
+            nudges + the Welcome Router re-offer. The Progress Spine and Next
+            Step card are navigation/product output and stay on regardless.
+            "Take the tour" ships with the Welcome Router in Build 3. */}
+        <Card title="Help & Guidance">
+          {guidanceError && (
+            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 12px', color: '#dc2626', fontSize: 13, marginBottom: 8 }}>
+              {guidanceError}
+            </div>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, padding: '12px 0', borderBottom: '1px solid #f3f4f6' }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 500, color: '#374151' }}>Show guidance</div>
+              <div style={{ fontSize: 13, color: '#9ca3af', marginTop: 2 }}>
+                Tips and getting-started prompts across Shortlist. Turning this off is instant and global.
+              </div>
+            </div>
+            <button
+              onClick={handleToggleGuidance}
+              disabled={guidanceSaving || !stateLoaded}
+              aria-pressed={guidanceEnabled}
+              aria-label={guidanceEnabled ? 'Turn guidance off' : 'Turn guidance on'}
+              style={{ background: 'none', border: 'none', padding: 9, cursor: guidanceSaving || !stateLoaded ? 'default' : 'pointer', minHeight: 44, display: 'flex', alignItems: 'center', flexShrink: 0 }}
+            >
+              <span style={{ width: 46, height: 26, borderRadius: 99, background: guidanceEnabled ? '#166534' : '#d1d5db', position: 'relative', display: 'inline-block', transition: 'background 0.15s ease', opacity: guidanceSaving || !stateLoaded ? 0.6 : 1 }}>
+                <span style={{ position: 'absolute', top: 3, left: guidanceEnabled ? 23 : 3, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: 'left 0.15s ease', boxShadow: '0 1px 2px rgba(0,0,0,0.2)' }} />
+              </span>
+            </button>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, padding: '12px 0' }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 500, color: '#374151' }}>Reset tips</div>
+              <div style={{ fontSize: 13, color: '#9ca3af', marginTop: 2 }}>
+                Bring back any tips you have dismissed.
+              </div>
+              {tipsReset && (
+                <div style={{ fontSize: 13, color: '#166534', marginTop: 4 }}>Tips reset.</div>
+              )}
+            </div>
+            <button
+              onClick={handleResetTips}
+              disabled={guidanceSaving || tipsReset}
+              style={{ fontSize: 13, fontWeight: 500, color: tipsReset ? '#9ca3af' : '#374151', background: 'none', border: '1px solid #d1d5db', borderRadius: 6, padding: '6px 14px', cursor: guidanceSaving || tipsReset ? 'default' : 'pointer', minHeight: 36, flexShrink: 0 }}
+            >
+              {tipsReset ? 'Done' : 'Reset'}
+            </button>
           </div>
         </Card>
 
