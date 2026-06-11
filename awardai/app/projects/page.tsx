@@ -1,12 +1,26 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
+import { useEngagement } from '@/lib/useEngagement'
+import { DEADLINES_2026 } from '@/lib/shows-data'
+import WelcomeRouter, { type WelcomeRoute, type WelcomeVariant } from '@/components/WelcomeRouter'
+import ShowsDrawer from '@/components/shows/ShowsDrawer'
+
+// ── Welcome Router launch gate (Session 56, Build 3 / C5) ───────────────────
+// Only accounts created AFTER this instant see the wizard uninvited (v3 brief
+// §8). Existing users (alpha cohort, current payers) get the "Take the tour"
+// entry points only. Set to midnight UTC after the Session 56 deploy.
+const WELCOME_ROUTER_LAUNCH = '2026-06-12T00:00:00Z'
+
+// Derived show count for wizard copy — never hardcode a number (v3 brief §8:
+// the v2 brief hardcoded "33 shows" and would have shipped stale).
+const SHOW_COUNT_LABEL = `${Math.max(10, Math.floor(DEADLINES_2026.length / 10) * 10)}+`
 
 /* ── Avatar dropdown (top-right nav) ─────────────────────────────────────── */
-function AvatarMenu({ email, onSignOut }: { email: string; onSignOut: () => void }) {
+function AvatarMenu({ email, onSignOut, onTakeTour }: { email: string; onSignOut: () => void; onTakeTour: () => void }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const initial = (email || '?')[0].toUpperCase()
@@ -37,6 +51,10 @@ function AvatarMenu({ email, onSignOut }: { email: string; onSignOut: () => void
             className="hover:bg-gray-50 transition-colors">
             Team
           </Link>
+          <button onClick={() => { setOpen(false); onTakeTour() }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 14px', fontSize: 14, color: '#374151', background: 'none', border: 'none', borderTop: '1px solid #f3f4f6', cursor: 'pointer' }}
+            className="hover:bg-gray-50 transition-colors">
+            Take the tour
+          </button>
           <button onClick={() => { setOpen(false); onSignOut() }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 14px', fontSize: 14, color: '#dc2626', background: 'none', border: 'none', borderTop: '1px solid #f3f4f6', cursor: 'pointer' }}
             className="hover:bg-red-50 transition-colors">
             Sign out
@@ -159,17 +177,32 @@ export default function ProjectsPage() {
     website_url: '', linkedin_url: '', x_handle: '', instagram_handle: '',
   })
 
+  // ── Welcome Router (Session 56, Build 3 / C5) ─────────────────────────────
+  // useEngagement state is the wizard's persistence: wizard_completed_at,
+  // wizard_route, and the soft-skip marker (a reserved key in the nudges map —
+  // no migration needed). All writes go through updateState, which checks the
+  // returned row (DM-16 silent no-op class). A failed save just means the
+  // wizard may re-offer next session — never block the user on it.
+  const { track, state: productState, stateLoaded, updateState } = useEngagement(user?.id)
+  const [profileCreatedAt, setProfileCreatedAt] = useState<string | null>(null)
+  const [wizardOpen, setWizardOpen] = useState(false)
+  const [wizardVariant, setWizardVariant] = useState<WelcomeVariant>('full')
+  const [showsDrawerOpen, setShowsDrawerOpen] = useState(false)
+  // One offer per page load, shared across auto-fire / tour param / menu
+  const wizardOfferedRef = useRef(false)
+
   useEffect(() => {
     if (!user) return
     supabase
       .from('profiles')
-      .select('org_id, role')
+      .select('org_id, role, created_at')
       .eq('id', user.id)
       .single()
       .then(({ data: profile }) => {
         if (!profile?.org_id) { setFetching(false); return }
         setUserRole(profile.role ?? null)
         setOrgId(profile.org_id)
+        setProfileCreatedAt(profile.created_at ?? null)
 
         // Fetch projects + agency profile in parallel
         return Promise.all([
@@ -196,6 +229,107 @@ export default function ProjectsPage() {
         setFetching(false)
       })
   }, [user])
+
+  // ── Wizard auto-fire: first login, post-launch accounts only ──────────────
+  // Fires when: engagement state + projects are loaded, the account was
+  // created after WELCOME_ROUTER_LAUNCH, and the wizard was never completed.
+  // A recorded soft-skip with no completion means this IS the one re-offer
+  // (v3 brief §8: soft skip re-offers once next session; the second soft skip
+  // is converted to done-forever in handleWizardSoftSkip).
+  useEffect(() => {
+    if (wizardOfferedRef.current) return
+    if (!stateLoaded || fetching || !profileCreatedAt) return
+    if (productState?.wizard_completed_at) return
+    if (new Date(profileCreatedAt) <= new Date(WELCOME_ROUTER_LAUNCH)) return
+    wizardOfferedRef.current = true
+    // Invited team members join an org that already has projects → 2-frame variant
+    setWizardVariant(projects.length > 0 ? 'invitee' : 'full')
+    setWizardOpen(true)
+  }, [stateLoaded, fetching, profileCreatedAt, productState?.wizard_completed_at, projects.length])
+
+  // ── Tour restart via ?tour= query param (from Settings → Help & Guidance) ─
+  // window.location.search read in an effect — deliberately NOT useSearchParams,
+  // which requires a Suspense boundary and is a known Vercel build trap.
+  useEffect(() => {
+    if (!user?.id) return
+    const params = new URLSearchParams(window.location.search)
+    const tour = params.get('tour')
+    if (!tour) return
+    wizardOfferedRef.current = true
+    track('tour_restarted', { source: tour === 'settings' ? 'settings' : 'link' })
+    setWizardVariant('full')
+    setWizardOpen(true)
+    params.delete('tour')
+    const qs = params.toString()
+    window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : ''))
+  }, [user?.id, track])
+
+  // ── Wizard exit handlers — three different exits, three semantics ─────────
+
+  const handleWizardFrameViewed = useCallback((frame: number) => {
+    track('wizard_frame_viewed', { frame, variant: wizardVariant })
+  }, [track, wizardVariant])
+
+  // Esc / click-out: soft skip. First time → marker only (re-offers once next
+  // session). Second time → done forever. On a manual tour restart (wizard
+  // already completed) it just closes.
+  const handleWizardSoftSkip = useCallback(() => {
+    setWizardOpen(false)
+    if (productState?.wizard_completed_at) return
+    const nudges = { ...(productState?.nudges ?? {}) }
+    if (nudges['welcome_router_soft_skip']) {
+      void updateState({ wizard_completed_at: new Date().toISOString(), wizard_route: 'skipped' })
+    } else {
+      nudges['welcome_router_soft_skip'] = { fired_at: new Date().toISOString() }
+      void updateState({ nudges })
+    }
+  }, [productState, updateState])
+
+  // Explicit "Skip" link: done forever, guidance stays ON.
+  const handleWizardExplicitSkip = useCallback(() => {
+    setWizardOpen(false)
+    if (productState?.wizard_completed_at) return
+    void updateState({ wizard_completed_at: new Date().toISOString(), wizard_route: 'skipped' })
+  }, [productState, updateState])
+
+  // Frame 1 "I'll explore on my own": done forever AND guidance off globally —
+  // the power-user one-click exit (Ben's requirement #1). Reversible in Settings.
+  const handleWizardExploreAlone = useCallback(() => {
+    setWizardOpen(false)
+    track('guidance_disabled', { source: 'wizard' })
+    void updateState({
+      guidance_enabled: false,
+      wizard_completed_at: new Date().toISOString(),
+      wizard_route: 'skipped',
+    })
+  }, [track, updateState])
+
+  // Frame 3 route selection — stored for nudge-priority segmentation (C4).
+  const handleWizardRoute = useCallback((route: WelcomeRoute) => {
+    setWizardOpen(false)
+    track('wizard_route_selected', { route })
+    void updateState({ wizard_completed_at: new Date().toISOString(), wizard_route: route })
+    if (route === 'scope_season') {
+      setShowsDrawerOpen(true)
+    } else {
+      router.push('/projects/new')
+    }
+  }, [track, updateState, router])
+
+  // Invitee variant finish (frames 1+2 only) — completed, no route.
+  const handleWizardInviteeDone = useCallback(() => {
+    setWizardOpen(false)
+    if (productState?.wizard_completed_at) return
+    void updateState({ wizard_completed_at: new Date().toISOString() })
+  }, [productState, updateState])
+
+  // Avatar menu "Take the tour" — always the full 3-frame router.
+  const handleTakeTour = useCallback(() => {
+    wizardOfferedRef.current = true
+    track('tour_restarted', { source: 'avatar_menu' })
+    setWizardVariant('full')
+    setWizardOpen(true)
+  }, [track])
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
@@ -446,7 +580,7 @@ export default function ProjectsPage() {
                 Dashboard
               </Link>
             )}
-            <AvatarMenu email={user?.email ?? ''} onSignOut={handleSignOut} />
+            <AvatarMenu email={user?.email ?? ''} onSignOut={handleSignOut} onTakeTour={handleTakeTour} />
           </div>
         </div>
       </header>
@@ -953,6 +1087,30 @@ export default function ProjectsPage() {
           </div>
         )}
       </main>
+
+      {/* ── Welcome Router (Session 56, Build 3 / C5) ─────────────────────── */}
+      <WelcomeRouter
+        open={wizardOpen}
+        variant={wizardVariant}
+        showCountLabel={SHOW_COUNT_LABEL}
+        onFrameViewed={handleWizardFrameViewed}
+        onSoftSkip={handleWizardSoftSkip}
+        onExplicitSkip={handleWizardExplicitSkip}
+        onExploreAlone={handleWizardExploreAlone}
+        onRoute={handleWizardRoute}
+        onInviteeDone={handleWizardInviteeDone}
+      />
+
+      {/* Shows calendar/budget drawer — the "Scope the season" route target.
+          Self-contained (lazy-loads its children); directions list is empty
+          on the projects list page by design. */}
+      <ShowsDrawer
+        open={showsDrawerOpen}
+        onClose={() => setShowsDrawerOpen(false)}
+        initialTab="calendar"
+        directions={[]}
+        orgId={orgId}
+      />
     </div>
   )
 }
