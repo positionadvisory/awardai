@@ -125,7 +125,10 @@ export default function NextStepCard({
 
   return (
     <div className="mt-5 rounded-xl border-2 border-green-700 bg-green-50 p-4 sm:p-5">
-      <div className="text-xs font-bold uppercase tracking-wide text-green-800 mb-2">
+      <div
+        className="text-green-800 mb-2"
+        style={{ fontFamily: '"Instrument Serif", "Times New Roman", serif', fontSize: '1.55rem', lineHeight: 1.15, letterSpacing: '-0.01em' }}
+      >
         ✦ Where this campaign goes next
       </div>
 
