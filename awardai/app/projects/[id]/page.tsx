@@ -222,6 +222,17 @@ const buildNextCandidates = (excludeShow: string): { show: string; categories: s
     .map(s => ({ show: s, categories: SHOW_CATEGORIES[s] }))
 }
 
+// Session 55 feedback round: direction show names are FREE TEXT from
+// generate-directions (legacy rows especially carry variants like 'Effies' or
+// 'Spikes'), while Next Step suggestions are canonical. Tolerant comparison:
+// alias-normalise both sides, then case-insensitive equality. Never compare
+// show names with === when one side comes from a direction row.
+const sameShow = (a?: string | null, b?: string | null): boolean => {
+  if (!a || !b) return false
+  const norm = (s: string) => (normaliseKbShow(s) ?? s).trim().toLowerCase()
+  return norm(a) === norm(b)
+}
+
 const SHOW_CATEGORIES: Record<string, string[]> = {
   'Cannes Lions': [
     'Film Lions', 'Film Craft Lions', 'Titanium Lions', 'Grand Prix for Good',
@@ -2957,9 +2968,15 @@ export default function ProjectPage() {
       if (previousEvaluationId) body.previous_evaluation_id = previousEvaluationId
       // Build 2 (Session 55): judge mode gets the next-opportunity candidate
       // list (Next Step card). Coach mode is out of scope (resolved decision #5).
+      // Feedback round: existing directions also go up so the model never
+      // re-suggests a placement the project already has.
       if (mode === 'judge') {
         const bodyDir = directions.find(d => d.id === directionId)
         body.next_candidates = buildNextCandidates(bodyDir?.best_show ?? '')
+        body.existing_directions = directions
+          .filter(dd => dd.angle !== 'Uploaded entry — direct evaluation' && dd.best_show)
+          .slice(0, 30)
+          .map(dd => ({ show: dd.best_show, category: dd.best_category ?? '' }))
       }
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/evaluate-entry`,
@@ -3305,8 +3322,17 @@ export default function ProjectPage() {
             'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
           },
           // Build 2 (Session 55): quick eval runs judge mode — send candidates
-          // so the Next Step card renders (quick eval users need it most).
-          body: JSON.stringify({ project_id: project.id, direction_id: dir.id, next_candidates: buildNextCandidates(quickEvalShow.trim()) }),
+          // so the Next Step card renders (quick eval users need it most),
+          // plus existing directions so suggestions never duplicate them.
+          body: JSON.stringify({
+            project_id: project.id,
+            direction_id: dir.id,
+            next_candidates: buildNextCandidates(quickEvalShow.trim()),
+            existing_directions: directions
+              .filter(dd => dd.angle !== 'Uploaded entry — direct evaluation' && dd.best_show)
+              .slice(0, 30)
+              .map(dd => ({ show: dd.best_show, category: dd.best_category ?? '' })),
+          }),
         }
       )
       const data = await res.json()
@@ -5197,10 +5223,10 @@ export default function ProjectPage() {
                                                     ...opp,
                                                     existingDirectionId:
                                                       realDirs.find(dd =>
-                                                        dd.best_show === opp.show &&
-                                                        (dd.best_category ?? '') === opp.category
+                                                        sameShow(dd.best_show, opp.show) &&
+                                                        (dd.best_category ?? '').trim().toLowerCase() === opp.category.trim().toLowerCase()
                                                       )?.id ??
-                                                      realDirs.find(dd => dd.best_show === opp.show)?.id ?? null,
+                                                      realDirs.find(dd => sameShow(dd.best_show, opp.show))?.id ?? null,
                                                   }))
                                                 : null}
                                               evaluatedShow={dirShow ?? ''}
