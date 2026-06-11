@@ -230,8 +230,9 @@ export default function WelcomeRouter({
     </div>
   )
 
-  // Frame 2 — workflow stages + one-line snapshots (Session 57: clickable)
-  const workflowSteps = ['Brief', 'Directions', 'Draft', 'Evaluate / Coach', 'Press Kit', 'Video Script']
+  // Frame 2 — workflow stages + one-line snapshots (Session 57: clickable;
+  // Press Kit moved LAST to match the spine — script before announcement)
+  const workflowSteps = ['Brief', 'Directions', 'Draft', 'Evaluate / Coach', 'Video Script', 'Press Kit']
   const stepSnapshots: Record<string, string> = {
     'Brief': `The Brief holds the campaign story and what you want the entry to achieve. Everything Shortlist generates draws on it, so a sharper brief means sharper output at every step after.`,
     'Directions': `Directions maps which of the ${showCountLabel} covered shows are worth entering and where the strongest angle is. Everything after that, drafts, evaluations, press kit, script, builds on it.`,
