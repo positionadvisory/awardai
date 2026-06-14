@@ -11,7 +11,7 @@
  *        confidence === 'verified' AND the deadline is in the future.
  *        All other shows require manual operation via the standard UI.
  *
- * Last verified pass: 4 June 2026 (Ben Royalcondit) — ADFEST added
+ * Last verified pass: 14 June 2026 (Ben Royalcondit) — SABRE Awards EMEA + North America added
  * =============================================================================
  */
 
@@ -21,7 +21,7 @@ export type ShowConfidence = 'verified' | 'partial' | 'needs_check'
 
 export type ShowDeadline = {
   show: string
-  region: 'Global' | 'APAC' | 'MENA' | 'China' | 'Europe' | 'Australia'
+  region: 'Global' | 'APAC' | 'MENA' | 'China' | 'Europe' | 'Australia' | 'North America'
   finalDate: string       // ISO date string: submission deadline (hard cutoff). Empty string = unknown.
   juryDate: string        // ISO date string: jury convenes / results begin
   ceremonyDate: string    // ISO date string: awards ceremony / winners announced
@@ -330,6 +330,22 @@ export const DEADLINES_2026: ShowDeadline[] = [
     confidence: 'needs_check', lastVerified: '2026-06-05',
   },
   {
+    show: 'SABRE Awards EMEA', region: 'Europe',
+    finalDate: '', juryDate: '', ceremonyDate: '',
+    earlyBird: 'Closed — was 19 Dec 2025 (midnight GMT, 2026 cycle)', standard: '', final: 'Closed — extended deadline was 20 Feb 2026 (midnight GMT, 2026 cycle)', ceremony: 'Ceremony complete — 21 May 2026, The Brewery, London; 2027 dates TBC',
+    prValue: 45,
+    note: 'SABRE Awards EMEA — PRovoke Media\'s premier regional PR awards for Europe, Middle East and Africa (Superior Achievement in Branding, Reputation and Engagement). The largest dedicated PR awards programme in EMEA by entry volume: 2,000+ entries, ~400 finalists (~20% shortlist rate — festival-stated). 141 categories: 22 geographic/country sub-regions, 26 industry sectors, 33 practice areas, 6 Diamond SABRE, 54 IN2 SABRE. Paul Holmes (PRovoke Media founder) chairs the jury; 75 jurors: genuinely pan-European with strong Africa representation — approximately 20–25% UK, with Nordics, DACH, Eastern Europe, and Africa collectively outweighing UK representation. Jury announced after entries close. Entry fees: $475 basic (1 practice area + 1 industry sector + 1 international category); $125 per additional selection; $250 late surcharge. 2026 cycle CLOSED — early 19 Dec 2025, final 20 Feb 2026, ceremony 21 May 2026 (The Brewery, London). 2027 dates not yet published. Judging criteria (festival-stated): Impact, Creative Problem-Solving, Strategic Insight, Innovative Approaches, Executional Excellence. What wins: business impact first — results hierarchy runs media coverage (floor) → engagement → attitudinal change → behavioural change + commercial outcomes (ceiling). AVE and impressions-only reporting explicitly penalised. Misaligned objectives and results is the most common failure mode. Diamond SABRE (CEO, Company, Brand-Building, Measurement) and IN2 SABRE (single earned coverage anchor required) carry specific bar. WARC partnership: winning case studies published on warc.com. Independent agencies win regularly.',
+    confidence: 'needs_check', lastVerified: '2026-06-14',
+  },
+  {
+    show: 'SABRE Awards North America', region: 'North America',
+    finalDate: '', juryDate: '', ceremonyDate: '',
+    earlyBird: 'Closed — was 19 Dec 2025 (midnight PST, 2026 cycle)', standard: '', final: 'Closed — deadline was 13 Feb 2026 (midnight PST, 2026 cycle)', ceremony: 'Ceremony complete — 5 May 2026, Cipriani 42nd Street, New York; 2027 dates TBC',
+    prValue: 48,
+    note: 'SABRE Awards North America — PRovoke Media\'s flagship North American PR awards (Superior Achievement in Branding, Reputation and Engagement). Widely regarded as the de facto prestige benchmark for the US PR industry. 2,000+ entries annually. 67 categories: 3 international, 29 practice areas, 26 industry sectors, 6 Diamond SABRE, 4 Silver SABRE. Paul Holmes chairs; 45 jurors (~85–90% US-based): agency leaders from FleishmanHillard, Golin, Weber Shandwick, Ketchum, MSL, Burson, Praytell, Bospar, M Booth; in-house executives from Honda, Walmart, L\'Oréal, PepsiCo, JetBlue, Intuit, Mondelez, Abbott. PR Council represented. Jury published ~3 weeks before entry deadline. 2026 Best in Show: MSL for Always × Tampax ("The Flow Must Go On"). Entry fees: $525 basic (1 practice area + 1 industry sector + 1 international category); $125 per additional selection; $250 late surcharge. 2026 cycle CLOSED — early 19 Dec 2025, final 13 Feb 2026, ceremony 5 May 2026 (Cipriani 42nd Street, New York). 2027 dates not yet published. Judging framework identical to SABRE EMEA: business impact over media reach, behavioural and commercial outcomes at top of results hierarchy, AVE and impressions-only reporting discouraged. Diamond and Silver SABRE categories carry a higher bar. International categories: Global Campaign (10+ markets), Multimarket Campaign, Canadian Campaign. WARC partnership publishes winning case studies on warc.com.',
+    confidence: 'needs_check', lastVerified: '2026-06-14',
+  },
+  {
     show: 'ICCO Global Awards', region: 'Global',
     finalDate: '', juryDate: '', ceremonyDate: '',
     earlyBird: '2026 dates not yet published — 2025 pattern: early bird 25 Jul', standard: '', final: '2026 date TBC — 2025 final was 29 Aug', ceremony: 'Nov 2026 at ICCO Global Summit (city TBC); 2025 was 12 Nov Mumbai',
@@ -574,6 +590,24 @@ export const WIN_RATES: Record<string, WinRateData> = {
     pr: { shortlist: 50000, metal: 150000, gold: 500000, grandprix: 1500000 },
     fee: 0,
   },
+  // SABRE Awards EMEA shortlist: FESTIVAL-STATED (2026). Source: PRovoke Media / sabre.provokemedia.com/emea.
+  // ~400 finalists from 2,000+ entries → ~20% campaign-level shortlist rate.
+  // metal/gold/grandprix: ESTIMATE — SABRE EMEA does not publish a metals breakdown.
+  // Rates estimated from sector comparison with SABRE APAC and PR show benchmarks.
+  // Do not use in client-facing materials without caveat.
+  'SABRE Awards EMEA': {
+    shortlist: 20, metal: 10, gold: 3, grandprix: 0.5,
+    pr: { shortlist: 8000, metal: 25000, gold: 85000, grandprix: 300000 },
+    fee: 475,
+  },
+  // SABRE Awards North America shortlist: ESTIMATE (~20%, comparable entry volume to EMEA;
+  // finalist count not separately published by PRovoke NA). metal/gold/grandprix: ESTIMATE.
+  // Do not use in client-facing materials without caveat.
+  'SABRE Awards North America': {
+    shortlist: 20, metal: 10, gold: 3, grandprix: 0.5,
+    pr: { shortlist: 10000, metal: 30000, gold: 100000, grandprix: 400000 },
+    fee: 525,
+  },
   // ESTIMATE — ICCO does not publish shortlist/metal rates. 64 shortlisted in 2024
   // across 30+ categories; field is small and selective. Rates estimated from PR show
   // comparisons. Do not use in client-facing materials without caveat.
@@ -663,7 +697,9 @@ export const ENTRY_FEES: Record<string, EntryFeeData> = {
   'Tangrams':               { base: 400,  range: 'N/A — integrated into Spikes Asia', note: 'Use Spikes Asia Strategy & Effectiveness Spike.' },
   'Spikes Asia':            { base: 645,  range: 'SGD 655–1,005 standard (2026 cycle); 2027 rates pending', note: 'Canonical fee: SGD 830 mid of 2026 standard range × SGD 0.778 = $645 USD. 2026 cycle closed Mar 2026; 2027 entry kit not yet published. Await 2027 rates at spikes.asia before next cycle.' },
   'SABRE Awards Asia-Pacific': { base: 500, range: 'US$475–US$650+ (USD; basic entry ~US$475–525 includes 3 category selections; +US$125 each additional category; late fees apply after early deadline)', note: 'ESTIMATE — APAC base fee assumed in the US$475–525 band (confirmed for EMEA at US$475, North America at US$525; APAC-specific fee unverified). Effective cost per campaign typically US$600–900+ once add-ons included. No membership discount — same price for all entrants. 2026 APAC cycle CLOSED (late deadline was 1 Jun 2026). Verify 2027 fees at sabre.provokemedia.com/ap when cycle opens.' },
-  'Global SABRE Awards':    { base: 0,   range: 'No direct entry fee — qualify via regional SABRE (APAC: ~US$475–650+)', note: 'Global SABRE winners are selected by PRovoke from regional competition performance. No separate entry or fee for the global programme. Cost of competing = cost of regional SABRE entry.' },
+  'Global SABRE Awards':    { base: 0,   range: 'No direct entry fee — qualify via regional SABRE (EMEA: $475 basic; NA: $525 basic; APAC: ~US$475–650+)', note: 'Global SABRE winners are selected by PRovoke from regional competition performance. No separate entry or fee for the global programme. Cost of competing = cost of regional SABRE entry.' },
+  'SABRE Awards EMEA':      { base: 475, range: '$475–$725+ USD (basic $475: 1 practice area + 1 industry sector + 1 international category; +$125 each additional selection; +$250 late surcharge)', note: 'Canonical fee: $475 USD basic entry (verified from sabre.provokemedia.com/emea, Jun 2026). Additional category selections $125 each; late fee (after early bird) $250 surcharge. Diamond SABRE and IN2 SABRE selections $125 each. No membership discount — same price for all entrants. Effective campaign cost typically $600–900+ once add-ons included. 2026 cycle CLOSED — verify 2027 fees at sabre.provokemedia.com/emea when cycle opens.' },
+  'SABRE Awards North America': { base: 525, range: '$525–$775+ USD (basic $525: 1 practice area + 1 industry sector + 1 international category; +$125 each additional selection; +$250 late surcharge)', note: 'Canonical fee: $525 USD basic entry (verified from sabre.provokemedia.com/am, Jun 2026). Additional category selections $125 each; late fee (after early bird) $250 surcharge. Diamond and Silver SABRE selections $125 each. No membership discount. Effective campaign cost typically $650–950+ once add-ons included. 2026 cycle CLOSED — verify 2027 fees at sabre.provokemedia.com/am when cycle opens.' },
   'ICCO Global Awards':     { base: 300,  range: '€250–€500 (EUR; member vs non-member × early bird / standard / final)', note: 'ESTIMATE — 2024 fee table only. Early bird: €250 member / €350 non-member. Standard: €300 / €400. Final: €400 / €500. 2025/2026 fees not separately verified — 2024 table is best available proxy. ~€100 per-entry saving for ICCO members (28–40% cheaper). Late entry (final deadline) costs 60% more than early bird — strong incentive to enter early. EUR currency. Verify at awards.iccopr.com before budgeting.' },
   'PRCA UK Awards':         { base: 200,  range: 'GBP + VAT (not published for UK Awards; DARE proxy ~£150–£285 member/non-member — flagship likely higher)', note: 'Member vs non-member pricing — PRCA members pay materially less (~45% discount for non-members). 20% charity discount. Some individual/culture categories free. Verify at prca.global before budgeting. ESTIMATE — base fee is a directional proxy only.' },
   'PRCA APAC Awards':       { base: 150,  range: 'Not publicly published', note: 'Contact PRCA APAC chapter for entry fee information. 2026 cycle: early bird 5 Dec 2025, entry deadline 6 Feb 2026.' },
@@ -813,6 +849,16 @@ export const KB_SHOW_ALIASES: Record<string, string | null> = {
   // Campaign Asia Women to Watch APAC (canonical) — map old/short name variants
   'women to watch apac':                          'Campaign Asia Women to Watch APAC',
   'campaign asia women to watch':                 'Campaign Asia Women to Watch APAC',
+
+  // SABRE Awards EMEA — map short variants
+  'sabre emea':                                   'SABRE Awards EMEA',
+  'sabre awards emea':                            'SABRE Awards EMEA',
+
+  // SABRE Awards North America — map short variants
+  'sabre na':                                     'SABRE Awards North America',
+  'sabre americas':                               'SABRE Awards North America',
+  'sabre north america':                          'SABRE Awards North America',
+  'sabre awards north america':                   'SABRE Awards North America',
 
   // ADFEST — map legacy KB variant (KB entries may use mixed case 'AdFest')
   'adfest':                                       'ADFEST',
