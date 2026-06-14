@@ -420,26 +420,50 @@ export const DEADLINES_2026: ShowDeadline[] = [
 ]
 
 // ── WIN_RATES ─────────────────────────────────────────────────────────────────
-// Historical win probability percentages per award level + estimated PR values.
-// Source: published show statistics aggregated 2019–2024.
-// ⚠️  Rows marked with "ESTIMATE" need Ben's benchmarking before using in client reports.
+// Win probability percentages per award level + estimated PR values.
+// ⚠️  Rows marked with "ESTIMATE" have no festival-stated primary source — do not use in client reports.
+// ⚠️  All rates are ALL-CATEGORY, WHOLE-SHOW blended figures. No category-level breakdown is stored.
+//     Dividing a category-specific fee by these rates produces a hybrid figure, not a precise cost-per-metal.
+// Rate audit: 14 June 2026. Sources documented per-show inline below.
 
 export const WIN_RATES: Record<string, WinRateData> = {
+  // FESTIVAL-STATED. Source: canneslions.com/awards/awards-support/awards-entry-guide
+  // "Each year, only 10% of all entries make the shortlist and only 3% win an Award."
+  // Standing annual figure referencing 2026 cycle. Denominator: "all entries" (festival's word).
+  // fee: Standard single entry €1,100 × EUR 1.157 = $1,273 USD (verified in DEADLINES_2026 note).
   'Cannes Lions': {
-    shortlist: 12, metal: 6, gold: 2, grandprix: 0.08,
+    shortlist: 10, metal: 3, gold: 2, grandprix: 0.08,
     pr: { shortlist: 12000, metal: 60000, gold: 350000, grandprix: 1500000 },
-    fee: 1350,
+    fee: 1273,
   },
+  // FESTIVAL-STATED (2020 cycle). Source: dandad.org/annual/2020/dandad2020/d-ad-in-2020/
+  // "8,656 entries … 1,019 shortlisted (11.8%) and 630 pencil winners (7.3%)"
+  // Denominator: entries (not pieces of work). Most recent clean entry-denominator cycle published.
+  // 2021 cycle (via 2022 article dandad.org): stated inline as ~6% (9,972 entries); year inferred — do not cite as definitive.
+  // 2026 press release (media.dandad.org/documents/DAD_Winners_release_-2.pdf): 573 pencils from "50,000+ pieces" —
+  //   denominator is PIECES not entries; do not derive a rate from this figure.
+  // fee: Standard single advertising entry £390 × GBP 1.340 = $523 USD (top of £290–£390 verified range; PDF not fetchable).
   'D&AD': {
-    shortlist: 15, metal: 10, gold: 4, grandprix: 0.5,
+    shortlist: 11.8, metal: 7.3, gold: 4, grandprix: 0.5,
     pr: { shortlist: 10000, metal: 40000, gold: 200000, grandprix: 800000 },
-    fee: 620,
+    fee: 523,
   },
+  // FESTIVAL-STATED (raw counts, 2025 cycle). Source: oneshow.org/about/
+  // "Entries: 18,000 in 2025 … Awards Presented: 658 Pencils in 2025"
+  // Derived rate: 658 / 18,000 = 3.66% — rounded to 3.7.
+  // ⚠️ AMBIGUITY: "658 Pencils" may include Merit awards (One Show calls all award levels "Pencils").
+  //    This figure is the upper bound for any award level. Metals-only rate may be lower; festival does not break it out.
+  // Shortlist count: not published by One Show. shortlist field remains ESTIMATE.
+  // fee: Regular Deadline, Single entry, Film/OOH/Print/Social Media tier = $625 USD (verified live oneshow.org/fees/ 14 Jun 2026).
   'One Show': {
-    shortlist: 20, metal: 12, gold: 5, grandprix: 0.8,
+    shortlist: 20, metal: 3.7, gold: 5, grandprix: 0.8,
     pr: { shortlist: 8000, metal: 35000, gold: 180000, grandprix: 700000 },
-    fee: 700,
+    fee: 625,
   },
+  // ESTIMATE — Clio Awards does not publish win rates, entry totals, or aggregate award counts.
+  // Circulating figures ("less than 3%") trace to Wikipedia / agency copy with no Clio primary source.
+  // Do not use in client-facing materials without caveat. Source check completed: 14 Jun 2026.
+  // fee: $750 USD — within $525–$800 sourced range; clean; no change.
   'Clio Awards': {
     shortlist: 22, metal: 12, gold: 4, grandprix: 0.6,
     pr: { shortlist: 9000, metal: 35000, gold: 180000, grandprix: 650000 },
@@ -524,10 +548,17 @@ export const WIN_RATES: Record<string, WinRateData> = {
     pr: { shortlist: 6000, metal: 20000, gold: 75000, grandprix: 220000 },
     fee: 400,
   },
+  // shortlist: FESTIVAL-STATED (evergreen). Source: spikes.asia/awards/awards-support/how-judging-works
+  // "Typically around twenty percent of entries will make it to this stage [the shortlist]."
+  // metal: ESTIMATE — Spikes Asia does not publish a whole-show metals win rate. Per-category rates
+  //   are calculable from the 2026 winners press release but no aggregate is stated.
+  //   B&T (third-party) reported 8.9% in 2022 (271 trophies / 3,000+ entries) — not festival-stated; not used here.
+  //   Do not use metal rate in client-facing materials without caveat.
+  // fee: SGD 830 mid of SGD 655–1,005 sourced standard range × SGD 0.778 = $645 USD (2026 cycle; 2027 rates pending).
   'Spikes Asia': {
-    shortlist: 18, metal: 9, gold: 3, grandprix: 0.3,
+    shortlist: 20, metal: 9, gold: 3, grandprix: 0.3,
     pr: { shortlist: 10000, metal: 50000, gold: 250000, grandprix: 900000 },
-    fee: 1000,
+    fee: 645,
   },
   // ESTIMATE — SABRE does not publish per-region win rates. EMEA 2026: ~20% finalist
   // rate (400 from 2,000+ entries). APAC volume lower; rates estimated from sector comparison.
@@ -573,10 +604,14 @@ export const WIN_RATES: Record<string, WinRateData> = {
     pr: { shortlist: 6000, metal: 20000, gold: 80000, grandprix: 300000 },
     fee: 294,
   },
-  // ESTIMATE — LIA does not publish shortlist/metal rates. Tiered structure confirmed
-  // (Finalist → Bronze → Silver → Gold → Grand LIA); percentages not released.
-  // Rates derived from comparison with comparable global shows (D&AD/One Show tier).
+  // ESTIMATE — LIA does not publish entry totals; win rate is therefore not calculable.
+  // Tiered structure confirmed: Finalist → Bronze → Silver → Gold → Grand LIA.
+  // 2024 raw statue count (liaawards.com/press/2024/): 935 statues (29 Grand + 274 Gold + 300 Silver + 332 Bronze)
+  //   — no corresponding entry total published. Rate cannot be derived.
+  // 2013 historical figure (AWN, attributed to LIA press release): original LIA URL is 404 — NOT CHECKABLE.
+  // Rates derived from comparison with comparable global shows (D&AD/One Show tier). ESTIMATE only.
   // Do not use in client-facing materials without caveat.
+  // fee: $800 USD — ESTIMATE, within $425–$1,150 sourced band; verify at liaentries.com before budgeting.
   'London International Awards': {
     shortlist: 15, metal: 8, gold: 2.5, grandprix: 0.4,
     pr: { shortlist: 10000, metal: 40000, gold: 200000, grandprix: 700000 },
@@ -607,9 +642,9 @@ export const WIN_RATES: Record<string, WinRateData> = {
 // canonical number used in ROI calculations.
 
 export const ENTRY_FEES: Record<string, EntryFeeData> = {
-  'Cannes Lions':           { base: 1200, range: '€690–€2,825 (EUR; category/deadline dependent)', note: 'Late-fee tiers after 5 Mar, 19 Mar, 2 Apr. AI/source disclosure and CEO/CMO sign-off required. Festival 22–26 Jun 2026.' },
-  'D&AD':                   { base: 390,  range: '£25–£980 (GBP; category/tier dependent; VAT excl.)', note: 'Payment deadline 19 Mar; finalise deadline 26 Mar; physical shipment 8 Apr. Craft categories: execution judged before idea.' },
-  'One Show':               { base: 700,  range: '$400–$1,500 (USD; category/deadline dependent)', note: 'Processing fees excluded. Final deadline 20 Feb 2026.' },
+  'Cannes Lions':           { base: 1273, range: '€690–€2,825 (EUR; category/deadline dependent)', note: 'Canonical fee: Standard single entry €1,100 × EUR 1.157 = $1,273 USD. Late-fee tiers after 5 Mar, 19 Mar, 2 Apr. AI/source disclosure and CEO/CMO sign-off required. Festival 22–26 Jun 2026.' },
+  'D&AD':                   { base: 523,  range: '£290–£390 (GBP; advertising standard; VAT excl.)', note: 'Canonical fee: Standard single advertising entry £390 × GBP 1.340 = $523 USD (top of verified advertising range; specific Film tier not confirmed — D&AD PDF not web-fetchable). Payment deadline 19 Mar; finalise deadline 26 Mar; physical shipment 8 Apr. Craft categories: execution judged before idea.' },
+  'One Show':               { base: 625,  range: '$475–$900 (USD; category/deadline dependent)', note: 'Canonical fee: Regular Deadline, Single entry, Film/OOH/Print/Social Media = $625 USD (verified live oneshow.org/fees/ 14 Jun 2026). Processing fees excluded. Final deadline 20 Feb 2026.' },
   'Clio Awards':            { base: 750,  range: '$525–$1,400 (USD; category/deadline dependent)', note: 'Student $50–$75. Google AI specialty category free. Ceremony 12 May NYC.' },
   'Effie APAC':             { base: 800,  range: 'SGD 1,090–2,690', note: 'Most rigorous data requirements. Allow 4–6 weeks for writing.' },
   'Festival of Media APAC': { base: 550,  range: '£349–£440 (GBP; deadline dependent)', note: 'Early 5 Dec £349; standard 2 Jan £389; final 30 Jan £440. Ceremony 7 May 2026.' },
@@ -626,7 +661,7 @@ export const ENTRY_FEES: Record<string, EntryFeeData> = {
   'Campaign Asia Agency of the Year': { base: 420,  range: 'HKD 3,950–6,250 (people / agency; tier dependent)', note: 'Early bird by 30 Jun: HKD 3,950 (people) / 4,780 (agency/brand). Standard by 30 Jul: HKD 4,750 / 5,650. Final by 4 Sep: HKD 5,350 / 6,250. Source: aoyawards.com (verified 3 Jun 2026).' },
   'ROI Festival':           { base: 450,  range: 'Not published in English', note: 'Fees appear in Chinese-language entry handbook only (roifestival.com/cn). Require login at entry.roifestival.com/en or handbook download to obtain. Do not commit budget until fees confirmed.' },
   'Tangrams':               { base: 400,  range: 'N/A — integrated into Spikes Asia', note: 'Use Spikes Asia Strategy & Effectiveness Spike.' },
-  'Spikes Asia':            { base: 1000, range: 'Unknown — 2027 cycle not yet open', note: '2026 cycle closed Mar 2026. Await 2027 entry kit.' },
+  'Spikes Asia':            { base: 645,  range: 'SGD 655–1,005 standard (2026 cycle); 2027 rates pending', note: 'Canonical fee: SGD 830 mid of 2026 standard range × SGD 0.778 = $645 USD. 2026 cycle closed Mar 2026; 2027 entry kit not yet published. Await 2027 rates at spikes.asia before next cycle.' },
   'SABRE Awards Asia-Pacific': { base: 500, range: 'US$475–US$650+ (USD; basic entry ~US$475–525 includes 3 category selections; +US$125 each additional category; late fees apply after early deadline)', note: 'ESTIMATE — APAC base fee assumed in the US$475–525 band (confirmed for EMEA at US$475, North America at US$525; APAC-specific fee unverified). Effective cost per campaign typically US$600–900+ once add-ons included. No membership discount — same price for all entrants. 2026 APAC cycle CLOSED (late deadline was 1 Jun 2026). Verify 2027 fees at sabre.provokemedia.com/ap when cycle opens.' },
   'Global SABRE Awards':    { base: 0,   range: 'No direct entry fee — qualify via regional SABRE (APAC: ~US$475–650+)', note: 'Global SABRE winners are selected by PRovoke from regional competition performance. No separate entry or fee for the global programme. Cost of competing = cost of regional SABRE entry.' },
   'ICCO Global Awards':     { base: 300,  range: '€250–€500 (EUR; member vs non-member × early bird / standard / final)', note: 'ESTIMATE — 2024 fee table only. Early bird: €250 member / €350 non-member. Standard: €300 / €400. Final: €400 / €500. 2025/2026 fees not separately verified — 2024 table is best available proxy. ~€100 per-entry saving for ICCO members (28–40% cheaper). Late entry (final deadline) costs 60% more than early bird — strong incentive to enter early. EUR currency. Verify at awards.iccopr.com before budgeting.' },
