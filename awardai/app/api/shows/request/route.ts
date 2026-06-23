@@ -16,6 +16,33 @@ const SUPABASE_URL   = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const ANON_KEY       = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 const SERVICE_KEY    = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
+// Audit S59 H3: every user-supplied value is interpolated into an HTML email
+// sent to the admin inbox. Escape all text and validate any URL before it is
+// placed into markup, so a request cannot inject tags, a phishing link, or a
+// javascript:/data: URI.
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+// Returns an attribute-safe http(s) URL string, or null if the value is not a
+// valid public web URL (any other scheme, including javascript:/data:, is rejected).
+function safeHttpUrl(raw: string | null | undefined): string | null {
+  if (!raw) return null
+  let parsed: URL
+  try {
+    parsed = new URL(raw.trim())
+  } catch {
+    return null
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null
+  return escapeHtml(parsed.toString())
+}
+
 export async function POST(request: Request) {
   try {
     // ── Auth check ──────────────────────────────────────────────────────────
@@ -67,7 +94,25 @@ export async function POST(request: Request) {
       console.error('[shows/request] Failed to persist show_request:', insertError.message)
     }
 
-    // ── Build email ──────────────────────────────────────────────────────────
+    // ── Build email (all interpolated values escaped — audit S59 H3) ─────────
+    const safeShowName  = escapeHtml(show_name.trim())
+    const safeUserEmail = escapeHtml(user.email ?? '')
+    const safeMarket    = market?.trim() ? escapeHtml(market.trim()) : null
+    const safeProjectId = project_id ? escapeHtml(String(project_id)) : null
+    const safeShowUrl   = safeHttpUrl(show_url)
+    const safeEntryKit  = safeHttpUrl(entry_kit_url)
+    // If a URL was provided but failed validation, still show it as escaped text (no link).
+    const rawShowUrl    = show_url?.trim() ? escapeHtml(show_url.trim()) : null
+    const rawEntryKit   = entry_kit_url?.trim() ? escapeHtml(entry_kit_url.trim()) : null
+
+    const linkOrText = (safe: string | null, rawText: string | null): string | null => {
+      if (safe) return `<a href="${safe}" style="color: #166534;">${safe}</a>`
+      if (rawText) return rawText
+      return null
+    }
+    const showUrlCell  = linkOrText(safeShowUrl, rawShowUrl)
+    const entryKitCell = linkOrText(safeEntryKit, rawEntryKit)
+
     const subject = `Show request: ${show_name.trim()}`
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 520px;">
@@ -77,47 +122,47 @@ export async function POST(request: Request) {
         <table style="width: 100%; border-collapse: collapse;">
           <tr>
             <td style="padding: 6px 0; color: #6b7280; font-size: 14px; width: 100px;">Show</td>
-            <td style="padding: 6px 0; color: #111827; font-size: 14px; font-weight: 600;">${show_name.trim()}</td>
+            <td style="padding: 6px 0; color: #111827; font-size: 14px; font-weight: 600;">${safeShowName}</td>
           </tr>
           <tr>
             <td style="padding: 6px 0; color: #6b7280; font-size: 14px;">Requested by</td>
             <td style="padding: 6px 0; font-size: 14px;">
-              <a href="mailto:${user.email}" style="color: #166534;">${user.email}</a>
+              <a href="mailto:${safeUserEmail}" style="color: #166534;">${safeUserEmail}</a>
             </td>
           </tr>
-          ${market ? `
+          ${safeMarket ? `
           <tr>
             <td style="padding: 6px 0; color: #6b7280; font-size: 14px;">Market</td>
-            <td style="padding: 6px 0; color: #111827; font-size: 14px;">${market}</td>
+            <td style="padding: 6px 0; color: #111827; font-size: 14px;">${safeMarket}</td>
           </tr>
           ` : ''}
-          ${show_url ? `
+          ${showUrlCell ? `
           <tr>
             <td style="padding: 6px 0; color: #6b7280; font-size: 14px; vertical-align: top;">Show website</td>
             <td style="padding: 6px 0; font-size: 14px;">
-              <a href="${show_url}" style="color: #166534;">${show_url}</a>
+              ${showUrlCell}
             </td>
           </tr>
           ` : ''}
-          ${entry_kit_url ? `
+          ${entryKitCell ? `
           <tr>
             <td style="padding: 6px 0; color: #6b7280; font-size: 14px; vertical-align: top;">Entry kit</td>
             <td style="padding: 6px 0; font-size: 14px;">
-              <a href="${entry_kit_url}" style="color: #166534;">${entry_kit_url}</a>
+              ${entryKitCell}
             </td>
           </tr>
           ` : ''}
-          ${project_id ? `
+          ${safeProjectId ? `
           <tr>
             <td style="padding: 6px 0; color: #6b7280; font-size: 14px;">Project ID</td>
-            <td style="padding: 6px 0; color: #111827; font-size: 14px; font-family: monospace;">${project_id}</td>
+            <td style="padding: 6px 0; color: #111827; font-size: 14px; font-family: monospace;">${safeProjectId}</td>
           </tr>
           ` : ''}
         </table>
         <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;" />
         <p style="color: #9ca3af; font-size: 12px; margin: 0;">
           Go to <a href="https://gotshortlisted.com/admin" style="color: #166534;">Admin</a> to research and add this show.
-          Reply to respond directly to ${user.email}.
+          Reply to respond directly to ${safeUserEmail}.
         </p>
       </div>
     `
