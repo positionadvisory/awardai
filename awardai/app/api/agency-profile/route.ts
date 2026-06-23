@@ -70,10 +70,21 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json()
 
     // Whitelist — ignore anything not explicitly writable
-    const updates: Record<string, string | null> = {}
+    const updates: Record<string, unknown> = {}
     for (const field of WRITABLE_FIELDS) {
       if (field in body) {
         updates[field] = body[field] || null
+      }
+    }
+    // cost_defaults is a jsonb object set by BudgetPlanner (audit S59 H1 — the
+    // client write was routed here so the table's anon/authenticated write grants
+    // can be revoked). Validate it is a plain object before accepting it.
+    if ('cost_defaults' in body) {
+      const cd = body.cost_defaults
+      if (cd === null || (typeof cd === 'object' && !Array.isArray(cd))) {
+        updates.cost_defaults = cd
+      } else {
+        return NextResponse.json({ error: 'cost_defaults must be an object' }, { status: 400 })
       }
     }
     if (Object.keys(updates).length === 0) {
@@ -87,14 +98,18 @@ export async function PATCH(req: NextRequest) {
       .update(updates)
       .eq('org_id', caller.orgId)
       .select()
-      .single()
 
     if (error) {
+      console.error('agency-profile PATCH: update failed', error)
       return NextResponse.json({ error: 'Update failed' }, { status: 500 })
     }
-    return NextResponse.json({ success: true, profile: data })
+    if (!data || data.length === 0) {
+      return NextResponse.json({ error: 'No agency profile to update' }, { status: 404 })
+    }
+    return NextResponse.json({ success: true, profile: data[0] })
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+    console.error('agency-profile PATCH: unexpected error', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
@@ -112,10 +127,12 @@ export async function DELETE(req: NextRequest) {
       .eq('org_id', caller.orgId)
 
     if (error) {
+      console.error('agency-profile DELETE: delete failed', error)
       return NextResponse.json({ error: 'Delete failed' }, { status: 500 })
     }
     return NextResponse.json({ success: true })
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+    console.error('agency-profile DELETE: unexpected error', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
