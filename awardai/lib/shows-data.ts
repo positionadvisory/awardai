@@ -216,8 +216,8 @@ export const DEADLINES_2026: ShowDeadline[] = [
     finalDate: '2026-01-30', juryDate: '2026-03-19', ceremonyDate: '2026-05-07',
     earlyBird: 'Dec 2025', standard: 'Jan 2026', final: '30 Jan 2026', ceremony: '7 May 2026',
     prValue: 30,
-    note: 'Asia-Pacific Media Campaign Awards. Open 7 Nov 2025; early 5 Dec (£349); standard 2 Jan (£389); extended/final 30 Jan (£440). Shortlist 19 Mar. Ceremony 7 May 2026. GBP fees.',
-    confidence: 'verified', lastVerified: '2026-04-26',
+    note: 'Asia-Pacific Media Campaign Awards (C Squared / Festival of Media). 2026 cycle CLOSED: open 7 Nov 2025; early 5 Dec £349; standard 2 Jan £389; extended/final 30 Jan £440 (per entry per category, GBP). Shortlist 19 Mar; ceremony 7 May 2026 (virtual). Jury ~80–85% client-side brand marketers. Next (2027) cycle expected to open ~Nov 2026. Verified festivalofmedia.com 23 Jun 2026.',
+    confidence: 'verified', lastVerified: '2026-06-23',
   },
   {
     show: 'Campaign Asia Women Leading Change', region: 'APAC',
@@ -229,19 +229,19 @@ export const DEADLINES_2026: ShowDeadline[] = [
   },
   {
     show: 'MMA Smarties APAC', region: 'APAC',
-    finalDate: '2026-07-21', juryDate: '2026-08-14', ceremonyDate: '2026-09-11',
-    earlyBird: '25 May 2026', standard: '9 Jul 2026', final: '21 Jul 2026', ceremony: 'Sep 2026',
+    finalDate: '2026-07-21', juryDate: '2026-08-21', ceremonyDate: '2026-11-20',
+    earlyBird: '25 May 2026', standard: '9 Jul 2026', final: '21 Jul 2026', ceremony: '20 Nov 2026 (JW Marriott Singapore South Beach)',
     prValue: 28,
-    note: 'Early bird 25 May, on-time 9 Jul, extended/final 21 Jul. Member/non-member fees $365–$525 USD. Early bird saves ~$160 per entry vs extended. APAC and Global cycles are distinct.',
-    confidence: 'verified', lastVerified: '2026-05-03',
+    note: 'APAC per-entry fees USD: member $365 / $405 / $480, non-member $410 / $450 / $525 (early bird 25 May / on-time 9 Jul / extended 21 Jul). Country programs cheaper (Vietnam/Indonesia/Philippines/Thailand/India ~$240–$350; Cambodia $140–$240). Volume discounts 5–20%. Online screening jury 1–21 Aug; gala 20 Nov, Singapore. APAC and Global cycles are distinct. Verified mmaglobal.com 23 Jun 2026.',
+    confidence: 'verified', lastVerified: '2026-06-23',
   },
   {
     show: 'MMA Smarties Global', region: 'Global',
-    finalDate: '2026-07-23', juryDate: '2026-08-20', ceremonyDate: '2026-09-15',
-    earlyBird: '22 May 2026', standard: '23 Jul 2026', final: '6 Aug 2026', ceremony: 'Sep 2026',
+    finalDate: '2026-08-06', juryDate: '2026-09-01', ceremonyDate: '',
+    earlyBird: '22 May 2026', standard: '23 Jul 2026', final: '6 Aug 2026', ceremony: 'TBC 2026 (2025 was online, 18 Dec)',
     prValue: 30,
-    note: 'Early bird 22 May ($435), on-time 23 Jul ($495), extended 6 Aug ($570). Global program separate from APAC regional. Early bird saves $135 vs extended.',
-    confidence: 'verified', lastVerified: '2026-05-03',
+    note: 'SMARTIES X Global per-entry fees USD: member $435 / $495 / $570, non-member $490 / $550 / $625 (early bird 22 May / on-time 23 Jul / extended 6 Aug). Online screening jury 1 Aug–1 Sep. 2026 ceremony date not yet published (2025 was online, 18 Dec). Distinct from APAC regional; separate submission required. Verified mmaglobal.com / 2026 submission guide 23 Jun 2026.',
+    confidence: 'verified', lastVerified: '2026-06-23',
   },
 
   // ── PARTIAL — agent will pause, user must operate manually ──────────────────
@@ -492,25 +492,33 @@ export const WIN_RATES: Record<string, WinRateData> = {
     pr: { shortlist: 15000, metal: 50000, gold: 200000, grandprix: 600000 },
     fee: 800,
   },
+  // ESTIMATE — Festival of Media does not disclose entry/category counts ("We don't disclose category numbers", FAQ).
+  // These win-rate values are modeled, NOT festival-stated. Do not use in client-facing materials.
+  // (Verified absence of published rates: festivalofmedia.com/faqs, 23 Jun 2026.)
   'Festival of Media APAC': {
     shortlist: 32, metal: 18, gold: 7, grandprix: 2,
     pr: { shortlist: 10000, metal: 35000, gold: 120000, grandprix: 400000 },
-    fee: 550,
+    fee: 521,
   },
   'Campaign Asia Women Leading Change': {
     shortlist: 35, metal: 20, gold: 8, grandprix: 3,
     pr: { shortlist: 8000, metal: 25000, gold: 80000, grandprix: 200000 },
     fee: 450,
   },
+  // ESTIMATE — MMA does not publish APAC entry totals or shortlist counts (2025: 107 medals; 2024: 93 medals,
+  // no denominator). These win-rate values are modeled, NOT festival-stated. Do not use in client-facing materials.
+  // (Verified absence of published rates: mmaglobal.com, 23 Jun 2026.)
   'MMA Smarties APAC': {
     shortlist: 28, metal: 16, gold: 6, grandprix: 1.5,
     pr: { shortlist: 8000, metal: 30000, gold: 100000, grandprix: 350000 },
-    fee: 435,
+    fee: 405,
   },
+  // ESTIMATE — MMA does not publish Global entry totals (2025: 83 medals, no denominator). Modeled, NOT
+  // festival-stated. Do not use in client-facing materials. (Verified absence: mmaglobal.com, 23 Jun 2026.)
   'MMA Smarties Global': {
     shortlist: 22, metal: 12, gold: 5, grandprix: 1.0,
     pr: { shortlist: 10000, metal: 40000, gold: 140000, grandprix: 480000 },
-    fee: 435,
+    fee: 495,
   },
   'Clio Entertainment': {
     shortlist: 25, metal: 14, gold: 5, grandprix: 0.8,
@@ -683,10 +691,10 @@ export const ENTRY_FEES: Record<string, EntryFeeData> = {
   'One Show':               { base: 625,  range: '$475–$900 (USD; category/deadline dependent)', note: 'Canonical fee: Regular Deadline, Single entry, Film/OOH/Print/Social Media = $625 USD (verified live oneshow.org/fees/ 14 Jun 2026). Processing fees excluded. Final deadline 20 Feb 2026.' },
   'Clio Awards':            { base: 675,  range: '$675–$900 (USD; Film, Deadline 1 → Deadline 3)', note: 'Canonical fee: Film, Deadline 1 standard single = $675 USD; rises to $900 by Deadline 3 (verified ledger B1; clios.com entry-fees). Student $50–$75. Google AI specialty category free. Ceremony 12 May NYC.' },
   'Effie APAC':             { base: 800,  range: 'SGD 1,090–2,690', note: 'Most rigorous data requirements. Allow 4–6 weeks for writing.' },
-  'Festival of Media APAC': { base: 550,  range: '£349–£440 (GBP; deadline dependent)', note: 'Early 5 Dec £349; standard 2 Jan £389; final 30 Jan £440. Ceremony 7 May 2026.' },
+  'Festival of Media APAC': { base: 521,  range: '£349–£440 (GBP; early £349 / standard £389 / final £440)', note: 'Per entry per category. base = standard £389 × GBP 1.341 ≈ $521 USD (FX per ledger B1). Prior base 550 was stale/unsourced. 2026 cycle closed; 2027 fees not yet published. Verified festivalofmedia.com 23 Jun 2026.' },
   'Campaign Asia Women Leading Change': { base: 450,  range: 'HKD 2,990–3,950 (per entry; tier dependent)', note: 'Deadlines 6pm Hong Kong time. Early/standard/final tiers.' },
-  'MMA Smarties APAC':      { base: 435,  range: '$365–$525 (USD; early bird $435, on-time $495, extended $570)', note: 'Early bird 25 May saves ~$160 vs extended. Country programs vary $140–$350.' },
-  'MMA Smarties Global':    { base: 435,  range: '$435–$570 (USD; early bird $435, on-time $495, extended $570)', note: 'Early bird 22 May. Global program distinct from APAC regional.' },
+  'MMA Smarties APAC':      { base: 405,  range: '$365–$525 (USD; member $365/$405/$480, non-member $410/$450/$525 by deadline)', note: 'APAC per-entry fees. base = on-time member ($405). Country programs cheaper (Vietnam etc. ~$240–$350; Cambodia $140–$240). Volume discounts 5–20%. Verified mmaglobal.com 23 Jun 2026.' },
+  'MMA Smarties Global':    { base: 495,  range: '$435–$625 (USD; member $435/$495/$570, non-member $490/$550/$625 by deadline)', note: 'SMARTIES X Global per-entry fees. base = on-time member ($495). Distinct from APAC regional. Verified mmaglobal.com / 2026 submission guide 23 Jun 2026.' },
   'Clio Entertainment':     { base: 550,  range: '$400–$1,300 (USD; category/deadline dependent)', note: 'Student $50. Ceremony TBC — confirm before scheduling.' },
   'Clio Sports':            { base: 550,  range: '$300–$1,075 (USD; category/deadline dependent)', note: 'Student $50–$75. Includes NIL category. Ceremony 8 Dec NYC.' },
   'Clio Creators':          { base: 250,  range: '$100–$600 (USD; medium/deadline dependent)', note: 'Creator Track $100, Brand Track $500, Student free. Inaugural 2026 program.' },
