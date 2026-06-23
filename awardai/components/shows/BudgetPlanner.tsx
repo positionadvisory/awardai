@@ -141,15 +141,30 @@ export default function BudgetPlanner({ directions, orgId, prefilledShow }: Prop
   }, [directions])
 
   // ── Save cost defaults ─────────────────────────────────────────────────────
+  // Audit S59 H1: agency_profiles is SELECT-only under RLS, so the old client-side
+  // .update() silently no-oped (UI said "saved", nothing persisted). Writes now go
+  // through the service-role API route, like every other agency_profiles write.
   const saveCosts = async () => {
     if (!orgId) return
     setSaveStatus('saving')
-    const { error } = await supabase
-      .from('agency_profiles')
-      .update({ cost_defaults: costs })
-      .eq('org_id', orgId)
-    setSaveStatus(error ? 'error' : 'saved')
-    if (!error) setTimeout(() => setSaveStatus('idle'), 2500)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token
+      if (!token) { setSaveStatus('error'); return }
+      const res = await fetch('/api/agency-profile', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ cost_defaults: costs }),
+      })
+      if (!res.ok) { setSaveStatus('error'); return }
+      setSaveStatus('saved')
+      setTimeout(() => setSaveStatus('idle'), 2500)
+    } catch {
+      setSaveStatus('error')
+    }
   }
 
   // ── Per-direction calculations ─────────────────────────────────────────────
