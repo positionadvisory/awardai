@@ -54,7 +54,7 @@ import ShowsDrawer from '@/components/shows/ShowsDrawer'
 import { MATERIALS_EVAL_STATEMENTS, JURY_EVAL_STATEMENTS, COACH_REVIEW_STATEMENTS } from '@/lib/generatingStatements'
 import { appErrorFromResponse, formatError, parseErrorString } from '@/lib/errorMessages'
 import { computeRoiIndex, normaliseKbShow, DEADLINES_2026 } from '@/lib/shows-data'
-import { isAoyShow, AOY_SHOW_NAME, aoyResolveStored } from '@/lib/aoy-taxonomy'
+import { isAoyShow, AOY_SHOW_NAME, aoyResolveStored, aoyTrackById, buildAoyBestCategory } from '@/lib/aoy-taxonomy'
 import AoyEntryPicker from '@/components/AoyEntryPicker'
 import AgencyFactsValidator from '@/components/AgencyFactsValidator'
 import JuryProfilePanel, { JuryCell, RegionalUplift } from '@/components/JuryProfilePanel'
@@ -851,6 +851,47 @@ type AoyRecommendation = {
   evidence_used: { facts: boolean; materials: boolean; draft: boolean }
 }
 
+// AOY entry-slate strategy (generate-aoy-strategy, S77). Directions-shaped
+// recommendations the user accepts into a directions row. Weights authoritative
+// from the parsed rubric, set server-side.
+type AoyStrategyRec = {
+  stem: string
+  label: string
+  best_category: string
+  pillar: string
+  fit: number
+  evidence_sections: { name: string; weight: number }[]
+  positioning: string
+  rationale: string
+}
+type AoyStrategy = {
+  aoy: boolean
+  pillar: string
+  track_id: string
+  market_prefix: string | null
+  show_name: string
+  candidates_considered: number
+  headline: string
+  recommendations: AoyStrategyRec[]
+  summary: string
+  evidence_used: { facts: boolean; materials: boolean; facts_source: string | null }
+}
+
+// AOY per-section Coach (generate-aoy-coach, S77). Advisory only, never a score.
+type AoyCoaching = {
+  aoy: boolean
+  pillar: string
+  category_key: string
+  draft_generation: number
+  sections: {
+    key: string; label: string; weight: number; rubric_weight: number | null
+    weight_divergence: boolean; word_count: number; is_placeholder: boolean
+    missing: string[]; suggestions: string[]
+  }[]
+  priorities: string[]
+  overall: string
+}
+
 type EntryDraft = {
   id: number
   direction_id: number
@@ -1245,6 +1286,23 @@ export default function ProjectPage() {
   const [recommendingForDirectionId, setRecommendingForDirectionId] = useState<number | null>(null)
   const [recommendError, setRecommendError] = useState('')
   const [aoyRecommendations, setAoyRecommendations] = useState<Record<number, AoyRecommendation>>({})
+
+  // Session 77 — AOY entry-slate strategy (generate-aoy-strategy). Project-level,
+  // return-then-accept. The seed is one picked category that encodes the market +
+  // pillar; aoyResolveStored expands it to the market-scoped candidate set.
+  const [aoyStrategy, setAoyStrategy] = useState<AoyStrategy | null>(null)
+  const [generatingStrategy, setGeneratingStrategy] = useState(false)
+  const [strategyError, setStrategyError] = useState('')
+  const [showStrategyModal, setShowStrategyModal] = useState(false)
+  const [strategySeed, setStrategySeed] = useState('')
+  const [acceptingStem, setAcceptingStem] = useState<string | null>(null)
+
+  // Session 77 — AOY per-section Coach (generate-aoy-coach). Advisory, separate
+  // from the calibrated jury; its own state, not an evaluations row.
+  const [aoyCoaching, setAoyCoaching] = useState<Record<number, AoyCoaching>>({})
+  const [coaching, setCoaching] = useState(false)
+  const [coachingForDirectionId, setCoachingForDirectionId] = useState<number | null>(null)
+  const [coachingError, setCoachingError] = useState('')
 
   useEffect(() => {
     if (!user || !projectId) return
@@ -3143,6 +3201,155 @@ export default function ProjectPage() {
     }
   }
 
+  // Session 77 — AOY entry-slate strategy (generate-aoy-strategy). The user picks
+  // ONE seed category in the market + pillar they want a plan for; aoyResolveStored
+  // expands it to the full market-scoped candidate set (so South Asia / APAC Network
+  // can never appear). Returns recommendations the user accepts into directions.
+  const generateAoyStrategy = async () => {
+    if (!project || !strategySeed.trim()) return
+    const resolved = aoyResolveStored(strategySeed.trim())
+    if (!resolved || resolved.candidates.length < 2) {
+      setStrategyError(formatError({ message: 'Pick a market-scoped category so the planner can build a slate of at least two comparable categories.', retryable: false, code: 'STRAT-NOCANDIDATES' }))
+      return
+    }
+    const track = aoyTrackById(resolved.trackId)
+    // Market-tier agency categories need a market. Recover it from the seed (a
+    // market-tier pick carries a market prefix; a regional pick does not).
+    const seed = strategySeed.trim()
+    const marketPrefix = track?.markets.find(m => seed.toLowerCase().startsWith(m.prefix.toLowerCase() + ' '))?.prefix ?? null
+    const candidates = resolved.candidates.map(o => {
+      const bc = buildAoyBestCategory({ trackId: resolved.trackId, option: o, marketPrefix: o.requiresMarket ? marketPrefix : null })
+      if (!bc) return null
+      const scope = o.requiresMarket ? (marketPrefix ?? '') : (track?.label ?? '')
+      return { stem_key: o.stemKey, label: `${scope} ${o.label}`.trim(), best_category: bc }
+    }).filter((c): c is { stem_key: string; label: string; best_category: string } => !!c)
+    if (candidates.length < 2) {
+      setStrategyError(formatError({ message: 'This selection does not produce enough market-scoped categories to compare. For agency disciplines, pick a specific market (not just the region), or choose a different pillar.', retryable: false, code: 'STRAT-NOCANDIDATES' }))
+      return
+    }
+    setGeneratingStrategy(true)
+    setStrategyError('')
+    setAoyStrategy(null)
+    try {
+      const accessToken = await getToken()
+      if (!accessToken) return
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-aoy-strategy`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}`, 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
+          body: JSON.stringify({ project_id: project.id, track_id: resolved.trackId, market_prefix: marketPrefix, pillar: resolved.pillar, candidates }),
+        }
+      )
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        setStrategyError(formatError(appErrorFromResponse(data, res.status, 'STRAT')))
+        return
+      }
+      if (data.strategy) {
+        setAoyStrategy(data.strategy as AoyStrategy)
+        setShowStrategyModal(false)
+      }
+    } catch (err) {
+      setStrategyError(formatError({ message: 'Network error. Check your connection and try again.', retryable: true, code: 'STRAT-NET' }))
+    } finally {
+      setGeneratingStrategy(false)
+    }
+  }
+
+  // Accept a strategy recommendation into a directions row (one writer of
+  // directions: the same canonical-category insert as Add AOY entry). The
+  // positioning angle seeds the direction's angle.
+  const acceptStrategyRecommendation = async (rec: AoyStrategyRec) => {
+    if (!project || !user) return
+    setAcceptingStem(rec.stem)
+    setStrategyError('')
+    try {
+      let currentOrgId = orgId
+      if (!currentOrgId) {
+        const { data } = await supabase.rpc('get_my_org_id')
+        currentOrgId = data
+        if (currentOrgId) setOrgId(currentOrgId)
+      }
+      const showName = AOY_SHOW_NAME
+      const category = rec.best_category
+      const { data: existingDirs } = await supabase
+        .from('directions').select('id')
+        .eq('project_id', project.id)
+        .eq('best_show', showName)
+        .eq('best_category', category)
+        .limit(1)
+      if (existingDirs && existingDirs.length > 0) {
+        setStrategyError(formatError({ message: 'That entry already exists in this project.', retryable: false, code: 'STRAT-DUP' }))
+        return
+      }
+      const angle = (rec.positioning || 'Campaign AOY entry (market-scoped)').slice(0, 280)
+      const { data: newDir, error: dirErr } = await supabase
+        .from('directions')
+        .insert({
+          project_id: project.id,
+          org_id: currentOrgId,
+          created_by: user.id,
+          name: `${showName}: ${category}`,
+          best_show: showName,
+          best_category: category,
+          angle,
+          sort_order: directions.length,
+        })
+        .select()
+        .single()
+      if (dirErr || !newDir) {
+        setStrategyError(formatError({ message: dirErr?.message || 'Failed to create the entry.', retryable: true, code: 'STRAT-DB' }))
+        return
+      }
+      const dir = newDir as Direction
+      setDirections(prev => [dir, ...prev])
+      setNewDirectionIds(prev => new Set(Array.from(prev).concat([dir.id])))
+      track('directions_generated', { project_id: Number(projectId), count: 1, source: 'aoy_strategy' })
+      setDirSortKey('default')
+    } catch (err) {
+      setStrategyError(formatError({ message: 'Something went wrong creating the entry. Please try again.', retryable: true, code: 'STRAT-DB' }))
+    } finally {
+      setAcceptingStem(null)
+    }
+  }
+
+  // Session 77 — AOY per-section Coach (generate-aoy-coach). Advisory guidance on a
+  // drafted AOY entry; never a score, so it does not touch the calibrated scorers.
+  const coachAoyEntry = async (directionId: number) => {
+    if (!project) return
+    setCoaching(true)
+    setCoachingError('')
+    setCoachingForDirectionId(directionId)
+    setEvaluatingMode(prev => ({ ...prev, [directionId]: 'coach' }))
+    try {
+      const accessToken = await getToken()
+      if (!accessToken) return
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-aoy-coach`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}`, 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
+          body: JSON.stringify({ project_id: project.id, direction_id: directionId }),
+        }
+      )
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        setCoachingError(formatError(appErrorFromResponse(data, res.status, 'COACH')))
+        return
+      }
+      if (data.coaching) {
+        setAoyCoaching(prev => ({ ...prev, [directionId]: data.coaching as AoyCoaching }))
+      }
+    } catch (err) {
+      setCoachingError(formatError({ message: 'Network error. Check your connection and try again.', retryable: true, code: 'COACH-NET' }))
+    } finally {
+      setCoaching(false)
+      setCoachingForDirectionId(null)
+      setEvaluatingMode(prev => { const next = { ...prev }; delete next[directionId]; return next })
+    }
+  }
+
   const evaluateEntry = async (directionId: number, mode: 'judge' | 'coach' = 'judge', previousEvaluationId?: number) => {
     if (!project) return
     setEvaluating(true)
@@ -3156,10 +3363,12 @@ export default function ProjectPage() {
     // rather than silently returning a Jury score.
     const isAoyDir = isAoyShow(directions.find(d => d.id === directionId)?.best_show ?? '')
     if (isAoyDir && mode === 'coach') {
-      setEvaluateError(formatError({ message: 'Coach mode for Agency of the Year entries is coming soon. Use Jury to score this entry against its weighted rubric.', retryable: false, code: 'AOYEVAL-NOCOACH' }))
+      // AOY Coach is its OWN advisory function (generate-aoy-coach, S77), not a mode
+      // of the calibrated scorer. Hand off; reset the shared jury spinner state so
+      // coachAoyEntry owns the coaching spinner.
       setEvaluating(false)
       setEvaluatingForDirectionId(null)
-      setEvaluatingMode(prev => { const next = { ...prev }; delete next[directionId]; return next })
+      await coachAoyEntry(directionId)
       return
     }
     const evalFnName = isAoyDir ? 'evaluate-aoy-entry' : 'evaluate-entry'
@@ -4602,6 +4811,11 @@ export default function ProjectPage() {
                   className="border border-green-700 text-green-800 hover:bg-green-50 text-sm font-medium px-4 py-2 rounded transition-colors">
                   Add AOY entry
                 </button>
+                {/* Session 77 — AOY entry-slate strategy (where should we enter). */}
+                <button onClick={() => { setStrategySeed(''); setStrategyError(''); setShowStrategyModal(true) }}
+                  className="border border-green-700 text-green-800 hover:bg-green-50 text-sm font-medium px-4 py-2 rounded transition-colors">
+                  Plan AOY entries
+                </button>
                 <button onClick={() => generateDirections()} disabled={generating || (!project.combined_text && !(project.materials || []).some(materialHasText))}
                   title={(!project.combined_text && !(project.materials || []).some(materialHasText)) ? 'Add a brief or upload materials first' : ''}
                   className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded transition-colors flex items-center gap-2">
@@ -4641,6 +4855,34 @@ export default function ProjectPage() {
               </div>
             )}
 
+            {/* Session 77 — Plan AOY entries modal: pick one seed category (market +
+                pillar); the planner expands it to the market-scoped slate. */}
+            {showStrategyModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => { if (!generatingStrategy) setShowStrategyModal(false) }}>
+                <div className="w-full max-w-md bg-white rounded-xl shadow-xl p-5" onClick={e => e.stopPropagation()}>
+                  <h3 className="text-sm font-semibold text-gray-900 mb-1">Plan your AOY entries</h3>
+                  <p className="text-xs text-gray-500 mb-4">Pick your market and one category in the pillar you want to plan. The planner ranks every category you could enter in that market against your agency facts and recommends where to enter, with a positioning angle. Agency categories by default; pick a People or Brand category to plan those instead.</p>
+
+                  <AoyEntryPicker key={showStrategyModal ? 'aoy-strat-open' : 'aoy-strat-closed'} onChange={setStrategySeed} />
+
+                  {strategyError && (
+                    <div className="mt-3"><ErrorBanner error={strategyError} /></div>
+                  )}
+
+                  <div className="flex gap-3 mt-5">
+                    <button onClick={generateAoyStrategy} disabled={generatingStrategy || !strategySeed.trim()}
+                      className="flex-1 bg-green-800 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2.5 rounded transition-colors">
+                      {generatingStrategy ? 'Planning…' : 'Plan entries'}
+                    </button>
+                    <button onClick={() => { if (!generatingStrategy) { setShowStrategyModal(false); setStrategyError('') } }} disabled={generatingStrategy}
+                      className="px-4 py-2.5 text-sm text-gray-500 hover:text-gray-900 disabled:opacity-40 transition-colors">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* AOY Phase 2 (S73) — agency facts: extract -> point-by-point validate
                 -> propagate org-wide. Shown once the project is an AOY entry
                 (entry_type set, or any AOY direction exists). */}
@@ -4653,6 +4895,59 @@ export default function ProjectPage() {
                 />
               </div>
             )}
+
+            {/* Session 77 — AOY entry-plan result (generate-aoy-strategy). Project-
+                level; each recommendation accepts into a directions row. */}
+            {strategyError && !showStrategyModal && !aoyStrategy && (
+              <div className="mb-4"><ErrorBanner error={strategyError} /></div>
+            )}
+            {aoyStrategy && (() => {
+              const s = aoyStrategy
+              return (
+                <div className="mb-5 bg-white border border-green-200 rounded-xl p-4">
+                  <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-semibold text-gray-800">AOY entry plan</span>
+                      <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full capitalize">{s.pillar} pillar</span>
+                      {s.evidence_used?.facts_source === 'org' && <span className="text-xs text-gray-400">using org facts</span>}
+                    </div>
+                    <button onClick={() => setAoyStrategy(null)} className="text-xs text-gray-400 hover:text-gray-600 transition-colors">Dismiss</button>
+                  </div>
+                  {s.headline && <p className="text-sm text-gray-800 font-medium">{s.headline}</p>}
+                  {s.summary && <p className="text-xs text-gray-500 mt-1">{s.summary}</p>}
+                  <p className="text-xs text-gray-400 mt-1">Ranked {s.recommendations.length} of {s.candidates_considered} categories you could enter.</p>
+                  {strategyError && <div className="mt-2"><ErrorBanner error={strategyError} /></div>}
+                  <div className="mt-3 space-y-2">
+                    {s.recommendations.map((r, i) => {
+                      const exists = directions.some(d => isAoyShow(d.best_show) && (d.best_category ?? '') === r.best_category)
+                      return (
+                        <div key={r.stem} className={`border rounded-lg px-3 py-2 ${i === 0 ? 'border-green-300 bg-green-50/40' : 'border-gray-200 bg-white'}`}>
+                          <div className="flex items-baseline justify-between gap-2">
+                            <p className="text-xs font-medium text-gray-800 flex-1 min-w-0">{r.label}{i === 0 && <span className="text-green-700"> · top pick</span>}</p>
+                            <p className="text-sm font-bold tabular-nums text-gray-700 flex-shrink-0">{r.fit}<span className="text-xs text-gray-400">/10</span></p>
+                          </div>
+                          {r.positioning && <p className="text-xs text-gray-600 mt-1">{r.positioning}</p>}
+                          {r.rationale && <p className="text-xs text-gray-500 mt-0.5">{r.rationale}</p>}
+                          {r.evidence_sections.length > 0 && (
+                            <p className="text-xs text-gray-400 mt-0.5">Leans on: {r.evidence_sections.map(x => `${x.name} (${x.weight}%)`).join(', ')}</p>
+                          )}
+                          <div className="mt-1.5">
+                            {exists ? (
+                              <span className="text-xs text-gray-400">Already added</span>
+                            ) : (
+                              <button onClick={() => acceptStrategyRecommendation(r)} disabled={acceptingStem === r.stem}
+                                className="text-xs font-medium text-green-700 hover:text-green-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                                {acceptingStem === r.stem ? 'Adding…' : '+ Add as entry'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })()}
 
             {generating && (
               <div className="mt-3 mb-4">
@@ -5112,15 +5407,19 @@ export default function ProjectPage() {
                                   <>⚖ {hasJudge ? 'Re-run Jury Eval' : 'Jury Evaluation'}</>
                                 )}
                               </button>
-                              {/* Coach Review */}
+                              {/* Coach Review. AOY directions route to the advisory AOY
+                                  Coach (generate-aoy-coach, S77); the campaign coach is
+                                  unchanged. */}
                               <button
                                 onClick={() => evaluateEntry(dirId, 'coach', evalBoth.coach?.id)}
-                                disabled={evaluating || generatingDraft}
-                                title="Review entry against all brief & materials — identifies what's being undersold"
+                                disabled={evaluating || generatingDraft || coaching}
+                                title="Review the entry and surface what is missing and how to strengthen it"
                                 className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded transition-colors flex items-center gap-2"
                               >
-                                {isEvaluatingThis && evaluatingMode[dirId] === 'coach' ? (
+                                {((isEvaluatingThis && evaluatingMode[dirId] === 'coach') || (coaching && coachingForDirectionId === dirId)) ? (
                                   <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Coaching…</>
+                                ) : isAoyShow(d?.best_show ?? '') ? (
+                                  <>✦ {aoyCoaching[dirId] ? 'Re-run AOY Coach' : 'AOY Coach'}</>
                                 ) : (
                                   <>✦ {hasCoach ? 'Re-run Coach Review' : 'Coach Review'}</>
                                 )}
@@ -5329,6 +5628,46 @@ export default function ProjectPage() {
                             </div>
                           </div>
                         )}
+
+                        {/* AOY Coach — advisory per-section guidance (generate-aoy-coach,
+                            S77). AOY directions only; not an evaluations row, so it
+                            renders separately from the Jury panel. */}
+                        {isAoyShow(d?.best_show ?? '') && coachingError && coachingForDirectionId === dirId && (
+                          <div className="px-5 py-3 border-b border-gray-200"><ErrorBanner error={coachingError} /></div>
+                        )}
+                        {isAoyShow(d?.best_show ?? '') && aoyCoaching[dirId] && (() => {
+                          const c = aoyCoaching[dirId]
+                          return (
+                            <div className="border-b border-gray-200 bg-green-50/40 px-5 py-4">
+                              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                <span className="text-sm font-semibold text-gray-800">✦ AOY Coach</span>
+                                <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full capitalize">{c.pillar} pillar</span>
+                                <span className="text-xs text-gray-400">advisory, not a score</span>
+                              </div>
+                              {c.overall && <p className="text-sm text-gray-700">{c.overall}</p>}
+                              {c.priorities.length > 0 && (
+                                <div className="mt-2">
+                                  <p className="text-xs font-medium text-gray-600 mb-1">Highest-leverage fixes</p>
+                                  <ul className="list-disc list-inside space-y-0.5">{c.priorities.map((p, i) => <li key={i} className="text-xs text-gray-600">{p}</li>)}</ul>
+                                </div>
+                              )}
+                              <div className="mt-3 space-y-2">
+                                {c.sections.map(sec => (
+                                  <div key={sec.key} className="border border-gray-200 rounded-lg bg-white px-3 py-2">
+                                    <div className="flex items-baseline justify-between gap-2">
+                                      <p className="text-xs font-medium text-gray-800">{sec.label}</p>
+                                      <span className="text-xs text-gray-400 tabular-nums flex-shrink-0">{sec.weight}%{sec.is_placeholder ? ' · not written' : ''}</span>
+                                    </div>
+                                    {sec.missing.length > 0 && <p className="text-xs text-amber-700 mt-1">Missing: {sec.missing.join('; ')}</p>}
+                                    {sec.suggestions.length > 0 && (
+                                      <ul className="list-disc list-inside mt-1 space-y-0.5">{sec.suggestions.map((x, i) => <li key={i} className="text-xs text-gray-600">{x}</li>)}</ul>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )
+                        })()}
 
                         {/* Evaluation panel */}
                         {(hasJudge || hasCoach) && (
