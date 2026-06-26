@@ -54,7 +54,8 @@ import ShowsDrawer from '@/components/shows/ShowsDrawer'
 import { MATERIALS_EVAL_STATEMENTS, JURY_EVAL_STATEMENTS, COACH_REVIEW_STATEMENTS } from '@/lib/generatingStatements'
 import { appErrorFromResponse, formatError, parseErrorString } from '@/lib/errorMessages'
 import { computeRoiIndex, normaliseKbShow, DEADLINES_2026 } from '@/lib/shows-data'
-import { isAoyShow, AOY_PILLARS, AOY_TRACKS, aoyTrackById, aoyCategoryOptions, buildAoyBestCategory, type AoyPillar } from '@/lib/aoy-taxonomy'
+import { isAoyShow, AOY_SHOW_NAME } from '@/lib/aoy-taxonomy'
+import AoyEntryPicker from '@/components/AoyEntryPicker'
 import JuryProfilePanel, { JuryCell, RegionalUplift } from '@/components/JuryProfilePanel'
 
 // ── ErrorBanner — renders a friendly message with a small diagnostic code ────
@@ -1203,34 +1204,16 @@ export default function ProjectPage() {
 
   // Session 72 — Campaign AOY controlled, market-scoped category picker.
   // AOY categories are track-prefixed and must normalize to a rubric stem, so the
-  // free-text field is replaced by this cascade when the chosen show is AOY. The
-  // selection writes a CANONICAL value into quickEvalCategory (the same field the
-  // existing evaluate path stores on directions.best_category), guaranteed by the
-  // parity test to normalize onto a show_profiles.category_pattern key.
-  const [aoyPillar, setAoyPillar] = useState<AoyPillar>('agency')
-  const [aoyTrackId, setAoyTrackId] = useState('')
-  const [aoyCatStem, setAoyCatStem] = useState('')
-  const [aoyMarketPrefix, setAoyMarketPrefix] = useState('')
-
-  function resetAoyPicker() {
-    setAoyPillar('agency'); setAoyTrackId(''); setAoyCatStem(''); setAoyMarketPrefix('')
-  }
-
-  // Recompute the canonical best_category from the current cascade and push it into
-  // quickEvalCategory (empty until a full, resolvable selection exists).
-  function syncAoyCategory(next: { pillar?: AoyPillar; trackId?: string; stem?: string; market?: string }) {
-    const pillar = next.pillar ?? aoyPillar
-    const trackId = next.trackId ?? aoyTrackId
-    const stem = next.stem ?? aoyCatStem
-    const market = next.market ?? aoyMarketPrefix
-    const opt = aoyCategoryOptions(trackId, pillar).find(o => o.stemKey === stem)
-    if (!opt) { setQuickEvalCategory(''); return }
-    if (opt.requiresMarket && !market) { setQuickEvalCategory(''); return }
-    const value = buildAoyBestCategory({ trackId, option: opt, marketPrefix: market || null })
-    setQuickEvalCategory(value ?? '')
-    setQuickEvalSuggestion(null)
-    setQuickEvalDetectedFields(prev => ({ ...prev, category: false }))
-  }
+  // free-text field is replaced by <AoyEntryPicker> (own cascade state) when the
+  // chosen show is AOY. The picker writes a CANONICAL value into quickEvalCategory
+  // (the same field the existing evaluate path stores on directions.best_category),
+  // guaranteed by the parity test to normalize onto a show_profiles.category_pattern
+  // key. A separate canonical value (dcAoyCategory) backs the directions panel's
+  // "Add AOY entry" flow below.
+  const [dcAoyCategory, setDcAoyCategory] = useState('')
+  const [showAoyDirModal, setShowAoyDirModal] = useState(false)
+  const [addingAoyDir, setAddingAoyDir] = useState(false)
+  const [aoyDirError, setAoyDirError] = useState('')
 
   useEffect(() => {
     if (!user || !projectId) return
@@ -2952,6 +2935,67 @@ export default function ProjectPage() {
     }
   }
 
+  // Session 72 — manually add a Campaign AOY direction from the controlled picker.
+  // The directions panel otherwise only AI-generates directions (free-text
+  // categories that would not normalize). This inserts a placement with a CANONICAL
+  // best_category so the deployed exact-key rubric lookup fires; the user then
+  // generates a draft from it like any other direction.
+  const addAoyDirection = async () => {
+    if (!project || !user || !dcAoyCategory.trim()) return
+    setAddingAoyDir(true); setAoyDirError('')
+    try {
+      let currentOrgId = orgId
+      if (!currentOrgId) {
+        const { data } = await supabase.rpc('get_my_org_id')
+        currentOrgId = data
+        if (currentOrgId) setOrgId(currentOrgId)
+      }
+      const showName = AOY_SHOW_NAME
+      const category = dcAoyCategory.trim()
+      const { data: existingDirs } = await supabase
+        .from('directions').select('id')
+        .eq('project_id', project.id)
+        .eq('best_show', showName)
+        .eq('best_category', category)
+        .limit(1)
+      if (existingDirs && existingDirs.length > 0) {
+        setAoyDirError('That entry already exists in this project.')
+        setAddingAoyDir(false)
+        return
+      }
+      const { data: newDir, error: dirErr } = await supabase
+        .from('directions')
+        .insert({
+          project_id: project.id,
+          org_id: currentOrgId,
+          created_by: user.id,
+          name: `${showName}: ${category}`,
+          best_show: showName,
+          best_category: category,
+          angle: 'Campaign AOY entry (market-scoped)',
+          sort_order: directions.length,
+        })
+        .select()
+        .single()
+      if (dirErr || !newDir) {
+        setAoyDirError(dirErr?.message || 'Failed to create the entry.')
+        setAddingAoyDir(false)
+        return
+      }
+      const dir = newDir as Direction
+      setDirections(prev => [dir, ...prev])
+      setNewDirectionIds(prev => new Set(Array.from(prev).concat([dir.id])))
+      track('directions_generated', { project_id: Number(projectId), count: 1, source: 'aoy_manual' })
+      setDirSortKey('default')
+      setShowAoyDirModal(false)
+      setDcAoyCategory('')
+    } catch (err) {
+      setAoyDirError('Something went wrong creating the entry. Please try again.')
+    } finally {
+      setAddingAoyDir(false)
+    }
+  }
+
   const generateHooks = async (directionId: number) => {
     setHooksLoading(prev => ({ ...prev, [directionId]: true }))
     setHooksError(prev => ({ ...prev, [directionId]: '' }))
@@ -3205,7 +3249,6 @@ export default function ProjectPage() {
       // AOY) drives selection; clear any stale category so it cannot proceed
       // unresolved. (detect-entry-context returns category null + aoy:true here.)
       if (detected.aoy || isAoyShow(detected.show ?? quickEvalShow)) {
-        resetAoyPicker()
         setQuickEvalCategory('')
       } else if (detected.category) {
         // Always use AI for category — harder to detect client-side
@@ -4450,14 +4493,50 @@ export default function ProjectPage() {
                 <h2 className="text-sm font-medium text-gray-700">Award Directions</h2>
                 <p className="text-gray-400 text-xs mt-0.5">AI-recommended show and category combinations. Generate a draft from any direction, then evaluate it.</p>
               </div>
-              <button onClick={() => generateDirections()} disabled={generating || (!project.combined_text && !(project.materials || []).some(materialHasText))}
-                title={(!project.combined_text && !(project.materials || []).some(materialHasText)) ? 'Add a brief or upload materials first' : ''}
-                className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded transition-colors flex items-center gap-2">
-                {generating ? (
-                  <><svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Generating…</>
-                ) : directions.length > 0 ? 'Generate More Directions' : 'Generate Directions'}
-              </button>
+              <div className="flex items-center gap-2">
+                {/* Session 72 — manual controlled entry for Campaign AOY (market-scoped) */}
+                <button onClick={() => { setDcAoyCategory(''); setAoyDirError(''); setShowAoyDirModal(true) }}
+                  className="border border-green-700 text-green-800 hover:bg-green-50 text-sm font-medium px-4 py-2 rounded transition-colors">
+                  Add AOY entry
+                </button>
+                <button onClick={() => generateDirections()} disabled={generating || (!project.combined_text && !(project.materials || []).some(materialHasText))}
+                  title={(!project.combined_text && !(project.materials || []).some(materialHasText)) ? 'Add a brief or upload materials first' : ''}
+                  className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded transition-colors flex items-center gap-2">
+                  {generating ? (
+                    <><svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Generating…</>
+                  ) : directions.length > 0 ? 'Generate More Directions' : 'Generate Directions'}
+                </button>
+              </div>
             </div>
+
+            {/* Session 72 — Add AOY entry modal: controlled, market-scoped picker. */}
+            {showAoyDirModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => { if (!addingAoyDir) setShowAoyDirModal(false) }}>
+                <div className="w-full max-w-md bg-white rounded-xl shadow-xl p-5" onClick={e => e.stopPropagation()}>
+                  <h3 className="text-sm font-semibold text-gray-900 mb-1">Add a Campaign AOY entry</h3>
+                  <p className="text-xs text-gray-500 mb-4">Campaign Asia-Pacific Agency of the Year. Pick the market-scoped category; a direction is created that you can draft and evaluate.</p>
+
+                  <AoyEntryPicker key={showAoyDirModal ? 'aoy-dir-open' : 'aoy-dir-closed'} onChange={setDcAoyCategory} />
+
+                  {aoyDirError && (
+                    <div className="mt-3 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                      <p className="text-red-600 text-xs">{aoyDirError}</p>
+                    </div>
+                  )}
+
+                  <div className="flex gap-3 mt-5">
+                    <button onClick={addAoyDirection} disabled={addingAoyDir || !dcAoyCategory.trim()}
+                      className="flex-1 bg-green-800 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2.5 rounded transition-colors">
+                      {addingAoyDir ? 'Adding…' : 'Add entry'}
+                    </button>
+                    <button onClick={() => { if (!addingAoyDir) { setShowAoyDirModal(false); setAoyDirError('') } }} disabled={addingAoyDir}
+                      className="px-4 py-2.5 text-sm text-gray-500 hover:text-gray-900 disabled:opacity-40 transition-colors">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {generating && (
               <div className="mt-3 mb-4">
@@ -7444,7 +7523,7 @@ export default function ProjectPage() {
                       <button
                         key={show}
                         type="button"
-                        onClick={() => { setQuickEvalShow(show); setQuickEvalCategory(''); resetAoyPicker(); setQuickEvalDetectedFields(prev => ({ ...prev, show: false, category: false })); setQuickEvalSuggestion(null) }}
+                        onClick={() => { setQuickEvalShow(show); setQuickEvalCategory(''); setQuickEvalDetectedFields(prev => ({ ...prev, show: false, category: false })); setQuickEvalSuggestion(null) }}
                         className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
                           quickEvalShow === show
                             ? 'bg-green-100 text-green-800 border-green-300 font-medium'
@@ -7460,7 +7539,7 @@ export default function ProjectPage() {
                   type="text"
                   list="quickeval-shows"
                   value={quickEvalShow}
-                  onChange={e => { setQuickEvalShow(e.target.value); resetAoyPicker(); setQuickEvalCategory(''); setQuickEvalDetectedFields(prev => ({ ...prev, show: false })); setQuickEvalSuggestion(null) }}
+                  onChange={e => { setQuickEvalShow(e.target.value); setQuickEvalCategory(''); setQuickEvalDetectedFields(prev => ({ ...prev, show: false })); setQuickEvalSuggestion(null) }}
                   placeholder={(project.target_shows ?? []).length > 0 ? 'Or type another show…' : 'e.g. Cannes Lions, Effies APAC, WARC…'}
                   className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
                 />
@@ -7497,89 +7576,9 @@ export default function ProjectPage() {
 
                 {isAoyShow(quickEvalShow) ? (
                   /* Session 72 — Campaign AOY controlled, market-scoped picker.
-                     Pillar -> Track -> Category (+ Market for market-tier categories).
-                     Writes a canonical best_category that resolves to a rubric stem. */
-                  <div className="rounded-lg border border-green-200 bg-green-50/40 p-3 grid grid-cols-1 gap-3">
-                    <p className="text-xs text-gray-500">
-                      Agency of the Year categories are market-scoped. Pick your pillar, track and category. South Asia is on its 2025 cycle and is not yet open.
-                    </p>
-
-                    {/* Pillar */}
-                    <div className="flex flex-wrap gap-1.5">
-                      {AOY_PILLARS.map(p => (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() => { setAoyPillar(p.id); setAoyCatStem(''); setAoyMarketPrefix(''); setQuickEvalCategory('') }}
-                          className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                            aoyPillar === p.id
-                              ? 'bg-green-100 text-green-800 border-green-300 font-medium'
-                              : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400 hover:text-gray-900'
-                          }`}
-                        >
-                          {p.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Track */}
-                    <div>
-                      <label className="text-xs text-gray-500 block mb-1">Track</label>
-                      <select
-                        value={aoyTrackId}
-                        onChange={e => { setAoyTrackId(e.target.value); setAoyCatStem(''); setAoyMarketPrefix(''); setQuickEvalCategory('') }}
-                        className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-green-600 transition-colors"
-                      >
-                        <option value="">Select a track…</option>
-                        {AOY_TRACKS.map(t => (
-                          <option key={t.id} value={t.id}>{t.label}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Category */}
-                    {aoyTrackId && (
-                      <div>
-                        <label className="text-xs text-gray-500 block mb-1">Category</label>
-                        <select
-                          value={aoyCatStem}
-                          onChange={e => { const stem = e.target.value; setAoyCatStem(stem); setAoyMarketPrefix(''); syncAoyCategory({ stem, market: '' }) }}
-                          className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-green-600 transition-colors"
-                        >
-                          <option value="">Select a category…</option>
-                          {aoyCategoryOptions(aoyTrackId, aoyPillar).map(o => (
-                            <option key={o.stemKey} value={o.stemKey}>
-                              {o.label}{o.isNew ? '  (new for 2026)' : ''}{o.requiresMarket ? '  (pick market)' : ''}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-
-                    {/* Market (only for market-tier categories) */}
-                    {aoyTrackId && aoyCatStem && aoyCategoryOptions(aoyTrackId, aoyPillar).find(o => o.stemKey === aoyCatStem)?.requiresMarket && (
-                      <div>
-                        <label className="text-xs text-gray-500 block mb-1">Market</label>
-                        <select
-                          value={aoyMarketPrefix}
-                          onChange={e => { const market = e.target.value; setAoyMarketPrefix(market); syncAoyCategory({ market }) }}
-                          className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-green-600 transition-colors"
-                        >
-                          <option value="">Select a market…</option>
-                          {(aoyTrackById(aoyTrackId)?.markets ?? []).map(m => (
-                            <option key={m.prefix} value={m.prefix}>{m.label}</option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-
-                    {/* Resolved canonical value */}
-                    {quickEvalCategory && (
-                      <p className="text-xs text-green-700">
-                        Entering as: <span className="font-medium">{quickEvalCategory}</span>
-                      </p>
-                    )}
-                  </div>
+                     Writes a canonical best_category that resolves to a rubric stem.
+                     Keyed on the show string so it resets when the show changes. */
+                  <AoyEntryPicker key={`qe-${quickEvalShow}`} onChange={v => setQuickEvalCategory(v)} />
                 ) : (
                   <>
                     {/* Free-text category input with optional suggestions for known shows */}
