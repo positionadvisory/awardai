@@ -80,6 +80,37 @@ export const AOY_PILLARS: { id: AoyPillar; label: string }[] = [
   { id: 'brand', label: 'Brand' },
 ]
 
+// ─── Pillar classification (spec §4) ─────────────────────────────────────────
+// PARITY CONTRACT: AOY_PEOPLE_STEMS, AOY_BRAND_STEMS and pillarForKey() below
+// MUST stay byte-for-byte equivalent to the copies inlined in
+// edge-functions/generate-aoy-draft.ts, evaluate-aoy-entry.ts and
+// recommend-aoy-category.ts (Deno edge functions cannot import this module).
+// People and Brand stems can also appear with an 'Asia-Pacific ' prefix (kept by
+// the normalizer), so strip that prefix for pillar lookup only. Everything else
+// is Agency.
+const AOY_PEOPLE_STEMS = new Set([
+  'Account Person of the Year', 'Agency Growth Leader of the Year',
+  'Agency Head of the Year', 'AI Person/Team of the Year',
+  'Channel/Engagement Planner of the Year', 'Corporate Communications/Marketing Team of the Year',
+  'Creative Leader of the Year', 'Most Innovative MarTech Team of the Year',
+  'New Business Development Person/Team of the Year', 'Producer of the Year',
+  'Strategic/Brand Planner of the Year', 'Young Achiever of the Year',
+  'Young Business Leader of the Year', 'Young Creative Person of the Year',
+  'Programmatic Person of the Year',
+])
+
+const AOY_BRAND_STEMS = new Set([
+  'AD Campaign of the Year', 'AI AD Campaign of the Year',
+  'Brand of the Year', 'Marketer of the Year',
+])
+
+export function pillarForKey(rubricKey: string): AoyPillar {
+  const base = rubricKey.replace(/^Asia-Pacific\s+/i, '').trim()
+  if (AOY_PEOPLE_STEMS.has(base)) return 'people'
+  if (AOY_BRAND_STEMS.has(base)) return 'brand'
+  return 'agency'
+}
+
 // ─── Rubric stem keys (the 63 in show_profiles; 1 show-level NULL excluded) ────
 // Used by the parity test. Exact-match targets for normalizeAoyCategory output.
 export const AOY_CATEGORY_KEYS: string[] = [
@@ -310,4 +341,39 @@ export function aoyDisplayLabel(args: {
     ? (args.marketLabel ?? '')
     : (track?.label ?? '')
   return `${scope} ${args.option.label}`.trim()
+}
+
+// ─── Resolve a stored best_category back to its track + pillar + candidate set ─
+// Used by the AOY category-fit recommender (recommend-aoy-category, S76): given a
+// direction's stored best_category (e.g. "Southeast Asia Young Business Leader of
+// the Year" or "Singapore Media Agency of the Year"), recover the track (longest
+// matching market/sub-region prefix), the rubric stem, the pillar, and the FULL
+// market-scoped candidate set for that (track, pillar). The recommender ranks
+// only within this set, so South Asia (excluded track) and Asia-Pacific/Network
+// (excluded from the picker) can never appear. Returns null if no track prefix
+// matches or the pillar has no options.
+export function aoyResolveStored(bestCategory: string | null | undefined): {
+  trackId: string
+  pillar: AoyPillar
+  stemKey: string
+  candidates: AoyCategoryOption[]
+} | null {
+  const raw = (bestCategory ?? '').replace(/\[NEW\]/gi, '').replace(/\s+/g, ' ').trim()
+  if (!raw) return null
+  // Every track's sub-region prefix plus its market prefixes, longest first so a
+  // short token can never match inside a longer prefix.
+  const prefixes: { prefix: string; trackId: string }[] = []
+  for (const t of AOY_TRACKS) {
+    prefixes.push({ prefix: t.subregionPrefix, trackId: t.id })
+    for (const m of t.markets) prefixes.push({ prefix: m.prefix, trackId: t.id })
+  }
+  prefixes.sort((a, b) => b.prefix.length - a.prefix.length)
+  const hit = prefixes.find(p => raw.toLowerCase().startsWith(p.prefix.toLowerCase() + ' '))
+  if (!hit) return null
+  const stemKey = normalizeAoyCategory(raw)
+  if (!stemKey) return null
+  const pillar = pillarForKey(stemKey)
+  const candidates = aoyCategoryOptions(hit.trackId, pillar)
+  if (candidates.length === 0) return null
+  return { trackId: hit.trackId, pillar, stemKey, candidates }
 }
