@@ -56,6 +56,7 @@ import { appErrorFromResponse, formatError, parseErrorString } from '@/lib/error
 import { computeRoiIndex, normaliseKbShow, DEADLINES_2026 } from '@/lib/shows-data'
 import { isAoyShow, AOY_SHOW_NAME } from '@/lib/aoy-taxonomy'
 import AoyEntryPicker from '@/components/AoyEntryPicker'
+import AgencyFactsValidator from '@/components/AgencyFactsValidator'
 import JuryProfilePanel, { JuryCell, RegionalUplift } from '@/components/JuryProfilePanel'
 
 // ── ErrorBanner — renders a friendly message with a small diagnostic code ────
@@ -806,6 +807,9 @@ type Project = {
   script_text: string | null
   script_analysis: ScriptAnalysis | null
   tonal_brief: TonalBrief | null
+  // AOY entry-type discriminator (S71) + validated agency-facts record (S73).
+  entry_type: string | null
+  agency_facts: Record<string, unknown> | null
 }
 
 type Direction = {
@@ -1310,7 +1314,7 @@ export default function ProjectPage() {
     //    active judge eval per direction is backfilled by a targeted query below
     Promise.all([
       supabase.from('projects')
-        .select('id, campaign_name, client_name, combined_text, target_shows, status, script_text, script_analysis, tonal_brief')
+        .select('id, campaign_name, client_name, combined_text, target_shows, status, script_text, script_analysis, tonal_brief, entry_type, agency_facts')
         .eq('id', projectId).single(),
       supabase.from('directions').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
       // RPC preserves the old ordering: sort_order ASC, id ASC (deterministic across generations)
@@ -4535,6 +4539,19 @@ export default function ProjectPage() {
                     </button>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* AOY Phase 2 (S73) — agency facts: extract -> point-by-point validate
+                -> propagate org-wide. Shown once the project is an AOY entry
+                (entry_type set, or any AOY direction exists). */}
+            {(project.entry_type === 'aoy' || directions.some(d => isAoyShow(d.best_show))) && (
+              <div className="mb-5">
+                <AgencyFactsValidator
+                  projectId={project.id}
+                  getToken={getToken}
+                  onPropagated={() => setProject(p => (p ? { ...p, entry_type: 'aoy' } : p))}
+                />
               </div>
             )}
 
