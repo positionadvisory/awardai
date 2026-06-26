@@ -54,6 +54,7 @@ import ShowsDrawer from '@/components/shows/ShowsDrawer'
 import { MATERIALS_EVAL_STATEMENTS, JURY_EVAL_STATEMENTS, COACH_REVIEW_STATEMENTS } from '@/lib/generatingStatements'
 import { appErrorFromResponse, formatError, parseErrorString } from '@/lib/errorMessages'
 import { computeRoiIndex, normaliseKbShow, DEADLINES_2026 } from '@/lib/shows-data'
+import { isAoyShow, AOY_PILLARS, AOY_TRACKS, aoyTrackById, aoyCategoryOptions, buildAoyBestCategory, type AoyPillar } from '@/lib/aoy-taxonomy'
 import JuryProfilePanel, { JuryCell, RegionalUplift } from '@/components/JuryProfilePanel'
 
 // ── ErrorBanner — renders a friendly message with a small diagnostic code ────
@@ -1199,6 +1200,37 @@ export default function ProjectPage() {
   // Session 52 — "Suggest for me" on the category field (recommendation, not detection)
   const [quickEvalSuggesting, setQuickEvalSuggesting] = useState(false)
   const [quickEvalSuggestion, setQuickEvalSuggestion] = useState<{ rationale: string; confidence: string } | null>(null)
+
+  // Session 72 — Campaign AOY controlled, market-scoped category picker.
+  // AOY categories are track-prefixed and must normalize to a rubric stem, so the
+  // free-text field is replaced by this cascade when the chosen show is AOY. The
+  // selection writes a CANONICAL value into quickEvalCategory (the same field the
+  // existing evaluate path stores on directions.best_category), guaranteed by the
+  // parity test to normalize onto a show_profiles.category_pattern key.
+  const [aoyPillar, setAoyPillar] = useState<AoyPillar>('agency')
+  const [aoyTrackId, setAoyTrackId] = useState('')
+  const [aoyCatStem, setAoyCatStem] = useState('')
+  const [aoyMarketPrefix, setAoyMarketPrefix] = useState('')
+
+  function resetAoyPicker() {
+    setAoyPillar('agency'); setAoyTrackId(''); setAoyCatStem(''); setAoyMarketPrefix('')
+  }
+
+  // Recompute the canonical best_category from the current cascade and push it into
+  // quickEvalCategory (empty until a full, resolvable selection exists).
+  function syncAoyCategory(next: { pillar?: AoyPillar; trackId?: string; stem?: string; market?: string }) {
+    const pillar = next.pillar ?? aoyPillar
+    const trackId = next.trackId ?? aoyTrackId
+    const stem = next.stem ?? aoyCatStem
+    const market = next.market ?? aoyMarketPrefix
+    const opt = aoyCategoryOptions(trackId, pillar).find(o => o.stemKey === stem)
+    if (!opt) { setQuickEvalCategory(''); return }
+    if (opt.requiresMarket && !market) { setQuickEvalCategory(''); return }
+    const value = buildAoyBestCategory({ trackId, option: opt, marketPrefix: market || null })
+    setQuickEvalCategory(value ?? '')
+    setQuickEvalSuggestion(null)
+    setQuickEvalDetectedFields(prev => ({ ...prev, category: false }))
+  }
 
   useEffect(() => {
     if (!user || !projectId) return
@@ -3168,8 +3200,15 @@ export default function ProjectPage() {
         setQuickEvalShow(detected.show)
         detectedFields.show = true
       }
-      // Always use AI for category — harder to detect client-side
-      if (detected.category) {
+      // Campaign AOY: categories are controlled + market-scoped — never accept a
+      // free-text category from detection. The picker (rendered when the show is
+      // AOY) drives selection; clear any stale category so it cannot proceed
+      // unresolved. (detect-entry-context returns category null + aoy:true here.)
+      if (detected.aoy || isAoyShow(detected.show ?? quickEvalShow)) {
+        resetAoyPicker()
+        setQuickEvalCategory('')
+      } else if (detected.category) {
+        // Always use AI for category — harder to detect client-side
         setQuickEvalCategory(detected.category)
         detectedFields.category = true
       }
@@ -7405,7 +7444,7 @@ export default function ProjectPage() {
                       <button
                         key={show}
                         type="button"
-                        onClick={() => { setQuickEvalShow(show); setQuickEvalCategory(''); setQuickEvalDetectedFields(prev => ({ ...prev, show: false, category: false })); setQuickEvalSuggestion(null) }}
+                        onClick={() => { setQuickEvalShow(show); setQuickEvalCategory(''); resetAoyPicker(); setQuickEvalDetectedFields(prev => ({ ...prev, show: false, category: false })); setQuickEvalSuggestion(null) }}
                         className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
                           quickEvalShow === show
                             ? 'bg-green-100 text-green-800 border-green-300 font-medium'
@@ -7421,7 +7460,7 @@ export default function ProjectPage() {
                   type="text"
                   list="quickeval-shows"
                   value={quickEvalShow}
-                  onChange={e => { setQuickEvalShow(e.target.value); setQuickEvalDetectedFields(prev => ({ ...prev, show: false })); setQuickEvalSuggestion(null) }}
+                  onChange={e => { setQuickEvalShow(e.target.value); resetAoyPicker(); setQuickEvalCategory(''); setQuickEvalDetectedFields(prev => ({ ...prev, show: false })); setQuickEvalSuggestion(null) }}
                   placeholder={(project.target_shows ?? []).length > 0 ? 'Or type another show…' : 'e.g. Cannes Lions, Effies APAC, WARC…'}
                   className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
                 />
@@ -7432,45 +7471,137 @@ export default function ProjectPage() {
               <div>
                 <div className="flex items-center gap-2 mb-1.5">
                   <label className="text-xs text-gray-500">Category</label>
-                  {quickEvalDetectedFields.category && !quickEvalDetecting && (
+                  {!isAoyShow(quickEvalShow) && quickEvalDetectedFields.category && !quickEvalDetecting && (
                     <span className={`text-xs font-medium ${quickEvalDetectedFields.confidence === 'low' ? 'text-amber-600' : 'text-green-600'}`}>
                       {quickEvalDetectedFields.confidence === 'low' ? '? verify' : '✓ detected'}
                     </span>
                   )}
-                  {quickEvalSuggestion && quickEvalCategory && !quickEvalSuggesting && (
+                  {!isAoyShow(quickEvalShow) && quickEvalSuggestion && quickEvalCategory && !quickEvalSuggesting && (
                     <span className={`text-xs font-medium ${quickEvalSuggestion.confidence === 'low' ? 'text-amber-600' : 'text-green-600'}`}>
                       ✦ suggested
                     </span>
                   )}
-                  {/* Session 52 — for users who don't know the right category */}
-                  <button
-                    type="button"
-                    onClick={suggestQuickEvalCategory}
-                    disabled={quickEvalSuggesting || quickEvaluating || quickEvalDetecting || !quickEvalShow.trim()}
-                    title={!quickEvalShow.trim() ? 'Choose an award show first' : 'Recommend the best-fit category based on the entry content'}
-                    className="ml-auto text-xs font-medium text-green-700 hover:text-green-600 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {quickEvalSuggesting ? 'Suggesting…' : "Don't know? Suggest for me"}
-                  </button>
+                  {/* Session 52 — for users who don't know the right category (non-AOY only) */}
+                  {!isAoyShow(quickEvalShow) && (
+                    <button
+                      type="button"
+                      onClick={suggestQuickEvalCategory}
+                      disabled={quickEvalSuggesting || quickEvaluating || quickEvalDetecting || !quickEvalShow.trim()}
+                      title={!quickEvalShow.trim() ? 'Choose an award show first' : 'Recommend the best-fit category based on the entry content'}
+                      className="ml-auto text-xs font-medium text-green-700 hover:text-green-600 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {quickEvalSuggesting ? 'Suggesting…' : "Don't know? Suggest for me"}
+                    </button>
+                  )}
                 </div>
-                {/* Free-text category input with optional suggestions for known shows */}
-                <input
-                  type="text"
-                  list="quickeval-categories"
-                  value={quickEvalCategory}
-                  onChange={e => { setQuickEvalCategory(e.target.value); setQuickEvalDetectedFields(prev => ({ ...prev, category: false })); setQuickEvalSuggestion(null) }}
-                  placeholder="e.g. Seasonal Marketing, Film Craft, Creative Effectiveness…"
-                  className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
-                />
-                <datalist id="quickeval-categories">
-                  {categoriesForShow(quickEvalShow).map((cat: string) => (
-                    <option key={cat} value={cat} />
-                  ))}
-                </datalist>
-                {quickEvalSuggestion && quickEvalCategory && (
-                  <p className={`text-xs mt-1.5 ${quickEvalSuggestion.confidence === 'low' ? 'text-amber-600' : 'text-gray-500'}`}>
-                    {quickEvalSuggestion.rationale || 'Suggested from the entry content — review before evaluating.'}
-                  </p>
+
+                {isAoyShow(quickEvalShow) ? (
+                  /* Session 72 — Campaign AOY controlled, market-scoped picker.
+                     Pillar -> Track -> Category (+ Market for market-tier categories).
+                     Writes a canonical best_category that resolves to a rubric stem. */
+                  <div className="rounded-lg border border-green-200 bg-green-50/40 p-3 grid grid-cols-1 gap-3">
+                    <p className="text-xs text-gray-500">
+                      Agency of the Year categories are market-scoped. Pick your pillar, track and category. South Asia is on its 2025 cycle and is not yet open.
+                    </p>
+
+                    {/* Pillar */}
+                    <div className="flex flex-wrap gap-1.5">
+                      {AOY_PILLARS.map(p => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => { setAoyPillar(p.id); setAoyCatStem(''); setAoyMarketPrefix(''); setQuickEvalCategory('') }}
+                          className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                            aoyPillar === p.id
+                              ? 'bg-green-100 text-green-800 border-green-300 font-medium'
+                              : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400 hover:text-gray-900'
+                          }`}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Track */}
+                    <div>
+                      <label className="text-xs text-gray-500 block mb-1">Track</label>
+                      <select
+                        value={aoyTrackId}
+                        onChange={e => { setAoyTrackId(e.target.value); setAoyCatStem(''); setAoyMarketPrefix(''); setQuickEvalCategory('') }}
+                        className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-green-600 transition-colors"
+                      >
+                        <option value="">Select a track…</option>
+                        {AOY_TRACKS.map(t => (
+                          <option key={t.id} value={t.id}>{t.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Category */}
+                    {aoyTrackId && (
+                      <div>
+                        <label className="text-xs text-gray-500 block mb-1">Category</label>
+                        <select
+                          value={aoyCatStem}
+                          onChange={e => { const stem = e.target.value; setAoyCatStem(stem); setAoyMarketPrefix(''); syncAoyCategory({ stem, market: '' }) }}
+                          className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-green-600 transition-colors"
+                        >
+                          <option value="">Select a category…</option>
+                          {aoyCategoryOptions(aoyTrackId, aoyPillar).map(o => (
+                            <option key={o.stemKey} value={o.stemKey}>
+                              {o.label}{o.isNew ? '  (new for 2026)' : ''}{o.requiresMarket ? '  (pick market)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Market (only for market-tier categories) */}
+                    {aoyTrackId && aoyCatStem && aoyCategoryOptions(aoyTrackId, aoyPillar).find(o => o.stemKey === aoyCatStem)?.requiresMarket && (
+                      <div>
+                        <label className="text-xs text-gray-500 block mb-1">Market</label>
+                        <select
+                          value={aoyMarketPrefix}
+                          onChange={e => { const market = e.target.value; setAoyMarketPrefix(market); syncAoyCategory({ market }) }}
+                          className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-green-600 transition-colors"
+                        >
+                          <option value="">Select a market…</option>
+                          {(aoyTrackById(aoyTrackId)?.markets ?? []).map(m => (
+                            <option key={m.prefix} value={m.prefix}>{m.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Resolved canonical value */}
+                    {quickEvalCategory && (
+                      <p className="text-xs text-green-700">
+                        Entering as: <span className="font-medium">{quickEvalCategory}</span>
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    {/* Free-text category input with optional suggestions for known shows */}
+                    <input
+                      type="text"
+                      list="quickeval-categories"
+                      value={quickEvalCategory}
+                      onChange={e => { setQuickEvalCategory(e.target.value); setQuickEvalDetectedFields(prev => ({ ...prev, category: false })); setQuickEvalSuggestion(null) }}
+                      placeholder="e.g. Seasonal Marketing, Film Craft, Creative Effectiveness…"
+                      className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
+                    />
+                    <datalist id="quickeval-categories">
+                      {categoriesForShow(quickEvalShow).map((cat: string) => (
+                        <option key={cat} value={cat} />
+                      ))}
+                    </datalist>
+                    {quickEvalSuggestion && quickEvalCategory && (
+                      <p className={`text-xs mt-1.5 ${quickEvalSuggestion.confidence === 'low' ? 'text-amber-600' : 'text-gray-500'}`}>
+                        {quickEvalSuggestion.rationale || 'Suggested from the entry content — review before evaluating.'}
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             </div>
