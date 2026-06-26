@@ -838,6 +838,7 @@ type EntryDraft = {
   field_key: string
   field_label: string
   word_limit: number | null
+  section_weight?: number | null   // AOY only — % of the category score this section carries (S74)
   version_a: string | null
   version_b: string | null
   version_c: string | null
@@ -3036,12 +3037,17 @@ export default function ProjectPage() {
     try {
       const accessToken = await getToken()
       if (!accessToken) return
+      // AOY directions route to the dedicated weighted-section drafter (S74).
+      // Same body + response shape ({ entry_drafts, draft_generation }); the
+      // campaign path (generate-draft) is untouched.
+      const isAoyDir = isAoyShow(directions.find(d => d.id === directionId)?.best_show ?? '')
+      const draftFnName = isAoyDir ? 'generate-aoy-draft' : 'generate-draft'
       const body: Record<string, unknown> = { project_id: project.id, direction_id: directionId }
       if (evaluationId) body.evaluation_id = evaluationId
       const focusItems = draftFocusItems[directionId] || []
       if (focusItems.length > 0) body.focus_items = focusItems
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-draft`,
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/${draftFnName}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}`, 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
@@ -5844,6 +5850,39 @@ export default function ProjectPage() {
                           </div>
                         )}
 
+                        {/* AOY page-budget meter (Session 74) — AOY entries only.
+                            Words used across the exec summary + weighted sections
+                            (the endorsement gate is excluded) vs the 10-page cap. */}
+                        {project?.entry_type === 'aoy' && fields.some(f => f.section_weight != null) && (() => {
+                          const AOY_WORDS_PER_PAGE = 500
+                          const AOY_MAX_PAGES = 10
+                          const budgetFields = fields.filter(f => f.field_key !== 'endorsement')
+                          const usedWords = budgetFields.reduce((acc, f) => acc + countWords(resolveFieldContent(f)), 0)
+                          const usedPages = usedWords / AOY_WORDS_PER_PAGE
+                          const pct = Math.min(100, Math.round((usedPages / AOY_MAX_PAGES) * 100))
+                          const over = usedWords > AOY_WORDS_PER_PAGE * AOY_MAX_PAGES
+                          const weightSum = fields.reduce((acc, f) => acc + (f.section_weight ?? 0), 0)
+                          return (
+                            <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Page budget</span>
+                                <span className={`text-xs tabular-nums ${over ? 'text-red-600' : 'text-gray-500'}`}>
+                                  {usedWords.toLocaleString()} words · ~{usedPages.toFixed(1)} / {AOY_MAX_PAGES} pages
+                                </span>
+                              </div>
+                              <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: over ? '#dc2626' : '#166534' }} />
+                              </div>
+                              {over && (
+                                <p className="text-xs text-red-600 mt-1.5">Over the 10-page limit. Tighten the lower-weighted sections first.</p>
+                              )}
+                              {weightSum > 0 && weightSum !== 100 && (
+                                <p className="text-xs text-amber-600 mt-1.5">Section weights total {weightSum}%, not 100%. Check the category rubric.</p>
+                              )}
+                            </div>
+                          )
+                        })()}
+
                         {/* Entry fields */}
                         <div className="divide-y divide-gray-100">
                           {fields.map(field => {
@@ -5890,6 +5929,11 @@ export default function ProjectPage() {
                                 <div className="flex items-start justify-between mb-3 gap-3">
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">{field.field_label}</p>
+                                    {field.section_weight != null && (
+                                      <span className="text-xs px-2 py-0.5 rounded-full bg-green-50 border border-green-200 text-green-700 font-medium tabular-nums">
+                                        {field.section_weight}% of score
+                                      </span>
+                                    )}
                                     {(field.version_b || field.version_c) && (
                                       <div className="flex items-center gap-1">
                                         {(['a', 'b', 'c'] as const).map(v => {
