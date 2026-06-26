@@ -982,9 +982,24 @@ function scoreBg(score: number): string {
 
 // Coach mode shows UNTAPPED potential (10 - raw score). Lower = better.
 function coachScoreColor(untapped: number): string {
-  if (untapped <= 2) return 'text-green-700'   // <=2 pts gap — most potential captured
+  if (untapped <= 2) return 'text-green-700'   // <=2 pts gap, most potential captured
   if (untapped <= 5) return 'text-amber-700'   // moderate gap
   return 'text-red-600'                         // significant potential not yet in draft
+}
+
+// Thin proportional meter bar shared by the AOY panels (weight share, fit score).
+// Width/colors are INLINE styles, not Tailwind arbitrary values: the purge drops
+// arbitrary values in dynamic spots here (the GeneratingBar / gold-accent gotcha).
+// Presentational only; the fraction is always computed from code-authoritative
+// numbers (persisted section_weight, parsed rubric weight, model fit 0-10).
+function MeterBar({ fraction, color = '#15803d', track = '#e5e7eb', height = 4 }:
+  { fraction: number; color?: string; track?: string; height?: number }) {
+  const pct = Math.max(0, Math.min(1, Number.isFinite(fraction) ? fraction : 0)) * 100
+  return (
+    <div className="w-full rounded-full overflow-hidden" style={{ height, backgroundColor: track }}>
+      <div style={{ width: `${pct}%`, height: '100%', backgroundColor: color, borderRadius: 9999 }} />
+    </div>
+  )
 }
 
 function buildAnalysisText(
@@ -4921,17 +4936,25 @@ export default function ProjectPage() {
                     {s.recommendations.map((r, i) => {
                       const exists = directions.some(d => isAoyShow(d.best_show) && (d.best_category ?? '') === r.best_category)
                       return (
-                        <div key={r.stem} className={`border rounded-lg px-3 py-2 ${i === 0 ? 'border-green-300 bg-green-50/40' : 'border-gray-200 bg-white'}`}>
+                        <div key={r.stem} className={`border rounded-lg px-3 py-2.5 ${i === 0 ? 'border-green-300 bg-green-50/40' : 'border-gray-200 bg-white'}`}>
                           <div className="flex items-baseline justify-between gap-2">
-                            <p className="text-xs font-medium text-gray-800 flex-1 min-w-0">{r.label}{i === 0 && <span className="text-green-700"> · top pick</span>}</p>
+                            <p className="text-xs font-medium text-gray-800 flex-1 min-w-0">
+                              {r.label}
+                              {i === 0 && <span className="ml-1.5 text-xs font-semibold bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full align-middle">Top pick</span>}
+                            </p>
                             <p className="text-sm font-bold tabular-nums text-gray-700 flex-shrink-0">{r.fit}<span className="text-xs text-gray-400">/10</span></p>
                           </div>
-                          {r.positioning && <p className="text-xs text-gray-600 mt-1">{r.positioning}</p>}
-                          {r.rationale && <p className="text-xs text-gray-500 mt-0.5">{r.rationale}</p>}
+                          <div className="mt-1.5"><MeterBar fraction={(r.fit || 0) / 10} color={i === 0 ? '#166534' : '#16a34a'} /></div>
+                          {r.positioning && <p className="text-xs text-gray-700 mt-1.5 leading-relaxed">{r.positioning}</p>}
+                          {r.rationale && <p className="text-xs text-gray-500 mt-1 leading-relaxed">{r.rationale}</p>}
                           {r.evidence_sections.length > 0 && (
-                            <p className="text-xs text-gray-400 mt-0.5">Leans on: {r.evidence_sections.map(x => `${x.name} (${x.weight}%)`).join(', ')}</p>
+                            <div className="mt-1.5 flex flex-wrap gap-1">
+                              {r.evidence_sections.map((x, xi) => (
+                                <span key={xi} className="text-xs bg-gray-100 text-gray-600 border border-gray-200 px-1.5 py-0.5 rounded-full tabular-nums">{x.name} {x.weight}%</span>
+                              ))}
+                            </div>
                           )}
-                          <div className="mt-1.5">
+                          <div className="mt-2">
                             {exists ? (
                               <span className="text-xs text-gray-400">Already added</span>
                             ) : (
@@ -5651,20 +5674,26 @@ export default function ProjectPage() {
                                   <ul className="list-disc list-inside space-y-0.5">{c.priorities.map((p, i) => <li key={i} className="text-xs text-gray-600">{p}</li>)}</ul>
                                 </div>
                               )}
+                              {(() => {
+                                const maxWeight = c.sections.reduce((m, x) => Math.max(m, x.weight || 0), 1)
+                                return (
                               <div className="mt-3 space-y-2">
                                 {c.sections.map(sec => (
-                                  <div key={sec.key} className="border border-gray-200 rounded-lg bg-white px-3 py-2">
+                                  <div key={sec.key} className={`border rounded-lg px-3 py-2.5 ${sec.is_placeholder ? 'border-amber-200 bg-amber-50/40' : 'border-gray-200 bg-white'}`}>
                                     <div className="flex items-baseline justify-between gap-2">
-                                      <p className="text-xs font-medium text-gray-800">{sec.label}</p>
-                                      <span className="text-xs text-gray-400 tabular-nums flex-shrink-0">{sec.weight}%{sec.is_placeholder ? ' · not written' : ''}</span>
+                                      <p className="text-xs font-medium text-gray-800 min-w-0 flex-1">{sec.label}</p>
+                                      <span className="text-xs text-gray-400 tabular-nums flex-shrink-0">{sec.weight}% of score{sec.is_placeholder ? ' · not written' : ''}</span>
                                     </div>
-                                    {sec.missing.length > 0 && <p className="text-xs text-amber-700 mt-1">Missing: {sec.missing.join('; ')}</p>}
+                                    <div className="mt-1.5"><MeterBar fraction={(sec.weight || 0) / maxWeight} color={sec.is_placeholder ? '#d97706' : '#15803d'} /></div>
+                                    {sec.missing.length > 0 && <p className="text-xs text-amber-700 mt-1.5">Missing: {sec.missing.join('; ')}</p>}
                                     {sec.suggestions.length > 0 && (
-                                      <ul className="list-disc list-inside mt-1 space-y-0.5">{sec.suggestions.map((x, i) => <li key={i} className="text-xs text-gray-600">{x}</li>)}</ul>
+                                      <ul className="list-disc list-inside mt-1 space-y-0.5">{sec.suggestions.map((x, i) => <li key={i} className="text-xs text-gray-600 leading-relaxed">{x}</li>)}</ul>
                                     )}
                                   </div>
                                 ))}
                               </div>
+                                )
+                              })()}
                             </div>
                           )
                         })()}
@@ -5859,26 +5888,32 @@ export default function ProjectPage() {
                                     {aoyOut.pillar && <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full capitalize">{aoyOut.pillar} pillar</span>}
                                   </div>
                                   {aoyOut.weight_warning && <p className="text-xs text-amber-600 mb-2">{aoyOut.weight_warning}</p>}
-                                  <div className="space-y-1.5">
+                                  {(() => {
+                                    const maxWeight = secs.reduce((m, x) => Math.max(m, x.weight || 0), 1)
+                                    return (
+                                  <div className="space-y-2">
                                     {secs.map(s => {
                                       const sDelta = deltas?.[s.key]
                                       return (
-                                        <div key={s.key} className={`border rounded-lg px-3 py-2 ${scoreBg(s.score)}`}>
+                                        <div key={s.key} className={`border rounded-lg px-3 py-2.5 ${scoreBg(s.score)}`}>
                                           <div className="flex items-baseline justify-between gap-2">
-                                            <p className="text-xs text-gray-600 font-medium">{s.label} <span className="text-gray-400">· {s.weight}%</span></p>
+                                            <p className="text-xs text-gray-700 font-medium min-w-0 flex-1">{s.label} <span className="text-gray-400 font-normal">{s.weight}% of score</span></p>
                                             <div className="flex items-baseline gap-1.5 flex-shrink-0">
                                               <p className={`text-lg font-bold tabular-nums ${scoreColor(s.score)}`}>{s.score}<span className="text-xs text-gray-400">/10</span></p>
                                               {sDelta !== undefined && sDelta !== 0 && (
                                                 <span className={`text-xs font-semibold tabular-nums ${sDelta > 0 ? 'text-green-600' : 'text-red-500'}`}>{sDelta > 0 ? `↑+${sDelta}` : `↓${sDelta}`}</span>
                                               )}
-                                              <span className="text-xs text-gray-400 tabular-nums">+{s.weighted_contribution}</span>
                                             </div>
                                           </div>
-                                          {s.rationale && <p className="text-xs text-gray-500 mt-1">{s.rationale}</p>}
+                                          <div className="mt-1.5"><MeterBar fraction={(s.weight || 0) / maxWeight} /></div>
+                                          <p className="text-xs text-gray-400 mt-1 tabular-nums">Adds {s.weighted_contribution} to the weighted total{s.is_placeholder ? ' · section not written' : ''}</p>
+                                          {s.rationale && <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">{s.rationale}</p>}
                                         </div>
                                       )
                                     })}
                                   </div>
+                                    )
+                                  })()}
                                 </div>
                               )
                             })()}
