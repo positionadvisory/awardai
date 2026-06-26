@@ -395,11 +395,11 @@ export const DEADLINES_2026: ShowDeadline[] = [
   },
   {
     show: 'Campaign Asia Agency of the Year', region: 'APAC',
-    finalDate: '2026-09-04', juryDate: '2026-10-28', ceremonyDate: '',
-    earlyBird: '30 Jun 2026', standard: '30 Jul 2026', final: '4 Sep 2026', ceremony: 'Late Nov/Early Dec 2026 (venue TBA)',
+    finalDate: '2026-09-04', juryDate: '2026-10-28', ceremonyDate: '2026-12-08',
+    earlyBird: '30 Jun 2026', standard: '30 Jul 2026', final: '4 Sep 2026', ceremony: 'By track: Japan/Korea 25 Nov (Hilton Tokyo); Greater China 1 Dec (Shanghai, venue TBA); SE Asia + ANZ + APAC/Network 8 Dec (Fairmont Singapore)',
     prValue: 35,
-    note: '2026 cycle fully live at aoyawards.com. Eligibility period: 1 Sep 2025–31 Aug 2026. Early bird 30 Jun (HKD 3,950 people / 4,780 agency); standard 30 Jul (HKD 4,750 / 5,650); final 4 Sep (HKD 5,350 / 6,250). Shortlists announced 28 Oct 2026. Awards presentation late Nov/early Dec 2026. Organiser: Campaign Asia-Pacific / Haymarket Media (contact via haymarket.asia). APAC-wide with market sub-categories: Australia/NZ, Greater China, Japan/Korea, South Asia, Southeast Asia, APAC/Network. Note: separate "AOY Globals" scheme also runs (launched 2020) — distinct entry type.',
-    confidence: 'partial', lastVerified: '2026-06-03',
+    note: '33rd edition (launched 1994); agency-PERFORMANCE award judged by client marketers on written submissions, not a creative-craft show. 2026 live at aoyawards.com for 5 of 6 tracks; SOUTH ASIA STILL ON ITS 2025 CYCLE as of 26 Jun 2026 (do not treat SA as open until its page refreshes; SA bills INR + 18% GST, all other tracks HKD). Eligibility 1 Sep 2025–31 Aug 2026. Per-entry fees (HKD): early bird 30 Jun 3,950 people / 4,780 agency-brand; standard 30 Jul 4,750 / 5,650; final 4 Sep 5,350 / 6,250. Shortlists 28 Oct. Each category has its OWN weighted scoring rubric (loaded to show_profiles 26 Jun 2026); cross-market Network titles use a market-weighted, ownership-scaled point system (awarded Platinum; eligibility min 2 wins incl 1 Gold). Endorsement requires CEO + CFO sign-off plus a wet-signature Letter of Endorsement. 3 new categories for 2026: Agency AI Excellence, MarTech Agency, Most Innovative MarTech Team. Integrity partner: SCS-Invictus. ⚠️ Entry/shortlist/winner volumes NOT published by Campaign — WIN_RATES are estimates, not for client-facing use. Organiser: Campaign Asia-Pacific / Haymarket. Separate "AOY Globals" scheme (2020) is a distinct entry type.',
+    confidence: 'verified', lastVerified: '2026-06-26',
   },
   {
     show: 'ROI Festival', region: 'Global',
@@ -562,7 +562,8 @@ export const WIN_RATES: Record<string, WinRateData> = {
   'Campaign Asia Agency of the Year': {
     shortlist: 40, metal: 25, gold: 10, grandprix: 3,
     pr: { shortlist: 12000, metal: 40000, gold: 150000, grandprix: 500000 },
-    fee: 420,
+    fee: 724, // ESTIMATE win rates (AOY publishes no denominators); fee must equal ENTRY_FEES.base
+
   },
   'ROI Festival': {
     shortlist: 35, metal: 20, gold: 8, grandprix: 2.5,
@@ -702,7 +703,7 @@ export const ENTRY_FEES: Record<string, EntryFeeData> = {
   'New York Festivals Advertising Awards': { base: 1050, range: '$600–$1,500 (USD; entry type/deadline dependent)', note: 'Live URL: nyfadvertising.com. Shortlist 8 Jun, winners 15 Jun 2026. NYF Cristal Village Award confirmed active 2026 NYFA category (verified nyfadvertising.com/Competition/Categories Jun 2026 — homepage "2025" label is stale). ESTIMATE — win rate benchmarks not confirmed from official statistics.' },
   'Dubai Lynx':             { base: 870,  range: '$575–$1,170 (USD; category/deadline dependent)', note: 'MENA premier show. Cannes Lions affiliate. Ceremony 8 Oct 2026 — re-pull all benchmarks after that date. ESTIMATE until post-Oct 2026 stats available.' },
   'Gerety Awards':          { base: 545,  range: '€340–€750 (EUR; single/campaign and deadline dependent)', note: 'Female jury. Ceremony TBC. ESTIMATE — benchmark with Ben.' },
-  'Campaign Asia Agency of the Year': { base: 420,  range: 'HKD 3,950–6,250 (people / agency; tier dependent)', note: 'Early bird by 30 Jun: HKD 3,950 (people) / 4,780 (agency/brand). Standard by 30 Jul: HKD 4,750 / 5,650. Final by 4 Sep: HKD 5,350 / 6,250. Source: aoyawards.com (verified 3 Jun 2026).' },
+  'Campaign Asia Agency of the Year': { base: 724,  range: 'HKD 3,950–6,250 per entry (people / agency-brand; tier dependent); South Asia billed INR + 18% GST', note: 'base = standard Agency/Brand single entry HKD 5,650 ≈ USD 724 at HKD peg 7.80 (canonical for ROI; must equal WIN_RATES.fee). Early bird by 30 Jun: HKD 3,950 (people) / 4,780 (agency/brand). Standard by 30 Jul: HKD 4,750 / 5,650. Final by 4 Sep: HKD 5,350 / 6,250. Fees HKD except South Asia (INR + 18% GST). Source: aoyawards.com + 2026 Entry Kit (verified 26 Jun 2026).' },
   'ROI Festival':           { base: 450,  range: 'Not published in English', note: 'Fees appear in Chinese-language entry handbook only (roifestival.com/cn). Require login at entry.roifestival.com/en or handbook download to obtain. Do not commit budget until fees confirmed.' },
   'Tangrams':               { base: 400,  range: 'N/A — integrated into Spikes Asia', note: 'Use Spikes Asia Strategy & Effectiveness Spike.' },
   'Spikes Asia':            { base: 631,  range: 'SGD 810 (Film base standard single); SGD 655–1,005 across categories (2026 cycle); 2027 rates pending', note: 'Canonical fee: Film base standard single SGD 810 × SGD 0.7787 = $631 USD (verified ledger B1; spikes.asia dates-and-fees). 2026 cycle closed Mar 2026; 2027 entry kit not yet published. Await 2027 rates at spikes.asia before next cycle.' },
