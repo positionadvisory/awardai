@@ -54,7 +54,7 @@ import ShowsDrawer from '@/components/shows/ShowsDrawer'
 import { MATERIALS_EVAL_STATEMENTS, JURY_EVAL_STATEMENTS, COACH_REVIEW_STATEMENTS } from '@/lib/generatingStatements'
 import { appErrorFromResponse, formatError, parseErrorString } from '@/lib/errorMessages'
 import { computeRoiIndex, normaliseKbShow, DEADLINES_2026 } from '@/lib/shows-data'
-import { isAoyShow, AOY_SHOW_NAME } from '@/lib/aoy-taxonomy'
+import { isAoyShow, AOY_SHOW_NAME, aoyResolveStored } from '@/lib/aoy-taxonomy'
 import AoyEntryPicker from '@/components/AoyEntryPicker'
 import AgencyFactsValidator from '@/components/AgencyFactsValidator'
 import JuryProfilePanel, { JuryCell, RegionalUplift } from '@/components/JuryProfilePanel'
@@ -832,6 +832,25 @@ type ChatMessage = {
   version_created?: string
 }
 
+// AOY category-fit recommender result (recommend-aoy-category, S76). Weights are
+// authoritative from the parsed rubric, set server-side, never the model.
+type AoyRecommendation = {
+  aoy: boolean
+  pillar: string
+  current_category_key: string | null
+  recommendation: { top_stem: string; top_label: string; is_switch: boolean; headline: string }
+  ranking: {
+    stem: string
+    label: string
+    is_current: boolean
+    fit: number
+    evidence_sections: { name: string; weight: number }[]
+    rationale: string
+  }[]
+  summary: string
+  evidence_used: { facts: boolean; materials: boolean; draft: boolean }
+}
+
 type EntryDraft = {
   id: number
   direction_id: number
@@ -1219,6 +1238,13 @@ export default function ProjectPage() {
   const [showAoyDirModal, setShowAoyDirModal] = useState(false)
   const [addingAoyDir, setAddingAoyDir] = useState(false)
   const [aoyDirError, setAoyDirError] = useState('')
+
+  // Session 76 — AOY category-fit recommender (recommend-aoy-category, spec §5).
+  // Per-direction ranking of which market-scoped category the entry fits best.
+  const [recommending, setRecommending] = useState(false)
+  const [recommendingForDirectionId, setRecommendingForDirectionId] = useState<number | null>(null)
+  const [recommendError, setRecommendError] = useState('')
+  const [aoyRecommendations, setAoyRecommendations] = useState<Record<number, AoyRecommendation>>({})
 
   useEffect(() => {
     if (!user || !projectId) return
@@ -3071,6 +3097,52 @@ export default function ProjectPage() {
     } finally { setGeneratingDraft(false); setGeneratingForDirectionId(null) }
   }
 
+  // Session 76 — AOY category-fit recommender. Resolves the direction's stored
+  // best_category to its market-scoped candidate set (lib/aoy-taxonomy.ts owns the
+  // scoping, so South Asia / Asia-Pacific Network can never appear), then asks
+  // recommend-aoy-category which category the entry's evidence fits strongest. One
+  // ranking call; no evaluations row is written (advisory, not a scored entry).
+  const recommendAoyCategory = async (directionId: number) => {
+    if (!project) return
+    const d = directions.find(x => x.id === directionId)
+    if (!d) return
+    const resolved = aoyResolveStored(d.best_category ?? '')
+    if (!resolved || resolved.candidates.length < 2) {
+      setRecommendingForDirectionId(directionId)
+      setRecommendError(formatError({ message: 'Pick a market-scoped AOY category with at least two comparable categories before checking fit.', retryable: false, code: 'RECCAT-NOCANDIDATES' }))
+      return
+    }
+    setRecommending(true)
+    setRecommendError('')
+    setRecommendingForDirectionId(directionId)
+    try {
+      const accessToken = await getToken()
+      if (!accessToken) return
+      const candidates = resolved.candidates.map(o => ({ stem_key: o.stemKey, label: o.label }))
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/recommend-aoy-category`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}`, 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
+          body: JSON.stringify({ project_id: project.id, direction_id: directionId, candidates }),
+        }
+      )
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        setRecommendError(formatError(appErrorFromResponse(data, res.status, 'RECCAT')))
+        return
+      }
+      if (data.recommendation) {
+        setAoyRecommendations(prev => ({ ...prev, [directionId]: data.recommendation as AoyRecommendation }))
+      }
+    } catch (err) {
+      setRecommendError(formatError({ message: 'Network error. Check your connection and try again.', retryable: true, code: 'RECCAT-NET' }))
+    } finally {
+      setRecommending(false)
+      setRecommendingForDirectionId(null)
+    }
+  }
+
   const evaluateEntry = async (directionId: number, mode: 'judge' | 'coach' = 'judge', previousEvaluationId?: number) => {
     if (!project) return
     setEvaluating(true)
@@ -4816,7 +4888,54 @@ export default function ProjectPage() {
                                 {hasEval ? 'View entry & evaluation →' : 'View entry →'}
                               </button>
                             )}
+                            {/* Session 76 — AOY category-fit recommender (which market-scoped
+                                category does this entry read strongest in). AOY directions only. */}
+                            {isAoyShow(d.best_show) && (
+                              <button onClick={() => recommendAoyCategory(d.id)} disabled={recommending}
+                                className="text-xs font-medium text-green-700 hover:text-green-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5">
+                                {recommending && recommendingForDirectionId === d.id ? (<><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Checking fit…</>) : '◎ Best-fit category'}
+                              </button>
+                            )}
                           </div>
+                          {isAoyShow(d.best_show) && recommendError && recommendingForDirectionId === d.id && (
+                            <div className="mt-2"><ErrorBanner error={recommendError} /></div>
+                          )}
+                          {aoyRecommendations[d.id] && (() => {
+                            const rec = aoyRecommendations[d.id]
+                            return (
+                              <div className="mt-3 bg-gray-50 border border-gray-200 rounded-xl p-3">
+                                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                  <span className="text-xs font-semibold text-gray-700">Category fit</span>
+                                  {rec.pillar && <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full capitalize">{rec.pillar} pillar</span>}
+                                </div>
+                                {rec.recommendation?.headline && <p className="text-sm text-gray-800 font-medium">{rec.recommendation.headline}</p>}
+                                <div className="mt-2 space-y-1.5">
+                                  {rec.ranking.map(r => {
+                                    const isTop = r.stem === rec.recommendation?.top_stem
+                                    return (
+                                      <div key={r.stem} className={`border rounded-lg px-3 py-2 bg-white ${isTop ? 'border-green-300' : 'border-gray-200'}`}>
+                                        <div className="flex items-baseline justify-between gap-2">
+                                          <p className="text-xs font-medium text-gray-800 flex-1 min-w-0">
+                                            {r.label}
+                                            {r.is_current && <span className="text-gray-400"> · current</span>}
+                                            {isTop && <span className="text-green-700"> · best fit</span>}
+                                          </p>
+                                          <p className="text-sm font-bold tabular-nums text-gray-700 flex-shrink-0">{r.fit}<span className="text-xs text-gray-400">/10</span></p>
+                                        </div>
+                                        {r.rationale && <p className="text-xs text-gray-500 mt-0.5">{r.rationale}</p>}
+                                        {r.evidence_sections.length > 0 && (
+                                          <p className="text-xs text-gray-400 mt-0.5">Leans on: {r.evidence_sections.map(s => `${s.name} (${s.weight}%)`).join(', ')}</p>
+                                        )}
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                                {rec.recommendation?.is_switch && (
+                                  <p className="text-xs text-gray-500 mt-2">This is a stronger fit than your current category. Add it from the picker if you want to enter it.</p>
+                                )}
+                              </div>
+                            )
+                          })()}
                           {isGeneratingThis && (
                             <div className="mt-3">
                               <GeneratingBar isGenerating={isGeneratingThis} estimatedDuration={60000} />
