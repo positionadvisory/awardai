@@ -3077,6 +3077,20 @@ export default function ProjectPage() {
     setEvaluateError('')
     setEvaluatingForDirectionId(directionId)
     setEvaluatingMode(prev => ({ ...prev, [directionId]: mode }))
+    // AOY entries score through the weight-aware jury (evaluate-aoy-entry, S75),
+    // mirroring the generateDraft routing. The campaign judge path below is
+    // byte-untouched. AOY scoring is judge-only for now (Coach per-section is P5);
+    // a Coach click on an AOY entry is short-circuited with a clear message
+    // rather than silently returning a Jury score.
+    const isAoyDir = isAoyShow(directions.find(d => d.id === directionId)?.best_show ?? '')
+    if (isAoyDir && mode === 'coach') {
+      setEvaluateError(formatError({ message: 'Coach mode for Agency of the Year entries is coming soon. Use Jury to score this entry against its weighted rubric.', retryable: false, code: 'AOYEVAL-NOCOACH' }))
+      setEvaluating(false)
+      setEvaluatingForDirectionId(null)
+      setEvaluatingMode(prev => { const next = { ...prev }; delete next[directionId]; return next })
+      return
+    }
+    const evalFnName = isAoyDir ? 'evaluate-aoy-entry' : 'evaluate-entry'
     try {
       const accessToken = await getToken()
       if (!accessToken) return
@@ -3085,8 +3099,9 @@ export default function ProjectPage() {
       // Build 2 (Session 55): judge mode gets the next-opportunity candidate
       // list (Next Step card). Coach mode is out of scope (resolved decision #5).
       // Feedback round: existing directions also go up so the model never
-      // re-suggests a placement the project already has.
-      if (mode === 'judge') {
+      // re-suggests a placement the project already has. AOY scoring does not use
+      // these campaign-specific placement candidates.
+      if (mode === 'judge' && !isAoyDir) {
         const bodyDir = directions.find(d => d.id === directionId)
         body.next_candidates = buildNextCandidates(bodyDir?.best_show ?? '')
         body.existing_directions = directions
@@ -3095,7 +3110,7 @@ export default function ProjectPage() {
           .map(dd => ({ show: dd.best_show, category: dd.best_category ?? '' }))
       }
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/evaluate-entry`,
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/${evalFnName}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}`, 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
@@ -3434,8 +3449,25 @@ export default function ProjectPage() {
 
       setEntries(prev => [...prev, draft])
 
+      // AOY entries score through the weight-aware jury (evaluate-aoy-entry, S75).
+      // A quick-eval AOY upload is a single blob with no weighted sections, so the
+      // AOY jury returns a clear "generate the weighted-section draft first"
+      // message rather than scoring an AOY paper against the campaign rubric.
+      const quickIsAoy = isAoyShow(quickEvalShow.trim())
+      const quickEvalFnName = quickIsAoy ? 'evaluate-aoy-entry' : 'evaluate-entry'
+      const quickBody: Record<string, unknown> = { project_id: project.id, direction_id: dir.id }
+      if (!quickIsAoy) {
+        // Build 2 (Session 55): quick eval runs judge mode — send candidates
+        // so the Next Step card renders (quick eval users need it most),
+        // plus existing directions so suggestions never duplicate them.
+        quickBody.next_candidates = buildNextCandidates(quickEvalShow.trim())
+        quickBody.existing_directions = directions
+          .filter(dd => dd.angle !== 'Uploaded entry — direct evaluation' && dd.best_show)
+          .slice(0, 30)
+          .map(dd => ({ show: dd.best_show, category: dd.best_category ?? '' }))
+      }
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/evaluate-entry`,
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/${quickEvalFnName}`,
         {
           method: 'POST',
           headers: {
@@ -3443,18 +3475,7 @@ export default function ProjectPage() {
             'Authorization': `Bearer ${accessToken}`,
             'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
           },
-          // Build 2 (Session 55): quick eval runs judge mode — send candidates
-          // so the Next Step card renders (quick eval users need it most),
-          // plus existing directions so suggestions never duplicate them.
-          body: JSON.stringify({
-            project_id: project.id,
-            direction_id: dir.id,
-            next_candidates: buildNextCandidates(quickEvalShow.trim()),
-            existing_directions: directions
-              .filter(dd => dd.angle !== 'Uploaded entry — direct evaluation' && dd.best_show)
-              .slice(0, 30)
-              .map(dd => ({ show: dd.best_show, category: dd.best_category ?? '' })),
-          }),
+          body: JSON.stringify(quickBody),
         }
       )
       const data = await res.json()
@@ -5364,6 +5385,47 @@ export default function ProjectPage() {
                               </p>
                             )}
 
+                            {/* AOY weight-aware jury (S75): per-section scores x section_weight.
+                                Replaces the fixed 6-dimension campaign grid for AOY entries. */}
+                            {(() => {
+                              const aoyOut = evaluation.output as unknown as {
+                                aoy?: boolean; pillar?: string; category_key?: string; weight_warning?: string | null;
+                                sections?: { key: string; label: string; weight: number; score: number; weighted_contribution: number; rationale: string; is_placeholder: boolean }[]
+                              } | null
+                              if (!aoyOut?.aoy) return null
+                              const secs = Array.isArray(aoyOut.sections) ? aoyOut.sections : []
+                              return (
+                                <div className="mb-5">
+                                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                    <span className="text-xs font-semibold text-gray-600">Weighted rubric: {aoyOut.category_key}</span>
+                                    {aoyOut.pillar && <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full capitalize">{aoyOut.pillar} pillar</span>}
+                                  </div>
+                                  {aoyOut.weight_warning && <p className="text-xs text-amber-600 mb-2">{aoyOut.weight_warning}</p>}
+                                  <div className="space-y-1.5">
+                                    {secs.map(s => {
+                                      const sDelta = deltas?.[s.key]
+                                      return (
+                                        <div key={s.key} className={`border rounded-lg px-3 py-2 ${scoreBg(s.score)}`}>
+                                          <div className="flex items-baseline justify-between gap-2">
+                                            <p className="text-xs text-gray-600 font-medium">{s.label} <span className="text-gray-400">· {s.weight}%</span></p>
+                                            <div className="flex items-baseline gap-1.5 flex-shrink-0">
+                                              <p className={`text-lg font-bold tabular-nums ${scoreColor(s.score)}`}>{s.score}<span className="text-xs text-gray-400">/10</span></p>
+                                              {sDelta !== undefined && sDelta !== 0 && (
+                                                <span className={`text-xs font-semibold tabular-nums ${sDelta > 0 ? 'text-green-600' : 'text-red-500'}`}>{sDelta > 0 ? `↑+${sDelta}` : `↓${sDelta}`}</span>
+                                              )}
+                                              <span className="text-xs text-gray-400 tabular-nums">+{s.weighted_contribution}</span>
+                                            </div>
+                                          </div>
+                                          {s.rationale && <p className="text-xs text-gray-500 mt-1">{s.rationale}</p>}
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
+                              )
+                            })()}
+
+                            {!((evaluation.output as unknown as { aoy?: boolean } | null)?.aoy) && (
                             <div className="grid grid-cols-3 gap-2 mb-5">
                               {SCORE_DIMENSIONS.map(dim => {
                                 const score = evaluation.scores[dim.key] ?? 0
@@ -5407,6 +5469,7 @@ export default function ProjectPage() {
                                 )
                               })()}
                             </div>
+                            )}
 
                             {/* ── v3 output: mode-specific display ─────────────────────── */}
                             {evaluation.output ? (
