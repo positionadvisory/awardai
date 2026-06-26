@@ -1002,6 +1002,63 @@ function MeterBar({ fraction, color = '#15803d', track = '#e5e7eb', height = 4 }
   )
 }
 
+// Always-openable show picker (S78 bug fix, replaces the datalist whose list was
+// hidden until the field was cleared). Free text is still allowed (unknown shows
+// route to the request flow). Chevron toggles the list; typing filters it;
+// clicking outside closes it.
+function ShowCombobox({ value, onChange, options, placeholder }:
+  { value: string; onChange: (v: string) => void; options: string[]; placeholder?: string }) {
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+  const q = value.trim().toLowerCase()
+  const filtered = q ? options.filter(o => o.toLowerCase().includes(q)) : options
+  return (
+    <div className="relative" ref={wrapRef}>
+      <div className="flex items-stretch gap-1">
+        <input
+          type="text"
+          value={value}
+          onChange={e => { onChange(e.target.value); setOpen(true) }}
+          onFocus={() => setOpen(true)}
+          placeholder={placeholder}
+          className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
+        />
+        <button
+          type="button"
+          aria-label="Toggle show list"
+          onClick={() => setOpen(o => !o)}
+          className="flex-shrink-0 px-2 bg-gray-50 border border-gray-300 rounded-lg text-gray-500 hover:text-gray-900 hover:border-gray-400 transition-colors"
+        >
+          <svg className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd" /></svg>
+        </button>
+      </div>
+      {open && filtered.length > 0 && (
+        <ul className="absolute z-10 mt-1 w-full max-h-56 overflow-auto bg-white border border-gray-200 rounded-lg shadow-lg py-1">
+          {filtered.map(o => (
+            <li key={o}>
+              <button
+                type="button"
+                onClick={() => { onChange(o); setOpen(false) }}
+                className={`w-full text-left px-3 py-1.5 text-sm hover:bg-green-50 transition-colors ${o === value ? 'bg-green-50 text-green-800 font-medium' : 'text-gray-700'}`}
+              >
+                {o}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 function buildAnalysisText(
   analysis: ScriptAnalysis,
   campaignName: string,
@@ -3467,8 +3524,14 @@ export default function ProjectPage() {
   // Pass 2 (background, AI): call detect-entry-context for category detection.
   const openQuickEvalModal = async (materialIdx: number) => {
     const material = project?.materials?.[materialIdx]
+    // Default the show from the PROJECT context, not document detection (S78 fix):
+    // an AOY project defaults to the AOY show; otherwise the first target show.
+    // Detection only fills the show when there is NO project default and never
+    // silently overrides it (an uploaded entry often names other shows it won).
+    const isAoyProject = project?.entry_type === 'aoy' || (directions ?? []).some(d => isAoyShow(d?.best_show ?? ''))
+    const projectShow = isAoyProject ? AOY_SHOW_NAME : (project?.target_shows?.[0] || '')
     setQuickEvalMaterialIdx(materialIdx)
-    setQuickEvalShow(project?.target_shows?.[0] || '')
+    setQuickEvalShow(projectShow)
     setQuickEvalCategory('')
     setQuickEvalError('')
     setQuickEvalDetectedFields({ show: false, category: false, confidence: undefined })
@@ -3523,7 +3586,7 @@ export default function ProjectPage() {
     const clientShow =
       kbShows.find(s => lowerText.includes(s.toLowerCase())) ??
       (SHOW_KEYWORD_MAP.find(([kw]) => lowerText.includes(kw))?.[1] ?? null)
-    if (clientShow) {
+    if (clientShow && !projectShow) {
       setQuickEvalShow(clientShow)
       setQuickEvalDetectedFields({ show: true, category: false, confidence: 'medium' })
     }
@@ -3555,13 +3618,14 @@ export default function ProjectPage() {
       console.log('detect-entry-context result:', detected)
 
       const detectedFields: { show: boolean; category: boolean; confidence?: string } = {
-        show: !!clientShow,  // preserve client-side show detection
+        show: !!clientShow && !projectShow,  // a project default is not a "detection"
         category: false,
         confidence: detected.confidence ?? 'low',
       }
 
-      // Only override show with AI result if client-side found nothing
-      if (detected.show && !clientShow) {
+      // Only fill show from detection when there is no project default AND the
+      // client-side scan found nothing. The project context wins (S78).
+      if (detected.show && !clientShow && !projectShow) {
         setQuickEvalShow(detected.show)
         detectedFields.show = true
       }
@@ -3719,37 +3783,66 @@ export default function ProjectPage() {
         setDirections(prev => [...prev, dir])
       }
 
-      const { data: draft, error: draftErr } = await supabase
-        .from('entry_drafts')
-        .insert({
-          project_id: project.id,
-          direction_id: dir.id,
-          org_id: currentOrgId,
-          created_by: user.id,
-          field_key: 'entry',
-          field_label: 'Entry',
-          version_a: entryText.slice(0, 50000),
-          selected: 'a',
-          award_show: quickEvalShow.trim(),
-          category: quickEvalCategory.trim(),
-          sort_order: 0,
-        })
-        .select()
-        .single()
+      const quickIsAoy = isAoyShow(quickEvalShow.trim())
 
-      if (draftErr || !draft) {
-        await supabase.from('directions').delete().eq('id', dir.id)
-        setQuickEvalError(draftErr?.message || 'Failed to create entry draft.')
-        return
+      if (quickIsAoy) {
+        // Uploaded AOY entry (S78 bug fix): an AOY entry is scored section by
+        // weighted section, so a single blob cannot be judged. Map the uploaded
+        // document onto the chosen category's weighted sections server-side
+        // (segment-aoy-entry, extractive, no fabrication); it writes one
+        // entry_drafts row per weighted section. The weight-aware jury then scores
+        // those rows. No single 'entry' blob row is created on this path.
+        const segRes = await fetch(
+          `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/segment-aoy-entry`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${accessToken}`,
+              'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            },
+            body: JSON.stringify({ project_id: project.id, direction_id: dir.id, material_path: material.path }),
+          }
+        )
+        const segData = await segRes.json()
+        if (!segRes.ok || segData.error) {
+          await supabase.from('directions').delete().eq('id', dir.id)
+          setQuickEvalError(segData.error || `Could not map the uploaded entry to the rubric (status ${segRes.status}).`)
+          return
+        }
+        // Refresh entries so the canvas shows the segmented weighted sections.
+        const { data: refreshedDrafts } = await supabase.rpc('get_project_entry_drafts', { p_project_id: project.id })
+        if (refreshedDrafts) setEntries(refreshedDrafts)
+      } else {
+        const { data: draft, error: draftErr } = await supabase
+          .from('entry_drafts')
+          .insert({
+            project_id: project.id,
+            direction_id: dir.id,
+            org_id: currentOrgId,
+            created_by: user.id,
+            field_key: 'entry',
+            field_label: 'Entry',
+            version_a: entryText.slice(0, 50000),
+            selected: 'a',
+            award_show: quickEvalShow.trim(),
+            category: quickEvalCategory.trim(),
+            sort_order: 0,
+          })
+          .select()
+          .single()
+
+        if (draftErr || !draft) {
+          await supabase.from('directions').delete().eq('id', dir.id)
+          setQuickEvalError(draftErr?.message || 'Failed to create entry draft.')
+          return
+        }
+
+        setEntries(prev => [...prev, draft])
       }
 
-      setEntries(prev => [...prev, draft])
-
-      // AOY entries score through the weight-aware jury (evaluate-aoy-entry, S75).
-      // A quick-eval AOY upload is a single blob with no weighted sections, so the
-      // AOY jury returns a clear "generate the weighted-section draft first"
-      // message rather than scoring an AOY paper against the campaign rubric.
-      const quickIsAoy = isAoyShow(quickEvalShow.trim())
+      // AOY entries score through the weight-aware jury (evaluate-aoy-entry, S75)
+      // on the weighted-section rows segment-aoy-entry just wrote.
       const quickEvalFnName = quickIsAoy ? 'evaluate-aoy-entry' : 'evaluate-entry'
       const quickBody: Record<string, unknown> = { project_id: project.id, direction_id: dir.id }
       if (!quickIsAoy) {
@@ -8152,17 +8245,12 @@ export default function ProjectPage() {
                     ))}
                   </div>
                 )}
-                <input
-                  type="text"
-                  list="quickeval-shows"
+                <ShowCombobox
                   value={quickEvalShow}
-                  onChange={e => { setQuickEvalShow(e.target.value); setQuickEvalCategory(''); setQuickEvalDetectedFields(prev => ({ ...prev, show: false })); setQuickEvalSuggestion(null) }}
+                  onChange={v => { setQuickEvalShow(v); setQuickEvalCategory(''); setQuickEvalDetectedFields(prev => ({ ...prev, show: false })); setQuickEvalSuggestion(null) }}
+                  options={Array.from(new Set([...(project.target_shows ?? []), ...kbShows]))}
                   placeholder={(project.target_shows ?? []).length > 0 ? 'Or type another show…' : 'e.g. Cannes Lions, Effies APAC, WARC…'}
-                  className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
                 />
-                <datalist id="quickeval-shows">
-                  {kbShows.map((s: string) => <option key={s} value={s} />)}
-                </datalist>
               </div>
               <div>
                 <div className="flex items-center gap-2 mb-1.5">
