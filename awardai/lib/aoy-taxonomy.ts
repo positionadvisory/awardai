@@ -377,3 +377,79 @@ export function aoyResolveStored(bestCategory: string | null | undefined): {
   if (candidates.length === 0) return null
   return { trackId: hit.trackId, pillar, stemKey, candidates }
 }
+
+// ─── Market-context resolver (AOY market-context layer, S83, Phase 1) ──────────
+// Design: AOY-market-context-layer-DESIGN-SPEC-2026-06-28.md §4.
+// Given a direction's stored best_category + the award cycle year, recover the
+// (market, performance_year, discipline) key into aoy_market_baselines.
+//
+// PARITY CONTRACT (forward-looking): when this block is inlined into the coach
+// (Phase 2) and the jury (Phase 3) Deno edge functions, it MUST stay byte-for-byte
+// equivalent with this copy and the node parity test must be extended to assert
+// it. As of Phase 1 it lives ONLY here (one copy), so there is nothing to diverge
+// from yet. It is built ONLY on AOY_MARKET_PREFIXES + normalizeAoyCategory (both
+// already in the parity surface), deliberately NOT on AOY_TRACKS, so the edge-fn
+// copies never have to carry the whole track taxonomy.
+
+export type AoyDiscipline = 'PR' | 'Media' | 'Creative' | 'Digital' | 'all'
+
+// The four MARKET-TIER disciplines carry a discipline baseline; everything else
+// (regional Agency, People, Brand, Asia-Pacific/Network) resolves to 'all'. Strip
+// a leading 'Asia-Pacific ' for the lookup, mirroring pillarForKey.
+export function aoyDisciplineForStem(stemKey: string | null | undefined): AoyDiscipline {
+  const s = (stemKey ?? '').replace(/^Asia-Pacific\s+/i, '').trim()
+  if (s === 'PR Agency of the Year') return 'PR'
+  if (s === 'Media Agency of the Year') return 'Media'
+  if (s === 'Creative Agency of the Year') return 'Creative'
+  if (s === 'Digital Innovation Agency of the Year') return 'Digital'
+  return 'all'
+}
+
+// Eligibility window for a cycle. VERIFIED from the 2026 entry kit: "The
+// eligibility period runs from September 1, 2025 to August 31, 2026." So the
+// judged window straddles two calendar years (it is NOT cycle_year - 1), running
+// 1 Sep of the prior year to 31 Aug of the cycle year. This is the DEFAULT rule;
+// the authoritative window per market lives in aoy_market_baselines.window_start/
+// window_end and overrides this if a cycle ever differs (spec §4.2, corrected).
+export function aoyEligibilityWindow(cycleYear: number): { start: string; end: string } {
+  return { start: `${cycleYear - 1}-09-01`, end: `${cycleYear}-08-31` }
+}
+
+// Recover the market (or sub-region) prefix from a stored best_category. Iterates
+// AOY_MARKET_PREFIXES in its curated longest-first order with an anchored
+// startsWith, exactly like normalizeAoyCategory, but RETURNS the matched prefix
+// instead of stripping it. So "China PR Agency of the Year" -> "China" and
+// "Greater China Best Culture" -> "Greater China". Returns null when no market
+// prefix matches (e.g. a bare stem, or an "Asia-Pacific " network stem, which is
+// deliberately not a market prefix) -> no baseline applies.
+export function aoyRecoverMarket(bestCategory: string | null | undefined): string | null {
+  const s = (bestCategory ?? '').replace(/\[NEW\]/gi, '').replace(/\s+/g, ' ').trim()
+  if (!s) return null
+  for (const p of AOY_MARKET_PREFIXES) {
+    if (s.toLowerCase().startsWith(p.toLowerCase() + ' ')) return p
+  }
+  return null
+}
+
+// The full baseline key for a stored best_category + award cycle. Keyed on
+// (market, cycle_year, discipline) to match aoy_market_baselines; the eligibility
+// window is carried for display/sourcing context. Returns null when the market
+// cannot be recovered (no baseline applies; the modifier is 0 and the UI says
+// "no verified market baseline on file"; the raw score stands). discipline always
+// resolves (falls to 'all'). The (market, cycle, discipline) ->
+// (market, cycle, 'all') -> null FALLBACK CHAIN itself lives at the query site
+// (spec §4.4), not here, so this stays a pure key-derivation function.
+export function aoyMarketBaselineKey(
+  bestCategory: string | null | undefined,
+  cycleYear: number,
+): { market: string; cycleYear: number; discipline: AoyDiscipline; window: { start: string; end: string } } | null {
+  const market = aoyRecoverMarket(bestCategory)
+  if (!market) return null
+  const stemKey = normalizeAoyCategory(bestCategory)
+  return {
+    market,
+    cycleYear,
+    discipline: aoyDisciplineForStem(stemKey),
+    window: aoyEligibilityWindow(cycleYear),
+  }
+}
