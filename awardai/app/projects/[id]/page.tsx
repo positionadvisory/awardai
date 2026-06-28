@@ -1334,6 +1334,11 @@ export default function ProjectPage() {
   const [quickEvaluating, setQuickEvaluating] = useState(false)
   // S81: two-phase progress for uploaded AOY entries (segment, then jury score).
   const [quickEvalPhase, setQuickEvalPhase] = useState<'segmenting' | 'scoring' | null>(null)
+  // S82: after a Quick Eval, land on the direction that was just scored, not the
+  // top of the entries tab. A project with more than one direction otherwise
+  // renders the first (sort_order 0) direction first, so the user thinks their
+  // freshly picked entry was ignored (the "PR shifted to Media" report).
+  const [justScoredDirId, setJustScoredDirId] = useState<number | null>(null)
   const [quickEvalError, setQuickEvalError] = useState('')
   const [quickEvalDetecting, setQuickEvalDetecting] = useState(false)
   const [quickEvalDetectedFields, setQuickEvalDetectedFields] = useState<{ show: boolean; category: boolean; confidence?: string }>({ show: false, category: false })
@@ -3717,6 +3722,17 @@ export default function ProjectPage() {
     }
   }
 
+  // S82: scroll the just-scored direction into view and flash a ring on it once
+  // the entries tab has rendered, then clear the flag. Depends on `entries` so it
+  // re-runs after the post-eval refresh actually paints the card.
+  useEffect(() => {
+    if (tab !== 'entries' || justScoredDirId == null) return
+    const el = document.getElementById(`aoy-dir-${justScoredDirId}`)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    const t = setTimeout(() => setJustScoredDirId(null), 2600)
+    return () => clearTimeout(t)
+  }, [tab, justScoredDirId, entries])
+
   const evaluateUploadedEntry = async () => {
     if (!project || quickEvalMaterialIdx === null || !user) return
     const material = project.materials[quickEvalMaterialIdx]
@@ -3918,6 +3934,7 @@ export default function ProjectPage() {
       setQuickEvalDetectedFields({ show: false, category: false, confidence: undefined })
       setQuickEvalSuggestion(null)
       setQuickEvalMaterialIdx(null)
+      setJustScoredDirId(dir.id)
       setTab('entries')
 
     } catch (err) {
@@ -5489,7 +5506,7 @@ export default function ProjectPage() {
                     const deltas = scoreDeltas[dirId] ?? null
 
                     return (
-                      <div key={dirId} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                      <div key={dirId} id={`aoy-dir-${dirId}`} className={`bg-white border rounded-xl overflow-hidden transition-shadow ${justScoredDirId === dirId ? 'border-green-500 ring-2 ring-green-500' : 'border-gray-200'}`}>
 
                         {/* Direction header — Session 57: stacks on mobile. The old
                             single-row flex (right block flex-shrink-0) crushed the
