@@ -1332,6 +1332,8 @@ export default function ProjectPage() {
   const [quickEvalShow, setQuickEvalShow] = useState('')
   const [quickEvalCategory, setQuickEvalCategory] = useState('')
   const [quickEvaluating, setQuickEvaluating] = useState(false)
+  // S81: two-phase progress for uploaded AOY entries (segment, then jury score).
+  const [quickEvalPhase, setQuickEvalPhase] = useState<'segmenting' | 'scoring' | null>(null)
   const [quickEvalError, setQuickEvalError] = useState('')
   const [quickEvalDetecting, setQuickEvalDetecting] = useState(false)
   const [quickEvalDetectedFields, setQuickEvalDetectedFields] = useState<{ show: boolean; category: boolean; confidence?: string }>({ show: false, category: false })
@@ -3790,6 +3792,7 @@ export default function ProjectPage() {
       const quickIsAoy = isAoyShow(quickEvalShow.trim())
 
       if (quickIsAoy) {
+        setQuickEvalPhase('segmenting')
         // Uploaded AOY entry (S78 bug fix): an AOY entry is scored section by
         // weighted section, so a single blob cannot be judged. Map the uploaded
         // document onto the chosen category's weighted sections server-side
@@ -3859,6 +3862,7 @@ export default function ProjectPage() {
           .slice(0, 30)
           .map(dd => ({ show: dd.best_show, category: dd.best_category ?? '' }))
       }
+      setQuickEvalPhase('scoring')
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/${quickEvalFnName}`,
         {
@@ -3920,6 +3924,7 @@ export default function ProjectPage() {
       setQuickEvalError(err instanceof Error ? err.message : 'Network error.')
     } finally {
       setQuickEvaluating(false)
+      setQuickEvalPhase(null)
     }
   }
 
@@ -8328,15 +8333,28 @@ export default function ProjectPage() {
               </div>
             )}
 
-            {quickEvaluating && (
-              <div className="mb-4">
-                <GeneratingBar
-                  isGenerating={quickEvaluating}
-                  estimatedDuration={50000}
-                  statements={MATERIALS_EVAL_STATEMENTS}
-                />
-              </div>
-            )}
+            {quickEvaluating && (() => {
+              const isAoyUploadEval = isAoyShow(quickEvalShow.trim())
+              return (
+                <div className="mb-4">
+                  <GeneratingBar
+                    isGenerating={quickEvaluating}
+                    estimatedDuration={isAoyUploadEval ? 165000 : 50000}
+                    statements={isAoyUploadEval ? JURY_EVAL_STATEMENTS : MATERIALS_EVAL_STATEMENTS}
+                  />
+                  {isAoyUploadEval && (
+                    <p className="mt-2 text-xs text-gray-500 text-center">
+                      {quickEvalPhase === 'segmenting'
+                        ? 'Step 1 of 2: mapping your entry onto the rubric sections…'
+                        : quickEvalPhase === 'scoring'
+                        ? 'Step 2 of 2: scoring each weighted section…'
+                        : 'Preparing…'}
+                      {' '}This runs two AI passes and can take up to about 3 minutes. Keep this tab open.
+                    </p>
+                  )}
+                </div>
+              )
+            })()}
 
             <div className="flex gap-3">
               <button
