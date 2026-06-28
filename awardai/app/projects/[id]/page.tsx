@@ -892,6 +892,28 @@ type AoyCoaching = {
   overall: string
 }
 
+// AOY market-context modifier (evaluate-aoy-market, S85, Phase 3). Option B: a
+// bounded, source-cited adjustment ON TOP OF the calibrated raw jury score, never
+// inside it. Both numbers are shown; every nonzero delta carries a sourced
+// rationale. Advisory and additive, so it is its own state, not an evaluations row.
+type AoyMarketFigure = { figure?: string; value?: string; scope?: string; url?: string }
+type AoyMarketAdjustment = {
+  evaluation_id: number
+  category_key: string
+  cap: number
+  no_baseline: boolean
+  market_context: {
+    market: string; discipline: string; fallback_to_all: boolean
+    window_start: string; window_end: string; baseline_text: string
+    figures: AoyMarketFigure[]; sources: { name?: string; url?: string }[]
+  } | null
+  raw_overall: number
+  adjusted_overall: number
+  overall_delta: number
+  sections: { key: string; label: string; weight: number; raw_score: number; delta: number; adjusted_score: number; rationale: string }[]
+  note?: string
+}
+
 type EntryDraft = {
   id: number
   direction_id: number
@@ -1382,6 +1404,13 @@ export default function ProjectPage() {
   const [coaching, setCoaching] = useState(false)
   const [coachingForDirectionId, setCoachingForDirectionId] = useState<number | null>(null)
   const [coachingError, setCoachingError] = useState('')
+
+  // Session 85 — AOY market-context modifier (evaluate-aoy-market, Phase 3).
+  // Keyed by directionId; carries the evaluation_id it was computed against so the
+  // dual-score view only renders for the evaluation currently on screen.
+  const [aoyMarketAdj, setAoyMarketAdj] = useState<Record<number, AoyMarketAdjustment>>({})
+  const [marketAdjusting, setMarketAdjusting] = useState<number | null>(null)
+  const [marketAdjustError, setMarketAdjustError] = useState<Record<number, string>>({})
 
   useEffect(() => {
     if (!user || !projectId) return
@@ -3430,6 +3459,40 @@ export default function ProjectPage() {
       // spinner, so this association is only read when there is an error to show; it
       // is reset to the new direction at the start of the next coach run.
       setEvaluatingMode(prev => { const next = { ...prev }; delete next[directionId]; return next })
+    }
+  }
+
+  // Session 85 — AOY market-context modifier (evaluate-aoy-market). Reads the
+  // persisted raw jury evaluation, resolves the sourced baseline, and returns a
+  // bounded per-section delta. Never touches the calibrated score; both numbers
+  // are shown. Advisory, so it does not write an evaluations row.
+  const applyAoyMarket = async (directionId: number, evaluationId: number) => {
+    if (!project) return
+    setMarketAdjusting(directionId)
+    setMarketAdjustError(prev => { const next = { ...prev }; delete next[directionId]; return next })
+    try {
+      const accessToken = await getToken()
+      if (!accessToken) return
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/evaluate-aoy-market`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}`, 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
+          body: JSON.stringify({ project_id: project.id, direction_id: directionId, evaluation_id: evaluationId }),
+        }
+      )
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        setMarketAdjustError(prev => ({ ...prev, [directionId]: formatError(appErrorFromResponse(data, res.status, 'AOYMKT')) }))
+        return
+      }
+      if (data.market_adjustment) {
+        setAoyMarketAdj(prev => ({ ...prev, [directionId]: data.market_adjustment as AoyMarketAdjustment }))
+      }
+    } catch (err) {
+      setMarketAdjustError(prev => ({ ...prev, [directionId]: formatError({ message: 'Network error. Check your connection and try again.', retryable: true, code: 'AOYMKT-NET' }) }))
+    } finally {
+      setMarketAdjusting(null)
     }
   }
 
@@ -6039,6 +6102,84 @@ export default function ProjectPage() {
                                   </div>
                                     )
                                   })()}
+                                </div>
+                              )
+                            })()}
+
+                            {/* AOY market-context modifier (S85, Phase 3, Option B):
+                                a bounded, source-cited adjustment shown ALONGSIDE the
+                                calibrated raw score. The raw score never changes; every
+                                nonzero delta names the sourced market fact behind it. */}
+                            {(() => {
+                              const isAoyJudge = !!(evaluation.output as unknown as { aoy?: boolean } | null)?.aoy && evaluation.evaluation_mode === 'judge'
+                              if (!isAoyJudge) return null
+                              const adj = aoyMarketAdj[dirId]
+                              const showAdj = !!adj && adj.evaluation_id === evaluation.id
+                              const busy = marketAdjusting === dirId
+                              const err = marketAdjustError[dirId]
+                              const mc = showAdj ? adj.market_context : null
+                              return (
+                                <div className="mb-5 border border-gray-200 rounded-lg px-3 py-3 bg-gray-50">
+                                  <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+                                    <span className="text-xs font-semibold text-gray-600">Market context</span>
+                                    {!showAdj && (
+                                      <button
+                                        onClick={() => applyAoyMarket(dirId, evaluation.id)}
+                                        disabled={busy}
+                                        className="text-xs font-medium bg-green-800 hover:bg-green-700 text-white px-2.5 py-1 rounded-full disabled:opacity-50"
+                                      >
+                                        {busy ? 'Adjusting...' : 'Apply market context'}
+                                      </button>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-gray-400 mb-2">A bounded, sourced adjustment (max ±{adj?.cap ?? 0.5} per section) on top of the calibrated score. The raw score is never altered.</p>
+                                  {err && <p className="text-xs text-red-600 mb-2">{err}</p>}
+                                  {showAdj && adj.no_baseline && (
+                                    <p className="text-xs text-gray-500">No verified market baseline on file for this market and cycle. The raw score stands.</p>
+                                  )}
+                                  {showAdj && !adj.no_baseline && (
+                                    <>
+                                      <div className="flex items-baseline gap-3 flex-wrap mb-2">
+                                        <span className="text-xs text-gray-500">Raw <span className="font-bold tabular-nums text-gray-700">{adj.raw_overall.toFixed(1)}</span><span className="text-gray-400">/10</span></span>
+                                        <span className="text-xs text-gray-500">Market-adjusted{' '}
+                                          <span className={`font-bold tabular-nums ${adj.overall_delta > 0 ? 'text-green-700' : adj.overall_delta < 0 ? 'text-red-600' : 'text-gray-700'}`}>{adj.adjusted_overall.toFixed(1)}</span><span className="text-gray-400">/10</span>
+                                          {adj.overall_delta !== 0 && <span className={`ml-1 font-semibold ${adj.overall_delta > 0 ? 'text-green-600' : 'text-red-500'}`}>{adj.overall_delta > 0 ? `+${adj.overall_delta}` : adj.overall_delta}</span>}
+                                        </span>
+                                        {mc && (
+                                          <span className="text-xs font-medium bg-white text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">
+                                            {mc.market}{mc.fallback_to_all ? ' (all-market)' : ` (${mc.discipline})`} · {mc.window_start} to {mc.window_end}
+                                          </span>
+                                        )}
+                                      </div>
+                                      {adj.note && <p className="text-xs text-gray-500 mb-2 leading-relaxed">{adj.note}</p>}
+                                      <div className="space-y-1">
+                                        {adj.sections.filter(s => s.delta !== 0).map(s => (
+                                          <div key={s.key} className="text-xs text-gray-600 leading-relaxed">
+                                            <span className="font-medium">{s.label}</span>{' '}
+                                            <span className={`font-semibold tabular-nums ${s.delta > 0 ? 'text-green-600' : 'text-red-500'}`}>{s.delta > 0 ? `+${s.delta}` : s.delta}</span>{' '}
+                                            <span className="text-gray-400 tabular-nums">({s.raw_score} to {s.adjusted_score})</span>
+                                            {s.rationale && <span className="text-gray-500"> · {s.rationale}</span>}
+                                          </div>
+                                        ))}
+                                        {adj.sections.every(s => s.delta === 0) && (
+                                          <p className="text-xs text-gray-400">No section moved: the market did not materially change how this entry reads.</p>
+                                        )}
+                                      </div>
+                                      {mc && mc.figures.length > 0 && (
+                                        <div className="mt-2 pt-2 border-t border-gray-200">
+                                          <p className="text-xs text-gray-400 mb-1">Sourced market figures</p>
+                                          <ul className="space-y-0.5">
+                                            {mc.figures.map((f, i) => (
+                                              <li key={i} className="text-xs text-gray-500">
+                                                {f.figure}: {f.value}{f.scope ? ` [${f.scope}]` : ''}
+                                                {f.url && <> · <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-green-700 underline">source</a></>}
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      )}
+                                    </>
+                                  )}
                                 </div>
                               )
                             })()}
