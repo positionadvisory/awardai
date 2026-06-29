@@ -2,7 +2,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-const ADMIN_EMAIL  = 'ben@positionadvisory.com'
+// Admin allowlist. Ben's Shortlist login may be either of these, so include
+// both: a login-email mismatch was 403'ing every toggle. Add admins here.
+// Compared lowercase against user.email.
+const ADMIN_EMAILS = ['ben@positionadvisory.com', 'bencondit@gmail.com']
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const ANON_KEY     = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -17,15 +20,18 @@ export async function POST(req: NextRequest) {
     global: { headers: { Authorization: authHeader } },
   })
   const { data: { user }, error: authError } = await userClient.auth.getUser(jwt)
-  if (authError || !user || user.email !== ADMIN_EMAIL) {
+  if (authError || !user || !user.email || !ADMIN_EMAILS.includes(user.email.toLowerCase())) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   // ── Parse body ──────────────────────────────────────────────────────────
   const body = await req.json().catch(() => null)
   const { org_id, trial_unlimited } = body ?? {}
+  // Admin dashboard may serialise the bigint org id as a string; coerce before
+  // the type guard so a string id no longer 400s and silently reverts the UI.
+  const orgId = Number(org_id)
 
-  if (typeof org_id !== 'number' || typeof trial_unlimited !== 'boolean') {
+  if (!Number.isInteger(orgId) || typeof trial_unlimited !== 'boolean') {
     return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
   }
 
@@ -34,12 +40,12 @@ export async function POST(req: NextRequest) {
   const { error } = await admin
     .from('organizations')
     .update({ trial_unlimited })
-    .eq('id', org_id)
+    .eq('id', orgId)
 
   if (error) {
     console.error('trial toggle error:', error)
     return NextResponse.json({ error: 'Update failed' }, { status: 500 })
   }
 
-  return NextResponse.json({ ok: true, org_id, trial_unlimited })
+  return NextResponse.json({ ok: true, org_id: orgId, trial_unlimited })
 }
