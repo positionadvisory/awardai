@@ -124,18 +124,41 @@ export async function POST(req: NextRequest) {
     console.error('Webhook event claim failed (processing anyway):', claimError)
   }
 
+  // The claim above is taken BEFORE processing (so concurrent duplicate
+  // deliveries are blocked). If processing then throws, the catch below
+  // DELETES the claim and returns 500, so Stripe's retry/resend can re-run the
+  // event. Without this, a single failed process recorded the id permanently
+  // and every resend returned a silent duplicate no-op.
+  try {
   switch (event.type) {
 
     case 'checkout.session.completed': {
       const session = event.data.object as Stripe.Checkout.Session
-      const orgId   = session.metadata?.org_id
+      // org_id is set on session.metadata at checkout, but older/edge sessions
+      // may carry it only on the subscription. Fall back to the subscription
+      // metadata, mirroring orgIdFromInvoice, before giving up.
+      let orgId = session.metadata?.org_id ?? null
+      if (!orgId && session.subscription) {
+        const subId = typeof session.subscription === 'string'
+          ? session.subscription
+          : session.subscription.id
+        try {
+          const sub = await stripe.subscriptions.retrieve(subId)
+          orgId = sub.metadata?.org_id ?? null
+        } catch (err) {
+          console.error('checkout.session.completed: subscription retrieve failed', subId, err)
+        }
+      }
       if (!orgId) break
-      await admin.from('organizations').update({
+      const { error: updErr } = await admin.from('organizations').update({
         plan:               'pro',
         stripe_customer_id: session.customer as string,
         max_projects:       999,
         payment_failed_at:  null,
       }).eq('id', parseInt(orgId))
+      // Throw on update failure so the outer catch releases the idempotency
+      // claim and Stripe retries, instead of recording a silent 200 no-op.
+      if (updErr) throw new Error(`checkout.session.completed update failed for org ${orgId}: ${updErr.message}`)
       break
     }
 
@@ -309,6 +332,12 @@ export async function POST(req: NextRequest) {
         `)
       break
     }
+  }
+  } catch (err) {
+    console.error('Webhook processing failed, releasing idempotency claim:', event.id, err)
+    // Release the claim so Stripe's retry/resend can re-run this event.
+    await admin.from('stripe_webhook_events').delete().eq('event_id', event.id)
+    return NextResponse.json({ error: 'Processing failed' }, { status: 500 })
   }
 
   return NextResponse.json({ received: true })
