@@ -6099,28 +6099,30 @@ export default function ProjectPage() {
                           const c = smartiesCoaching[dirId]
                           return (
                             <div className="border-b border-gray-200 bg-green-50/40 px-5 py-4">
+                              {/* S93: type scale bumped ~50% for readability (Ben) —
+                                  body content text-xs -> text-lg, meta -> text-base. */}
                               <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                <span className="text-sm font-semibold text-gray-800">✦ SMARTIES Coach</span>
-                                {c.category && <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">{c.category}</span>}
-                                <span className="text-xs text-gray-400">advisory, not a score</span>
+                                <span className="text-xl font-semibold text-gray-800">✦ SMARTIES Coach</span>
+                                {c.category && <span className="text-base font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">{c.category}</span>}
+                                <span className="text-base text-gray-400">advisory, not a score</span>
                               </div>
-                              {c.overall && <p className="text-sm text-gray-700">{c.overall}</p>}
+                              {c.overall && <p className="text-lg text-gray-700 leading-relaxed">{c.overall}</p>}
                               {c.priorities.length > 0 && (
                                 <div className="mt-2">
-                                  <p className="text-xs font-medium text-gray-600 mb-1">Highest-leverage fixes</p>
-                                  <ul className="list-disc list-inside space-y-0.5">{c.priorities.map((p, i) => <li key={i} className="text-xs text-gray-600">{p}</li>)}</ul>
+                                  <p className="text-base font-medium text-gray-600 mb-1">Highest-leverage fixes</p>
+                                  <ul className="list-disc list-inside space-y-1">{c.priorities.map((p, i) => <li key={i} className="text-lg text-gray-600 leading-relaxed">{p}</li>)}</ul>
                                 </div>
                               )}
                               <div className="mt-3 space-y-2">
                                 {c.sections.map(sec => (
                                   <div key={sec.field_key} className={`border rounded-lg px-3 py-2.5 ${sec.is_placeholder ? 'border-amber-200 bg-amber-50/40' : 'border-gray-200 bg-white'}`}>
                                     <div className="flex items-baseline justify-between gap-2">
-                                      <p className="text-xs font-medium text-gray-800 min-w-0 flex-1">{sec.label}</p>
-                                      {sec.is_placeholder && <span className="text-xs text-gray-400 flex-shrink-0">not written</span>}
+                                      <p className="text-lg font-medium text-gray-800 min-w-0 flex-1">{sec.label}</p>
+                                      {sec.is_placeholder && <span className="text-base text-gray-400 flex-shrink-0">not written</span>}
                                     </div>
-                                    {sec.missing.length > 0 && <p className="text-xs text-amber-700 mt-1.5">Missing: {sec.missing.join('; ')}</p>}
+                                    {sec.missing.length > 0 && <p className="text-lg text-amber-700 mt-1.5 leading-relaxed">Missing: {sec.missing.join('; ')}</p>}
                                     {sec.suggestions.length > 0 && (
-                                      <ul className="list-disc list-inside mt-1 space-y-0.5">{sec.suggestions.map((x, i) => <li key={i} className="text-xs text-gray-600 leading-relaxed">{x}</li>)}</ul>
+                                      <ul className="list-disc list-inside mt-1 space-y-1">{sec.suggestions.map((x, i) => <li key={i} className="text-lg text-gray-600 leading-relaxed">{x}</li>)}</ul>
                                     )}
                                   </div>
                                 ))}
