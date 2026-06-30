@@ -1290,6 +1290,14 @@ export default function ProjectPage() {
   // Draft version history expand/collapse — keyed by directionId
   const [expandedDraftHistory, setExpandedDraftHistory] = useState<Record<number, boolean>>({})
 
+  // Entries tab — collapsible entry cards (S91). Each direction's entry is a
+  // collapsible card so a project with several entries is scannable instead of
+  // an endless scroll. focusedEntryDirId = the entry just generated/scored: it
+  // renders FIRST and expanded; the rest collapse below it. entryCardExpanded
+  // holds explicit user toggles that override the focused-card default.
+  const [focusedEntryDirId, setFocusedEntryDirId] = useState<number | null>(null)
+  const [entryCardExpanded, setEntryCardExpanded] = useState<Record<number, boolean>>({})
+
   // Phase 2 — field refinement via edit-entry Edge Function
   const [refineMessage, setRefineMessage] = useState<Record<number, string>>({})
   const [refiningFieldId, setRefiningFieldId] = useState<number | null>(null)
@@ -3257,6 +3265,12 @@ export default function ProjectPage() {
         // Note: evaluations are NOT cleared — they belong to their specific generation rows
         track('draft_generated', { project_id: Number(projectId), direction_id: directionId, generation: data.entry_drafts[0]?.draft_generation ?? null })
       }
+      // The newly drafted entry becomes the focused card: first in order,
+      // expanded, scrolled to and flashed (justScoredDirId effect). S91 — fixes
+      // a new draft landing far below older entries.
+      setFocusedEntryDirId(directionId)
+      setEntryCardExpanded(prev => ({ ...prev, [directionId]: true }))
+      setJustScoredDirId(directionId)
       setTab('entries')
     } catch (err) {
       setGenerateDraftError(formatError({ message: 'Network error — check your connection and try again.', retryable: true, code: 'DRAFT-NET' }))
@@ -3998,6 +4012,8 @@ export default function ProjectPage() {
       setQuickEvalSuggestion(null)
       setQuickEvalMaterialIdx(null)
       setJustScoredDirId(dir.id)
+      setFocusedEntryDirId(dir.id)
+      setEntryCardExpanded(prev => ({ ...prev, [dir.id]: true }))
       setTab('entries')
 
     } catch (err) {
@@ -5541,7 +5557,26 @@ export default function ProjectPage() {
               </div>
             ) : (
               <div className="space-y-8">
-                {Array.from(new Set(entries.map(e => e.direction_id))).map(dirId => {
+                {(() => {
+                  // Order: focused entry first (just generated/scored), then the
+                  // rest newest-first, so previous entries sit collapsed below
+                  // the active one (S91). Default focus = the most recently
+                  // drafted entry, so a fresh page load opens on the latest work.
+                  const entryDirIds = Array.from(new Set(entries.map(e => e.direction_id)))
+                  const newestEntryDirId = entries.length
+                    ? entries.reduce((a, b) =>
+                        new Date(b.created_at ?? 0).getTime() > new Date(a.created_at ?? 0).getTime() ? b : a
+                      ).direction_id
+                    : null
+                  const effectiveFocusDirId =
+                    (focusedEntryDirId != null && entryDirIds.includes(focusedEntryDirId))
+                      ? focusedEntryDirId : newestEntryDirId
+                  const orderedEntryDirIds = [...entryDirIds].sort((a, b) => {
+                    if (a === effectiveFocusDirId) return -1
+                    if (b === effectiveFocusDirId) return 1
+                    return b - a
+                  })
+                  return orderedEntryDirIds.map(dirId => {
                     const d = directions.find(dir => dir.id === dirId)
                     const allDirEntries = entries.filter(e => e.direction_id === dirId)
                     // Split by generation: current (latest) vs historical
@@ -5588,6 +5623,12 @@ export default function ProjectPage() {
                       (coachEvalGen !== null && maxGen > coachEvalGen)
                     // Score deltas for this direction (set after a comparison re-evaluation)
                     const deltas = scoreDeltas[dirId] ?? null
+                    // Collapsible card (S91): expanded if the user toggled it, else
+                    // open only for the focused (just-worked-on) entry. Summary
+                    // badges (score + category fit) show in both states.
+                    const isExpanded = entryCardExpanded[dirId] ?? (dirId === effectiveFocusDirId)
+                    const summaryScore = (evalBoth.judge ?? evalBoth.coach)?.overall_score ?? null
+                    const dirFit = d?.win_likelihood ?? null
 
                     return (
                       <div key={dirId} id={`aoy-dir-${dirId}`} className={`bg-white border rounded-xl overflow-hidden transition-shadow ${justScoredDirId === dirId ? 'border-green-500 ring-2 ring-green-500' : 'border-gray-200'}`}>
@@ -5595,27 +5636,49 @@ export default function ProjectPage() {
                         {/* Direction header — Session 57: stacks on mobile. The old
                             single-row flex (right block flex-shrink-0) crushed the
                             title to one word per line on phones. */}
-                        <div className="px-5 py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                          {/* Left: direction label + name + show/category subline.
-                              Subline only shown when d.name exists — when it doesn't, dirName
-                              already falls back to "Show — Category" so the subline would duplicate it. */}
-                          <div className="min-w-0 pt-0.5">
-                            <p className="text-xs text-gray-400 uppercase tracking-wider font-medium mb-0.5">Direction</p>
-                            <h3 className="font-medium text-gray-900">{dirName}</h3>
-                            {d?.name && dirShow && (
-                              <p className="text-green-700 text-xs mt-0.5">
-                                {dirShow} · <span className="text-gray-400">{dirCategory}</span>
-                              </p>
-                            )}
+                        <div className={`px-5 py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 ${isExpanded ? 'border-b border-gray-200' : ''}`}>
+                          {/* Left: clickable toggle (chevron + label + name + show/
+                              category + score/fit badges). Collapsing keeps the whole
+                              card to this compact header (S91). */}
+                          <div className="min-w-0 pt-0.5 flex-1">
+                            <button
+                              onClick={() => setEntryCardExpanded(prev => ({ ...prev, [dirId]: !isExpanded }))}
+                              className="flex items-start gap-2 text-left w-full group"
+                              title={isExpanded ? 'Collapse this entry' : 'Expand this entry'}
+                            >
+                              <span className="text-gray-400 group-hover:text-gray-700 mt-0.5 flex-shrink-0 transition-colors text-xs leading-5">{isExpanded ? '▾' : '▸'}</span>
+                              <span className="min-w-0">
+                                <span className="block text-xs text-gray-400 uppercase tracking-wider font-medium mb-0.5">Direction</span>
+                                <span className="block font-medium text-gray-900">{dirName}</span>
+                                {dirShow && (
+                                  <span className="block text-green-700 text-xs mt-0.5">
+                                    {dirShow}{dirCategory ? <> · <span className="text-gray-400">{dirCategory}</span></> : null}
+                                  </span>
+                                )}
+                                <span className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                  {summaryScore != null && (
+                                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${scoreBg(summaryScore)} ${scoreColor(summaryScore)}`}>{summaryScore}/10</span>
+                                  )}
+                                  {typeof dirFit === 'number' && (
+                                    <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-500 border border-gray-200">{dirFit}% fit</span>
+                                  )}
+                                  {!isExpanded && needsReEval && (
+                                    <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-50 text-amber-700 border border-amber-200">Draft updated</span>
+                                  )}
+                                </span>
+                              </span>
+                            </button>
                             <button
                               onClick={() => setTab('directions')}
-                              className="text-xs text-gray-400 hover:text-gray-600 mt-1.5 transition-colors"
+                              className="text-xs text-gray-400 hover:text-gray-600 mt-1.5 ml-6 transition-colors"
                             >
                               ← View in Directions
                             </button>
                           </div>
 
-                          {/* Right: two rows of buttons (full-width + left-aligned on mobile) */}
+                          {/* Right: action buttons — only when expanded; a collapsed
+                              card stays compact (S91). */}
+                          {isExpanded && (
                           <div className="flex flex-col items-start sm:items-end gap-2 w-full sm:w-auto sm:flex-shrink-0">
 
                             {/* Row 1 — Evaluate + Download */}
@@ -5727,8 +5790,10 @@ export default function ProjectPage() {
                             </div>
 
                           </div>
+                          )}
                         </div>
 
+                        {isExpanded && (<>
                         {/* ── Jury intelligence panel — "What wins at this show" ──────────── */}
                         {/* Shown only when a show_profiles row exists for this direction's show.
                             Collapsed by default. Uses the same show_profiles query pattern as the
@@ -6994,10 +7059,12 @@ export default function ProjectPage() {
                             )}
                           </div>
                         )}
+                        </>)}
 
                       </div>
                     )
-                  })}
+                  })
+                })()}
               </div>
             )}
           </div>
