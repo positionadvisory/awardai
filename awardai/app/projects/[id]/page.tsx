@@ -4352,6 +4352,21 @@ export default function ProjectPage() {
     </div>
   )
 
+  // ── AOY vs Campaign: ONE project-level decision, made up front ─────────────
+  // A project is an AOY entry if it TARGETS Campaign Asia Agency of the Year
+  // (chosen at creation / Edit shows), or has already been flagged AOY
+  // (entry_type, set by /api/agency-facts), or already holds an AOY direction.
+  // Everything that is AOY-only AT THE PROJECT LEVEL — the Add AOY entry / Plan
+  // AOY entries buttons, the agency-facts validator — gates on this, so a pure
+  // campaign project shows the plain campaign interface and never the AOY tools
+  // (they were rendering unconditionally and crowding campaign projects, S91).
+  // Per-direction AOY controls stay gated on isAoyShow(d.best_show) so a MIXED
+  // project still shows the right buttons on each card.
+  const projectIsAoy =
+    (project.target_shows ?? []).some(isAoyShow) ||
+    project.entry_type === 'aoy' ||
+    directions.some(d => isAoyShow(d.best_show))
+
   // Session 55: the TABS const + tab strip were REMOVED — the spine and the
   // strip read as near-duplicate rows (Ben). The Progress Spine is now the
   // workspace's ONLY navigation row (it always was fully clickable; draft and
@@ -5003,16 +5018,22 @@ export default function ProjectPage() {
                 <p className="text-gray-400 text-xs mt-0.5">AI-recommended show and category combinations. Generate a draft from any direction, then evaluate it.</p>
               </div>
               <div className="flex items-center gap-2">
-                {/* Session 72 — manual controlled entry for Campaign AOY (market-scoped) */}
-                <button onClick={() => { setDcAoyCategory(''); setAoyDirError(''); setShowAoyDirModal(true) }}
-                  className="border border-green-700 text-green-800 hover:bg-green-50 text-sm font-medium px-4 py-2 rounded transition-colors">
-                  Add AOY entry
-                </button>
-                {/* Session 77 — AOY entry-slate strategy (where should we enter). */}
-                <button onClick={() => { setStrategySeed(''); setStrategyError(''); setShowStrategyModal(true) }}
-                  className="border border-green-700 text-green-800 hover:bg-green-50 text-sm font-medium px-4 py-2 rounded transition-colors">
-                  Plan AOY entries
-                </button>
+                {/* AOY-only project tools — shown ONLY for an AOY project (see
+                    projectIsAoy). A campaign project gets the plain interface. */}
+                {projectIsAoy && (
+                  <>
+                    {/* Session 72 — manual controlled entry for Campaign AOY (market-scoped) */}
+                    <button onClick={() => { setDcAoyCategory(''); setAoyDirError(''); setShowAoyDirModal(true) }}
+                      className="border border-green-700 text-green-800 hover:bg-green-50 text-sm font-medium px-4 py-2 rounded transition-colors">
+                      Add AOY entry
+                    </button>
+                    {/* Session 77 — AOY entry-slate strategy (where should we enter). */}
+                    <button onClick={() => { setStrategySeed(''); setStrategyError(''); setShowStrategyModal(true) }}
+                      className="border border-green-700 text-green-800 hover:bg-green-50 text-sm font-medium px-4 py-2 rounded transition-colors">
+                      Plan AOY entries
+                    </button>
+                  </>
+                )}
                 <button onClick={() => generateDirections()} disabled={generating || (!project.combined_text && !(project.materials || []).some(materialHasText))}
                   title={(!project.combined_text && !(project.materials || []).some(materialHasText)) ? 'Add a brief or upload materials first' : ''}
                   className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded transition-colors flex items-center gap-2">
@@ -5081,9 +5102,9 @@ export default function ProjectPage() {
             )}
 
             {/* AOY Phase 2 (S73) — agency facts: extract -> point-by-point validate
-                -> propagate org-wide. Shown once the project is an AOY entry
-                (entry_type set, or any AOY direction exists). */}
-            {(project.entry_type === 'aoy' || directions.some(d => isAoyShow(d.best_show))) && (
+                -> propagate org-wide. Shown only for an AOY project (projectIsAoy:
+                AOY targeted, entry_type set, or any AOY direction exists). */}
+            {projectIsAoy && (
               <div className="mb-5">
                 <AgencyFactsValidator
                   projectId={project.id}
