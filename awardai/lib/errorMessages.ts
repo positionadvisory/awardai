@@ -92,7 +92,18 @@ export function appErrorFromResponse(
   functionPrefix: string
 ): AppError {
   if (data.code && typeof data.code === 'string') {
-    return appErrorFromCode(data.code)
+    const mapped = appErrorFromCode(data.code)
+    // appErrorFromCode only knows the shared REASON_MAP (AI/PARSE/RATE/AUTH/DATA/
+    // NET); a function's bespoke guard code (e.g. SMARTCOACH-NODRAFT,
+    // COACH-NORUBRIC) is unmapped and falls back to GENERIC_MSG, which buries the
+    // server's own actionable message ("Generate the SMARTIES draft first..."). When
+    // the reason is unmapped, prefer data.error: by our server convention it is
+    // always a clean, user-safe string, never raw infra/DB detail. Keep the real
+    // code for support.
+    if (mapped.message === GENERIC_MSG && data.error && data.error !== GENERIC_MSG) {
+      return { message: data.error, retryable: mapped.retryable, code: data.code }
+    }
+    return mapped
   }
   // No structured code — try to infer from HTTP status
   const inferredCode = `${functionPrefix}-AI-${data.status ?? httpStatus}`
