@@ -5646,7 +5646,7 @@ export default function ProjectPage() {
                               className="flex items-start gap-2 text-left w-full group"
                               title={isExpanded ? 'Collapse this entry' : 'Expand this entry'}
                             >
-                              <span className="text-gray-400 group-hover:text-gray-700 mt-0.5 flex-shrink-0 transition-colors text-xs leading-5">{isExpanded ? '▾' : '▸'}</span>
+                              <span className="text-gray-400 group-hover:text-gray-700 flex-shrink-0 transition-colors text-3xl leading-none w-6 text-center">{isExpanded ? '▾' : '▸'}</span>
                               <span className="min-w-0">
                                 <span className="block text-xs text-gray-400 uppercase tracking-wider font-medium mb-0.5">Direction</span>
                                 <span className="block font-medium text-gray-900">{dirName}</span>
