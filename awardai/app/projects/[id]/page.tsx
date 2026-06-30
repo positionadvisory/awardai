@@ -916,6 +916,22 @@ type AoyCoaching = {
   overall: string
 }
 
+// SMARTIES per-section Coach (generate-smarties-coach, S93). Advisory, separate
+// from the qualitative SMARTIES jury; its own state, not an evaluations row. There
+// are NO section weights (SMARTIES publishes none), so this carries none: sections
+// are the four fixed case-study sections, matched by field_key.
+type SmartiesCoaching = {
+  smarties: boolean
+  category: string | null
+  draft_generation: number
+  sections: {
+    field_key: string; label: string; word_count: number; is_placeholder: boolean
+    missing: string[]; suggestions: string[]
+  }[]
+  priorities: string[]
+  overall: string
+}
+
 // AOY market-context modifier (evaluate-aoy-market, S85, Phase 3). Option B: a
 // bounded, source-cited adjustment ON TOP OF the calibrated raw jury score, never
 // inside it. Both numbers are shown; every nonzero delta carries a sourced
@@ -1436,6 +1452,13 @@ export default function ProjectPage() {
   const [coaching, setCoaching] = useState(false)
   const [coachingForDirectionId, setCoachingForDirectionId] = useState<number | null>(null)
   const [coachingError, setCoachingError] = useState('')
+
+  // Session 93 — SMARTIES per-section Coach (generate-smarties-coach). Advisory,
+  // separate from the qualitative jury; its own results map. It REUSES the shared
+  // coaching spinner state (coaching / coachingForDirectionId / coachingError) so
+  // the button gating, the disable, and the error banner all work the same way they
+  // do for AOY; only the results map is SMARTIES-specific.
+  const [smartiesCoaching, setSmartiesCoaching] = useState<Record<number, SmartiesCoaching>>({})
 
   // Session 85 — AOY market-context modifier (evaluate-aoy-market, Phase 3).
   // Keyed by directionId; carries the evaluation_id it was computed against so the
@@ -3504,6 +3527,48 @@ export default function ProjectPage() {
     }
   }
 
+  // Session 93 — SMARTIES per-section Coach (generate-smarties-coach). Advisory
+  // guidance on a drafted SMARTIES entry; never a score, so it does not touch the
+  // calibrated scorers. Mirrors coachAoyEntry exactly (shared coaching spinner
+  // state); only the function name and the results map differ. Same S79 banner
+  // lesson applies: coachingForDirectionId is NOT nulled in finally (the error
+  // banner is gated on it); it is reset to the new direction at the start of the
+  // next coach run.
+  const coachSmartiesEntry = async (directionId: number) => {
+    if (!project) return
+    setCoaching(true)
+    setCoachingError('')
+    setCoachingForDirectionId(directionId)
+    setEvaluatingMode(prev => ({ ...prev, [directionId]: 'coach' }))
+    try {
+      const accessToken = await getToken()
+      if (!accessToken) return
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-smarties-coach`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}`, 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
+          body: JSON.stringify({ project_id: project.id, direction_id: directionId }),
+        }
+      )
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        setCoachingError(formatError(appErrorFromResponse(data, res.status, 'SMARTCOACH')))
+        return
+      }
+      if (data.coaching) {
+        setSmartiesCoaching(prev => ({ ...prev, [directionId]: data.coaching as SmartiesCoaching }))
+      }
+    } catch (err) {
+      setCoachingError(formatError({ message: 'Network error. Check your connection and try again.', retryable: true, code: 'SMARTCOACH-NET' }))
+    } finally {
+      setCoaching(false)
+      // Do NOT null coachingForDirectionId here (same reason as coachAoyEntry: the
+      // error banner is gated on it). The `coaching` flag governs the spinner.
+      setEvaluatingMode(prev => { const next = { ...prev }; delete next[directionId]; return next })
+    }
+  }
+
   // Session 85 — AOY market-context modifier (evaluate-aoy-market). Reads the
   // persisted raw jury evaluation, resolves the sourced baseline, and returns a
   // bounded per-section delta. Never touches the calibrated score; both numbers
@@ -3561,9 +3626,18 @@ export default function ProjectPage() {
       await coachAoyEntry(directionId)
       return
     }
-    // SMARTIES judge scoring routes to the qualitative SMARTIES jury (S92). A Coach
-    // click on a SMARTIES entry falls through to the generic campaign coach for now
-    // (a dedicated SMARTIES coach is a follow-on). AOY + campaign paths untouched.
+    // SMARTIES Coach is its OWN advisory function (generate-smarties-coach, S93),
+    // not a mode of any scorer. Hand off the same way AOY does; reset the shared
+    // jury spinner state so coachSmartiesEntry owns the coaching spinner. (Before
+    // S93 a SMARTIES Coach click fell through to the generic campaign coach.)
+    if (isSmartiesDir && mode === 'coach') {
+      setEvaluating(false)
+      setEvaluatingForDirectionId(null)
+      await coachSmartiesEntry(directionId)
+      return
+    }
+    // SMARTIES judge scoring routes to the qualitative SMARTIES jury (S92). AOY +
+    // campaign paths untouched.
     const evalFnName = isAoyDir
       ? 'evaluate-aoy-entry'
       : (isSmartiesDir && mode === 'judge')
@@ -5746,6 +5820,8 @@ export default function ProjectPage() {
                                   <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Coaching…</>
                                 ) : isAoyShow(d?.best_show ?? '') ? (
                                   <>✦ {aoyCoaching[dirId] ? 'Re-run AOY Coach' : 'AOY Coach'}</>
+                                ) : isSmartiesShow(d?.best_show ?? '') ? (
+                                  <>✦ {smartiesCoaching[dirId] ? 'Re-run SMARTIES Coach' : 'SMARTIES Coach'}</>
                                 ) : (
                                   <>✦ {hasCoach ? 'Re-run Coach Review' : 'Coach Review'}</>
                                 )}
@@ -5955,6 +6031,8 @@ export default function ProjectPage() {
                                   <><svg className="animate-spin h-3 w-3 inline mr-1" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Coaching…</>
                                 ) : isAoyShow(d?.best_show ?? '') ? (
                                   <>✦ {aoyCoaching[dirId] ? 'Re-run AOY Coach' : 'AOY Coach'}</>
+                                ) : isSmartiesShow(d?.best_show ?? '') ? (
+                                  <>✦ {smartiesCoaching[dirId] ? 'Re-run SMARTIES Coach' : 'SMARTIES Coach'}</>
                                 ) : (
                                   <>✦ {hasCoach ? 'Re-run Coach Review' : 'Coach Review'}</>
                                 )}
@@ -6005,6 +6083,48 @@ export default function ProjectPage() {
                               </div>
                                 )
                               })()}
+                            </div>
+                          )
+                        })()}
+
+                        {/* SMARTIES Coach — advisory per-section guidance
+                            (generate-smarties-coach, S93). SMARTIES directions only;
+                            not an evaluations row, so it renders separately from the
+                            Jury panel. No section weights (SMARTIES publishes none).
+                            Reuses the shared coaching error state. */}
+                        {isSmartiesShow(d?.best_show ?? '') && coachingError && coachingForDirectionId === dirId && (
+                          <div className="px-5 py-3 border-b border-gray-200"><ErrorBanner error={coachingError} /></div>
+                        )}
+                        {isSmartiesShow(d?.best_show ?? '') && smartiesCoaching[dirId] && (() => {
+                          const c = smartiesCoaching[dirId]
+                          return (
+                            <div className="border-b border-gray-200 bg-green-50/40 px-5 py-4">
+                              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                <span className="text-sm font-semibold text-gray-800">✦ SMARTIES Coach</span>
+                                {c.category && <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">{c.category}</span>}
+                                <span className="text-xs text-gray-400">advisory, not a score</span>
+                              </div>
+                              {c.overall && <p className="text-sm text-gray-700">{c.overall}</p>}
+                              {c.priorities.length > 0 && (
+                                <div className="mt-2">
+                                  <p className="text-xs font-medium text-gray-600 mb-1">Highest-leverage fixes</p>
+                                  <ul className="list-disc list-inside space-y-0.5">{c.priorities.map((p, i) => <li key={i} className="text-xs text-gray-600">{p}</li>)}</ul>
+                                </div>
+                              )}
+                              <div className="mt-3 space-y-2">
+                                {c.sections.map(sec => (
+                                  <div key={sec.field_key} className={`border rounded-lg px-3 py-2.5 ${sec.is_placeholder ? 'border-amber-200 bg-amber-50/40' : 'border-gray-200 bg-white'}`}>
+                                    <div className="flex items-baseline justify-between gap-2">
+                                      <p className="text-xs font-medium text-gray-800 min-w-0 flex-1">{sec.label}</p>
+                                      {sec.is_placeholder && <span className="text-xs text-gray-400 flex-shrink-0">not written</span>}
+                                    </div>
+                                    {sec.missing.length > 0 && <p className="text-xs text-amber-700 mt-1.5">Missing: {sec.missing.join('; ')}</p>}
+                                    {sec.suggestions.length > 0 && (
+                                      <ul className="list-disc list-inside mt-1 space-y-0.5">{sec.suggestions.map((x, i) => <li key={i} className="text-xs text-gray-600 leading-relaxed">{x}</li>)}</ul>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
                             </div>
                           )
                         })()}
@@ -7089,6 +7209,8 @@ export default function ProjectPage() {
                                   <><svg className="animate-spin h-3 w-3 inline mr-1" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Coaching…</>
                                 ) : isAoyShow(d?.best_show ?? '') ? (
                                   <>✦ {aoyCoaching[dirId] ? 'Re-run AOY Coach' : 'AOY Coach'}</>
+                                ) : isSmartiesShow(d?.best_show ?? '') ? (
+                                  <>✦ {smartiesCoaching[dirId] ? 'Re-run SMARTIES Coach' : 'SMARTIES Coach'}</>
                                 ) : hasCoach ? '✦ Re-run Coach Review' : '✦ Coach Review'}
                               </button>
                             </div>
