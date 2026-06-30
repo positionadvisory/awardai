@@ -91,6 +91,8 @@ const DIMENSION_LABELS: Record<string, string> = {
   jury_fit: 'Jury Fit',
 }
 
+type UserSortCol = 'user' | 'projects' | 'drafts' | 'evals' | 'cost' | 'lastActive' | 'flags'
+
 export default function DashboardPage() {
   const { user, loading } = useAuth()
   const router = useRouter()
@@ -104,6 +106,16 @@ export default function DashboardPage() {
   const [entryDrafts, setEntryDrafts] = useState<EntryDraft[]>([])
   const [fetching, setFetching] = useState(true)
   const [accessDenied, setAccessDenied] = useState(false)
+
+  // User Activity table sort. Default cost desc (the original fixed order).
+  const [userSortCol, setUserSortCol] = useState<UserSortCol>('cost')
+  const [userSortDir, setUserSortDir] = useState<'asc' | 'desc'>('desc')
+  const toggleUserSort = (col: UserSortCol) => {
+    if (col === userSortCol) { setUserSortDir(d => (d === 'asc' ? 'desc' : 'asc')); return }
+    setUserSortCol(col)
+    // Names read best A->Z; counts/cost/recency read best high-first.
+    setUserSortDir(col === 'user' ? 'asc' : 'desc')
+  }
 
   useEffect(() => {
     if (!user) return
@@ -302,6 +314,30 @@ export default function DashboardPage() {
     ...u,
     flags: u.costThisMonth > avgCost * 2 && u.costThisMonth > 0.01 ? [...u.flags, 'high_usage'] : u.flags,
   }))
+
+  // Sort by the column the user picked. Strings (name) compare with
+  // localeCompare; everything else is numeric. Nulls (no last-active) sort to 0.
+  const sortedUserRows = [...userActivityFlagged].sort((a, b) => {
+    let cmp: number
+    switch (userSortCol) {
+      case 'user': {
+        const an = (a.profile.full_name ?? a.profile.email ?? '').toLowerCase()
+        const bn = (b.profile.full_name ?? b.profile.email ?? '').toLowerCase()
+        cmp = an.localeCompare(bn); break
+      }
+      case 'projects': cmp = a.projects - b.projects; break
+      case 'drafts': cmp = a.draftsThisMonth - b.draftsThisMonth; break
+      case 'evals': cmp = a.evalsThisMonth - b.evalsThisMonth; break
+      case 'lastActive': cmp = (a.lastActive ? new Date(a.lastActive).getTime() : 0) - (b.lastActive ? new Date(b.lastActive).getTime() : 0); break
+      case 'flags': cmp = a.flags.length - b.flags.length; break
+      case 'cost':
+      default: cmp = a.costThisMonth - b.costThisMonth; break
+    }
+    return userSortDir === 'asc' ? cmp : -cmp
+  })
+  // Arrow on the active column; fixed-width so headers never shift.
+  const userSortArrow = (col: UserSortCol) =>
+    userSortCol === col ? (userSortDir === 'asc' ? '↑' : '↓') : ''
 
   // AI activity — current month usage
   const currentMonth = monthlyUsage[monthlyUsage.length - 1]
@@ -617,19 +653,31 @@ export default function DashboardPage() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-gray-100">
-                    <th className="text-left text-gray-400 font-medium pb-2 pr-4">User</th>
-                    <th className="text-right text-gray-400 font-medium pb-2 px-3">Projects</th>
-                    <th className="text-right text-gray-400 font-medium pb-2 px-3">Drafts</th>
-                    <th className="text-right text-gray-400 font-medium pb-2 px-3">Evals</th>
-                    <th className="text-right text-gray-400 font-medium pb-2 px-3">Cost (mo)</th>
-                    <th className="text-right text-gray-400 font-medium pb-2 px-3">Last active</th>
-                    <th className="text-right text-gray-400 font-medium pb-2 pl-3">Flags</th>
+                    <th onClick={() => toggleUserSort('user')} className="text-left text-gray-400 font-medium pb-2 pr-4 cursor-pointer select-none hover:text-gray-600 transition-colors">
+                      User <span className="inline-block w-2 text-gray-500">{userSortArrow('user')}</span>
+                    </th>
+                    <th onClick={() => toggleUserSort('projects')} className="text-right text-gray-400 font-medium pb-2 px-3 cursor-pointer select-none hover:text-gray-600 transition-colors">
+                      <span className="inline-block w-2 text-gray-500">{userSortArrow('projects')}</span> Projects
+                    </th>
+                    <th onClick={() => toggleUserSort('drafts')} className="text-right text-gray-400 font-medium pb-2 px-3 cursor-pointer select-none hover:text-gray-600 transition-colors">
+                      <span className="inline-block w-2 text-gray-500">{userSortArrow('drafts')}</span> Drafts
+                    </th>
+                    <th onClick={() => toggleUserSort('evals')} className="text-right text-gray-400 font-medium pb-2 px-3 cursor-pointer select-none hover:text-gray-600 transition-colors">
+                      <span className="inline-block w-2 text-gray-500">{userSortArrow('evals')}</span> Evals
+                    </th>
+                    <th onClick={() => toggleUserSort('cost')} className="text-right text-gray-400 font-medium pb-2 px-3 cursor-pointer select-none hover:text-gray-600 transition-colors">
+                      <span className="inline-block w-2 text-gray-500">{userSortArrow('cost')}</span> Cost (mo)
+                    </th>
+                    <th onClick={() => toggleUserSort('lastActive')} className="text-right text-gray-400 font-medium pb-2 px-3 cursor-pointer select-none hover:text-gray-600 transition-colors">
+                      <span className="inline-block w-2 text-gray-500">{userSortArrow('lastActive')}</span> Last active
+                    </th>
+                    <th onClick={() => toggleUserSort('flags')} className="text-right text-gray-400 font-medium pb-2 pl-3 cursor-pointer select-none hover:text-gray-600 transition-colors">
+                      <span className="inline-block w-2 text-gray-500">{userSortArrow('flags')}</span> Flags
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {userActivityFlagged
-                    .sort((a, b) => b.costThisMonth - a.costThisMonth)
-                    .map(u => (
+                  {sortedUserRows.map(u => (
                     <tr
                       key={u.profile.id}
                       className="hover:bg-gray-50 cursor-pointer transition-colors"
