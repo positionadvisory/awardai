@@ -236,6 +236,14 @@ const sameShow = (a?: string | null, b?: string | null): boolean => {
   return norm(a) === norm(b)
 }
 
+// SMARTIES show detection. Byte-aligned with the copies in
+// generate-smarties-draft.ts and evaluate-smarties-entry.ts: "smarties" is unique
+// to MMA among canonical show names, so the substring is the reliable signal (the
+// keyword map routes every variant to "MMA Smarties APAC" / "MMA Smarties Global").
+function isSmartiesShow(showName: string | null | undefined): boolean {
+  return (showName ?? '').trim().toLowerCase().includes('smarties')
+}
+
 const SHOW_CATEGORIES: Record<string, string[]> = {
   'Cannes Lions': [
     'Film Lions', 'Film Craft Lions', 'Titanium Lions', 'Grand Prix for Good',
@@ -512,6 +520,22 @@ const SHOW_CATEGORIES: Record<string, string[]> = {
     'Best Search Campaign',
   ],
   'MMA Smarties APAC': [
+    'Brand Purpose / Activism', 'Social Impact Marketing',
+    'Diversity and Inclusive Excellence', 'Brand Experience',
+    'Instant Impact / Promotion', 'Customer Growth & Conversion Strategy',
+    'New Product or Service Launch / Re-launch', 'Real Time Marketing',
+    'Small Budget, Big Impact', 'Creator / Influencer / Celebrity Marketing',
+    'Partnership, PR & Branded Content Excellence', 'Omnichannel Marketing',
+    'Cross Digital Media Marketing', 'Social Media Marketing',
+    'AI Powered Data Insights / Contextual Marketing',
+    'Advanced Technologies Marketing', 'Retail Media / O2O Excellence',
+    'Audience Engagement Excellence Using AI',
+    'Integrated E-commerce Innovation & Live Streaming',
+    'Design / Customer / User Experience', 'Personalization',
+    'Short or Long Form Video', 'Innovative Use of AI in Advertising',
+    'AI-Driven Creative Excellence', 'D2C / E-commerce Marketing Excellence',
+  ],
+  'MMA Smarties Global': [
     'Brand Purpose / Activism', 'Social Impact Marketing',
     'Diversity and Inclusive Excellence', 'Brand Experience',
     'Instant Impact / Promotion', 'Customer Growth & Conversion Strategy',
@@ -3240,8 +3264,12 @@ export default function ProjectPage() {
       // AOY directions route to the dedicated weighted-section drafter (S74).
       // Same body + response shape ({ entry_drafts, draft_generation }); the
       // campaign path (generate-draft) is untouched.
-      const isAoyDir = isAoyShow(directions.find(d => d.id === directionId)?.best_show ?? '')
-      const draftFnName = isAoyDir ? 'generate-aoy-draft' : 'generate-draft'
+      // SMARTIES directions route to the dedicated four-section drafter (S92);
+      // the campaign and AOY paths are untouched.
+      const draftShow = directions.find(d => d.id === directionId)?.best_show ?? ''
+      const isAoyDir = isAoyShow(draftShow)
+      const isSmartiesDir = isSmartiesShow(draftShow)
+      const draftFnName = isAoyDir ? 'generate-aoy-draft' : isSmartiesDir ? 'generate-smarties-draft' : 'generate-draft'
       const body: Record<string, unknown> = { project_id: project.id, direction_id: directionId }
       if (evaluationId) body.evaluation_id = evaluationId
       const focusItems = draftFocusItems[directionId] || []
@@ -3521,7 +3549,9 @@ export default function ProjectPage() {
     // byte-untouched. AOY scoring is judge-only for now (Coach per-section is P5);
     // a Coach click on an AOY entry is short-circuited with a clear message
     // rather than silently returning a Jury score.
-    const isAoyDir = isAoyShow(directions.find(d => d.id === directionId)?.best_show ?? '')
+    const evalShow = directions.find(d => d.id === directionId)?.best_show ?? ''
+    const isAoyDir = isAoyShow(evalShow)
+    const isSmartiesDir = isSmartiesShow(evalShow)
     if (isAoyDir && mode === 'coach') {
       // AOY Coach is its OWN advisory function (generate-aoy-coach, S77), not a mode
       // of the calibrated scorer. Hand off; reset the shared jury spinner state so
@@ -3531,7 +3561,14 @@ export default function ProjectPage() {
       await coachAoyEntry(directionId)
       return
     }
-    const evalFnName = isAoyDir ? 'evaluate-aoy-entry' : 'evaluate-entry'
+    // SMARTIES judge scoring routes to the qualitative SMARTIES jury (S92). A Coach
+    // click on a SMARTIES entry falls through to the generic campaign coach for now
+    // (a dedicated SMARTIES coach is a follow-on). AOY + campaign paths untouched.
+    const evalFnName = isAoyDir
+      ? 'evaluate-aoy-entry'
+      : (isSmartiesDir && mode === 'judge')
+        ? 'evaluate-smarties-entry'
+        : 'evaluate-entry'
     try {
       const accessToken = await getToken()
       if (!accessToken) return
@@ -3542,7 +3579,7 @@ export default function ProjectPage() {
       // Feedback round: existing directions also go up so the model never
       // re-suggests a placement the project already has. AOY scoring does not use
       // these campaign-specific placement candidates.
-      if (mode === 'judge' && !isAoyDir) {
+      if (mode === 'judge' && !isAoyDir && !isSmartiesDir) {
         const bodyDir = directions.find(d => d.id === directionId)
         body.next_candidates = buildNextCandidates(bodyDir?.best_show ?? '')
         body.existing_directions = directions
@@ -6192,6 +6229,47 @@ export default function ProjectPage() {
                               )
                             })()}
 
+                            {/* SMARTIES qualitative jury (S92): per-section scores
+                                plus a holistic overall. SMARTIES publishes no section
+                                weighting, so there is no weighted total. Replaces the
+                                fixed campaign grid for SMARTIES entries. */}
+                            {(() => {
+                              const smOut = evaluation.output as unknown as {
+                                smarties?: boolean; category?: string | null;
+                                sections?: { field_key: string; label: string; score: number; rationale: string; is_placeholder: boolean }[]
+                              } | null
+                              if (!smOut?.smarties) return null
+                              const secs = Array.isArray(smOut.sections) ? smOut.sections : []
+                              return (
+                                <div className="mb-5">
+                                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                    <span className="text-xs font-semibold text-gray-600">SMARTIES case study{smOut.category ? `: ${smOut.category}` : ''}</span>
+                                    <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">holistic score, no published section weighting</span>
+                                  </div>
+                                  <div className="space-y-2">
+                                    {secs.map(s => {
+                                      const sDelta = deltas?.[s.field_key]
+                                      return (
+                                        <div key={s.field_key} className={`border rounded-lg px-3 py-2.5 ${scoreBg(s.score)}`}>
+                                          <div className="flex items-baseline justify-between gap-2">
+                                            <p className="text-xs text-gray-700 font-medium min-w-0 flex-1">{s.label}</p>
+                                            <div className="flex items-baseline gap-1.5 flex-shrink-0">
+                                              <p className={`text-lg font-bold tabular-nums ${scoreColor(s.score)}`}>{s.score}<span className="text-xs text-gray-400">/10</span></p>
+                                              {sDelta !== undefined && sDelta !== 0 && (
+                                                <span className={`text-xs font-semibold tabular-nums ${sDelta > 0 ? 'text-green-600' : 'text-red-500'}`}>{sDelta > 0 ? `↑+${sDelta}` : `↓${sDelta}`}</span>
+                                              )}
+                                            </div>
+                                          </div>
+                                          {s.is_placeholder && <p className="text-xs text-gray-400 mt-1">Section not written</p>}
+                                          {s.rationale && <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">{s.rationale}</p>}
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
+                              )
+                            })()}
+
                             {/* AOY market-context modifier (S85, Phase 3, Option B):
                                 a bounded, source-cited adjustment shown ALONGSIDE the
                                 calibrated raw score. The raw score never changes; every
@@ -6270,7 +6348,7 @@ export default function ProjectPage() {
                               )
                             })()}
 
-                            {!((evaluation.output as unknown as { aoy?: boolean } | null)?.aoy) && (
+                            {!((evaluation.output as unknown as { aoy?: boolean } | null)?.aoy) && !((evaluation.output as unknown as { smarties?: boolean } | null)?.smarties) && (
                             <div className="grid grid-cols-3 gap-2 mb-5">
                               {SCORE_DIMENSIONS.map(dim => {
                                 const score = evaluation.scores[dim.key] ?? 0
