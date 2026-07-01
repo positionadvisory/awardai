@@ -86,6 +86,23 @@ export interface EntryFormSpec {
   /** ISO date the spec was last verified against the official kit. */
   verified_on: string | null
   notes: string | null
+  // ── Chunk 3 jury framing (Session 98) ──
+  // Optional on the type, but REQUIRED at runtime by the config jury
+  // (evaluate-entry-config) for `weighted`/`qualitative` shows: it refuses with
+  // ENTRYEVAL-NOFRAMING rather than default to AOY/SMARTIES wording and silently
+  // mislabel a show. These carry the SHOW-specific (not mode-specific) parts of
+  // the scoring prompt, so a new weighted/qualitative show reproduces byte-for-
+  // byte from data with no new jury code. See the header of evaluate-entry-config.
+  /** e.g. 'Campaign Asia-Pacific Agency of the Year (AOY) awards' / 'MMA SMARTIES Awards'. */
+  jury_programme_name?: string | null
+  /** the programme-framing sentence(s) rendered after the juror intro. */
+  jury_framing?: string | null
+  /** the noun in "Score this ___ entry for" (e.g. 'AOY' / 'MMA SMARTIES'). */
+  jury_entry_noun?: string | null
+  /** qualitative only: the "HOW JUDGES READ THE CREATIVE" line (SMARTIES sets it). */
+  jury_creative_note?: string | null
+  /** weighted only: overrides the entry_subject lens for a new weighted show. */
+  subject_lens?: string | null
 }
 
 // Row shape as stored/read from show_profiles.entry_form (nullable jsonb).
