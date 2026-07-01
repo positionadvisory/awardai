@@ -55,6 +55,11 @@ import { MATERIALS_EVAL_STATEMENTS, JURY_EVAL_STATEMENTS, COACH_REVIEW_STATEMENT
 import { appErrorFromResponse, formatError, parseErrorString } from '@/lib/errorMessages'
 import { computeRoiIndex, normaliseKbShow, DEADLINES_2026 } from '@/lib/shows-data'
 import { isAoyShow, AOY_SHOW_NAME, aoyResolveStored, aoyTrackById, buildAoyBestCategory } from '@/lib/aoy-taxonomy'
+// Show Customization Architecture Chunk 5 (S98): config-driven entry_form resolver.
+// Only the canonical PURE helpers + type are imported (client can import lib; edge
+// functions carry byte-identical copies). Resolution = longest show-level prefix of
+// best_show (mirrors the config edge fns) then the category-exact row.
+import { resolveEntryFormCategoryKey, pickEntryForm, type EntryFormSpec } from '@/lib/entry-form'
 import AoyEntryPicker from '@/components/AoyEntryPicker'
 import AgencyFactsValidator from '@/components/AgencyFactsValidator'
 import JuryProfilePanel, { JuryCell, RegionalUplift } from '@/components/JuryProfilePanel'
@@ -916,16 +921,22 @@ type AoyCoaching = {
   overall: string
 }
 
-// SMARTIES per-section Coach (generate-smarties-coach, S93). Advisory, separate
-// from the qualitative SMARTIES jury; its own state, not an evaluations row. There
-// are NO section weights (SMARTIES publishes none), so this carries none: sections
-// are the four fixed case-study sections, matched by field_key.
-type SmartiesCoaching = {
-  smarties: boolean
-  category: string | null
+// Config per-section Coach (generate-entry-coach-config, S98 Chunk 4/5). Advisory
+// only, session-only, no evaluations row. Generalizes the AOY + SMARTIES coaches:
+// one shape for both weighted (weight non-null) and qualitative (weight null)
+// config shows, matched to draft rows by section key. `framing_degraded` is set
+// when the show's jury-framing fields are missing (Coach degrades gracefully where
+// the jury refuses); the panel surfaces it so a generic coaching pass is visible.
+type ConfigCoaching = {
+  config: boolean
+  scoring_mode: 'weighted' | 'qualitative'
+  entry_subject: string
+  show_name: string
+  category_key: string | null
   draft_generation: number
+  framing_degraded: boolean
   sections: {
-    field_key: string; label: string; word_count: number; is_placeholder: boolean
+    key: string; label: string; weight: number | null; word_count: number; is_placeholder: boolean
     missing: string[]; suggestions: string[]
   }[]
   priorities: string[]
@@ -1453,12 +1464,14 @@ export default function ProjectPage() {
   const [coachingForDirectionId, setCoachingForDirectionId] = useState<number | null>(null)
   const [coachingError, setCoachingError] = useState('')
 
-  // Session 93 — SMARTIES per-section Coach (generate-smarties-coach). Advisory,
-  // separate from the qualitative jury; its own results map. It REUSES the shared
-  // coaching spinner state (coaching / coachingForDirectionId / coachingError) so
-  // the button gating, the disable, and the error banner all work the same way they
-  // do for AOY; only the results map is SMARTIES-specific.
-  const [smartiesCoaching, setSmartiesCoaching] = useState<Record<number, SmartiesCoaching>>({})
+  // S98 Chunk 5 — config-driven show customization, client side.
+  // entryForms: resolved entry_form spec per directionId (null = craft/none/AOY).
+  // The config Coach reuses the shared coaching spinner state (coaching /
+  // coachingForDirectionId / coachingError), same as AOY; only the results map is
+  // config-specific. This REPLACES the dedicated SMARTIES coach state (S93): a
+  // qualitative config show (SMARTIES) now coaches through generate-entry-coach-config.
+  const [entryForms, setEntryForms] = useState<Record<number, EntryFormSpec | null>>({})
+  const [configCoaching, setConfigCoaching] = useState<Record<number, ConfigCoaching>>({})
 
   // Session 93 — coach feedback export. Transient "Copied" confirmation per panel,
   // keyed by a string id (e.g. "smarties-fb-<dirId>" / "aoy-fb-<dirId>").
@@ -1756,6 +1769,64 @@ export default function ProjectPage() {
       })
     })
   }, [directions]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── S98 Chunk 5 — resolve show_profiles.entry_form per direction ───────────
+  // Mirrors the config edge functions' resolution EXACTLY: the longest show-level
+  // (category_pattern NULL) show_name that best_show STARTS WITH is canonical, then
+  // the category-exact row wins over the show-level row (pickEntryForm). AOY returns
+  // null here on purpose: AOY keeps its dedicated render/routing in this chunk
+  // (isAoyShow precedence), so its seeded entry_form stays dormant client-side.
+  const resolveEntryFormFor = async (show?: string | null, category?: string | null): Promise<EntryFormSpec | null> => {
+    const best = (show ?? '').trim()
+    if (!best || isAoyShow(best)) return null
+    const { data: showRows } = await supabase
+      .from('show_profiles')
+      .select('show_name, entry_form')
+      .is('category_pattern', null)
+    const bestLower = best.toLowerCase()
+    const canonical = (showRows ?? [])
+      .filter((r: { show_name?: string | null }) => typeof r.show_name === 'string' && bestLower.startsWith(r.show_name.trim().toLowerCase()))
+      .sort((a: { show_name?: string | null }, b: { show_name?: string | null }) => (b.show_name?.length ?? 0) - (a.show_name?.length ?? 0))[0]
+    if (!canonical?.show_name) return null
+    const showLevelForm = ((canonical as { entry_form?: EntryFormSpec | null }).entry_form ?? null)
+    const catKey = resolveEntryFormCategoryKey(canonical.show_name, category ?? '')
+    let catForm: EntryFormSpec | null = null
+    if (catKey) {
+      const { data } = await supabase
+        .from('show_profiles')
+        .select('entry_form')
+        .eq('show_name', canonical.show_name)
+        .eq('category_pattern', catKey)
+        .limit(1)
+        .maybeSingle()
+      catForm = ((data as { entry_form?: EntryFormSpec | null } | null)?.entry_form ?? null)
+    }
+    return pickEntryForm(
+      catForm ? { category_pattern: catKey, entry_form: catForm } : null,
+      { category_pattern: null, entry_form: showLevelForm },
+    )
+  }
+
+  useEffect(() => {
+    const unresolved = directions.filter(d => d.best_show && !(d.id in entryForms))
+    if (unresolved.length === 0) return
+    Promise.all(unresolved.map(async d => ({ dirId: d.id, form: await resolveEntryFormFor(d.best_show, d.best_category) })))
+      .then(results => setEntryForms(prev => {
+        const next = { ...prev }
+        for (const { dirId, form } of results) next[dirId] = form
+        return next
+      }))
+  }, [directions]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The one branch point for the config path (spec §8 Chunk 5): a non-AOY direction
+  // whose entry_form resolves to a config-scored mode. null => keep the existing
+  // dedicated/generic path (AOY, craft, specialist, unseeded).
+  const configModeFor = (dirId: number, show?: string | null): 'weighted' | 'qualitative' | null => {
+    if (isAoyShow(show ?? '')) return null
+    const ef = entryForms[dirId]
+    if (ef && (ef.scoring_mode === 'weighted' || ef.scoring_mode === 'qualitative')) return ef.scoring_mode
+    return null
+  }
 
   // Jury Intelligence Layer — fetch jury_cells for shows in current directions
   useEffect(() => {
@@ -3620,14 +3691,13 @@ export default function ProjectPage() {
     }
   }
 
-  // Session 93 — SMARTIES per-section Coach (generate-smarties-coach). Advisory
-  // guidance on a drafted SMARTIES entry; never a score, so it does not touch the
-  // calibrated scorers. Mirrors coachAoyEntry exactly (shared coaching spinner
-  // state); only the function name and the results map differ. Same S79 banner
-  // lesson applies: coachingForDirectionId is NOT nulled in finally (the error
-  // banner is gated on it); it is reset to the new direction at the start of the
-  // next coach run.
-  const coachSmartiesEntry = async (directionId: number) => {
+  // S98 Chunk 5 — config per-section Coach (generate-entry-coach-config). Advisory
+  // guidance on a drafted config-path entry (weighted or qualitative); never a
+  // score, so it does not touch the calibrated scorers. Generalizes coachAoyEntry /
+  // coachSmartiesEntry into one handler. Same S79 banner lesson: coachingForDirectionId
+  // is NOT nulled in finally (the error banner is gated on it); it is reset to the
+  // new direction at the start of the next coach run.
+  const coachConfigEntry = async (directionId: number) => {
     if (!project) return
     setCoaching(true)
     setCoachingError('')
@@ -3637,7 +3707,7 @@ export default function ProjectPage() {
       const accessToken = await getToken()
       if (!accessToken) return
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-smarties-coach`,
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-entry-coach-config`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}`, 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
@@ -3646,14 +3716,14 @@ export default function ProjectPage() {
       )
       const data = await res.json()
       if (!res.ok || data.error) {
-        setCoachingError(formatError(appErrorFromResponse(data, res.status, 'SMARTCOACH')))
+        setCoachingError(formatError(appErrorFromResponse(data, res.status, 'ENTRYCOACH')))
         return
       }
       if (data.coaching) {
-        setSmartiesCoaching(prev => ({ ...prev, [directionId]: data.coaching as SmartiesCoaching }))
+        setConfigCoaching(prev => ({ ...prev, [directionId]: data.coaching as ConfigCoaching }))
       }
     } catch (err) {
-      setCoachingError(formatError({ message: 'Network error. Check your connection and try again.', retryable: true, code: 'SMARTCOACH-NET' }))
+      setCoachingError(formatError({ message: 'Network error. Check your connection and try again.', retryable: true, code: 'ENTRYCOACH-NET' }))
     } finally {
       setCoaching(false)
       // Do NOT null coachingForDirectionId here (same reason as coachAoyEntry: the
@@ -3710,6 +3780,9 @@ export default function ProjectPage() {
     const evalShow = directions.find(d => d.id === directionId)?.best_show ?? ''
     const isAoyDir = isAoyShow(evalShow)
     const isSmartiesDir = isSmartiesShow(evalShow)
+    // S98 Chunk 5: a non-AOY weighted/qualitative config show routes to the config
+    // jury/coach. null => keep the existing dedicated/generic path.
+    const configMode = configModeFor(directionId, evalShow)
     if (isAoyDir && mode === 'coach') {
       // AOY Coach is its OWN advisory function (generate-aoy-coach, S77), not a mode
       // of the calibrated scorer. Hand off; reset the shared jury spinner state so
@@ -3719,23 +3792,26 @@ export default function ProjectPage() {
       await coachAoyEntry(directionId)
       return
     }
-    // SMARTIES Coach is its OWN advisory function (generate-smarties-coach, S93),
-    // not a mode of any scorer. Hand off the same way AOY does; reset the shared
-    // jury spinner state so coachSmartiesEntry owns the coaching spinner. (Before
-    // S93 a SMARTIES Coach click fell through to the generic campaign coach.)
-    if (isSmartiesDir && mode === 'coach') {
+    // Config Coach (generate-entry-coach-config, S98). Advisory, not a mode of the
+    // calibrated scorer. Hand off the same way AOY does; the config coach owns the
+    // coaching spinner. Replaces the dedicated SMARTIES coach hand-off (S93): a
+    // SMARTIES direction with a resolved qualitative entry_form coaches here.
+    if (configMode && mode === 'coach') {
       setEvaluating(false)
       setEvaluatingForDirectionId(null)
-      await coachSmartiesEntry(directionId)
+      await coachConfigEntry(directionId)
       return
     }
-    // SMARTIES judge scoring routes to the qualitative SMARTIES jury (S92). AOY +
-    // campaign paths untouched.
+    // Judge routing: AOY -> weight-aware jury (S75); a non-AOY config show -> the
+    // config jury (evaluate-entry-config, S98); SMARTIES falls back to its dedicated
+    // jury only if entry_form did not resolve; campaign path untouched.
     const evalFnName = isAoyDir
       ? 'evaluate-aoy-entry'
-      : (isSmartiesDir && mode === 'judge')
-        ? 'evaluate-smarties-entry'
-        : 'evaluate-entry'
+      : configMode
+        ? 'evaluate-entry-config'
+        : (isSmartiesDir && mode === 'judge')
+          ? 'evaluate-smarties-entry'
+          : 'evaluate-entry'
     try {
       const accessToken = await getToken()
       if (!accessToken) return
@@ -3746,7 +3822,7 @@ export default function ProjectPage() {
       // Feedback round: existing directions also go up so the model never
       // re-suggests a placement the project already has. AOY scoring does not use
       // these campaign-specific placement candidates.
-      if (mode === 'judge' && !isAoyDir && !isSmartiesDir) {
+      if (mode === 'judge' && !isAoyDir && !isSmartiesDir && !configMode) {
         const bodyDir = directions.find(d => d.id === directionId)
         body.next_candidates = buildNextCandidates(bodyDir?.best_show ?? '')
         body.existing_directions = directions
@@ -4088,16 +4164,23 @@ export default function ProjectPage() {
 
       const quickIsAoy = isAoyShow(quickEvalShow.trim())
       const quickIsSmarties = isSmartiesShow(quickEvalShow.trim())
+      // S98 Chunk 5: a non-AOY weighted/qualitative config show segments + scores
+      // through the config path. Config segmentation writes the Chunk-2 placeholder
+      // format that only evaluate-entry-config clamps, so config segmentation MUST
+      // pair with the config jury. SMARTIES falls back to its dedicated pair only
+      // if entry_form does not resolve.
+      const quickForm = quickIsAoy ? null : await resolveEntryFormFor(quickEvalShow.trim(), quickEvalCategory.trim())
+      const quickConfigMode = quickForm && (quickForm.scoring_mode === 'weighted' || quickForm.scoring_mode === 'qualitative') ? quickForm.scoring_mode : null
 
-      if (quickIsAoy || quickIsSmarties) {
+      if (quickIsAoy || quickConfigMode || quickIsSmarties) {
         setQuickEvalPhase('segmenting')
-        // Uploaded AOY/SMARTIES entry (S78 AOY, S95 SMARTIES): both shows score
-        // section by fixed/weighted section, so a single blob cannot be judged.
-        // Map the uploaded document onto the sections server-side (segment-aoy-
-        // entry or segment-smarties-entry, both extractive, no fabrication); each
-        // writes one entry_drafts row per section. The respective jury then scores
-        // those rows. No single 'entry' blob row is created on this path.
-        const segFnName = quickIsAoy ? 'segment-aoy-entry' : 'segment-smarties-entry'
+        // Uploaded AOY/config/SMARTIES entry (S78 AOY, S95 SMARTIES, S98 config):
+        // these shows score section by section, so a single blob cannot be judged.
+        // Map the uploaded document onto the sections server-side (segment-aoy-entry,
+        // segment-entry-config, or segment-smarties-entry, all extractive, no
+        // fabrication); each writes one entry_drafts row per section. The matching
+        // jury then scores those rows. No single 'entry' blob row on this path.
+        const segFnName = quickIsAoy ? 'segment-aoy-entry' : quickConfigMode ? 'segment-entry-config' : 'segment-smarties-entry'
         const segRes = await fetch(
           `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/${segFnName}`,
           {
@@ -4113,7 +4196,7 @@ export default function ProjectPage() {
         const segData = await segRes.json()
         if (!segRes.ok || segData.error) {
           await supabase.from('directions').delete().eq('id', dir.id)
-          setQuickEvalError(segData.error || `Could not map the uploaded entry to the ${quickIsAoy ? 'rubric' : 'SMARTIES form'} (status ${segRes.status}).`)
+          setQuickEvalError(segData.error || `Could not map the uploaded entry to the ${quickIsAoy ? 'rubric' : quickConfigMode ? 'entry form' : 'SMARTIES form'} (status ${segRes.status}).`)
           return
         }
         // Refresh entries so the canvas shows the segmented sections.
@@ -4151,9 +4234,9 @@ export default function ProjectPage() {
       // on the weighted-section rows segment-aoy-entry just wrote. SMARTIES
       // entries score through the qualitative jury (evaluate-smarties-entry, S92)
       // on the fixed-section rows segment-smarties-entry just wrote (S95).
-      const quickEvalFnName = quickIsAoy ? 'evaluate-aoy-entry' : quickIsSmarties ? 'evaluate-smarties-entry' : 'evaluate-entry'
+      const quickEvalFnName = quickIsAoy ? 'evaluate-aoy-entry' : quickConfigMode ? 'evaluate-entry-config' : quickIsSmarties ? 'evaluate-smarties-entry' : 'evaluate-entry'
       const quickBody: Record<string, unknown> = { project_id: project.id, direction_id: dir.id }
-      if (!quickIsAoy && !quickIsSmarties) {
+      if (!quickIsAoy && !quickIsSmarties && !quickConfigMode) {
         // Build 2 (Session 55): quick eval runs judge mode — send candidates
         // so the Next Step card renders (quick eval users need it most),
         // plus existing directions so suggestions never duplicate them.
@@ -5919,8 +6002,8 @@ export default function ProjectPage() {
                                   <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Coaching…</>
                                 ) : isAoyShow(d?.best_show ?? '') ? (
                                   <>✦ {aoyCoaching[dirId] ? 'Re-run AOY Coach' : 'AOY Coach'}</>
-                                ) : isSmartiesShow(d?.best_show ?? '') ? (
-                                  <>✦ {smartiesCoaching[dirId] ? 'Re-run SMARTIES Coach' : 'SMARTIES Coach'}</>
+                                ) : configModeFor(dirId, d?.best_show) ? (
+                                  <>✦ {configCoaching[dirId] ? 'Re-run Coach' : 'Coach Review'}</>
                                 ) : (
                                   <>✦ {hasCoach ? 'Re-run Coach Review' : 'Coach Review'}</>
                                 )}
@@ -6130,8 +6213,8 @@ export default function ProjectPage() {
                                   <><svg className="animate-spin h-3 w-3 inline mr-1" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Coaching…</>
                                 ) : isAoyShow(d?.best_show ?? '') ? (
                                   <>✦ {aoyCoaching[dirId] ? 'Re-run AOY Coach' : 'AOY Coach'}</>
-                                ) : isSmartiesShow(d?.best_show ?? '') ? (
-                                  <>✦ {smartiesCoaching[dirId] ? 'Re-run SMARTIES Coach' : 'SMARTIES Coach'}</>
+                                ) : configModeFor(dirId, d?.best_show) ? (
+                                  <>✦ {configCoaching[dirId] ? 'Re-run Coach' : 'Coach Review'}</>
                                 ) : (
                                   <>✦ {hasCoach ? 'Re-run Coach Review' : 'Coach Review'}</>
                                 )}
@@ -6215,26 +6298,30 @@ export default function ProjectPage() {
                           )
                         })()}
 
-                        {/* SMARTIES Coach — advisory per-section guidance
-                            (generate-smarties-coach, S93). SMARTIES directions only;
-                            not an evaluations row, so it renders separately from the
-                            Jury panel. No section weights (SMARTIES publishes none).
+                        {/* Config Coach — advisory per-section guidance
+                            (generate-entry-coach-config, S98 Chunk 5). Non-AOY config
+                            directions (weighted or qualitative, e.g. SMARTIES); not an
+                            evaluations row, so it renders separately from the Jury
+                            panel. Replaces the dedicated SMARTIES coach panel (S93).
                             Reuses the shared coaching error state. */}
-                        {isSmartiesShow(d?.best_show ?? '') && coachingError && coachingForDirectionId === dirId && (
+                        {configModeFor(dirId, d?.best_show) && coachingError && coachingForDirectionId === dirId && (
                           <div className="px-5 py-3 border-b border-gray-200"><ErrorBanner error={coachingError} /></div>
                         )}
-                        {isSmartiesShow(d?.best_show ?? '') && smartiesCoaching[dirId] && (() => {
-                          const c = smartiesCoaching[dirId]
+                        {configCoaching[dirId] && (() => {
+                          const c = configCoaching[dirId]
                           return (
                             <div className="border-b border-gray-200 bg-green-50/40 px-5 py-4">
-                              {/* S93: type scale tuned for readability (Ben) — body
-                                  content at text-base (middle ground between the
-                                  original text-xs and text-lg), meta at text-sm. */}
                               <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                <span className="text-lg font-semibold text-gray-800">✦ SMARTIES Coach</span>
-                                {c.category && <span className="text-sm font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">{c.category}</span>}
+                                <span className="text-lg font-semibold text-gray-800">✦ Coach</span>
+                                {c.category_key && <span className="text-sm font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">{c.category_key}</span>}
                                 <span className="text-sm text-gray-400">advisory, not a score</span>
                               </div>
+                              {/* framing_degraded (S98 Chunk 4): Coach ran without the
+                                  show's full jury framing. Surface it so a generic pass
+                                  is visible rather than mistaken for show-calibrated advice. */}
+                              {c.framing_degraded && (
+                                <p className="text-sm text-amber-700 mb-2">Coaching without full show framing. Advice is general; seed this show&apos;s jury framing for show-specific guidance.</p>
+                              )}
                               {c.overall && <p className="text-base text-gray-700 leading-relaxed">{c.overall}</p>}
                               {c.priorities.length > 0 && (
                                 <div className="mt-2">
@@ -6244,9 +6331,9 @@ export default function ProjectPage() {
                               )}
                               <div className="mt-3 space-y-2">
                                 {c.sections.map(sec => (
-                                  <div key={sec.field_key} className={`border rounded-lg px-3 py-2.5 ${sec.is_placeholder ? 'border-amber-200 bg-amber-50/40' : 'border-gray-200 bg-white'}`}>
+                                  <div key={sec.key} className={`border rounded-lg px-3 py-2.5 ${sec.is_placeholder ? 'border-amber-200 bg-amber-50/40' : 'border-gray-200 bg-white'}`}>
                                     <div className="flex items-baseline justify-between gap-2">
-                                      <p className="text-base font-medium text-gray-800 min-w-0 flex-1">{sec.label}</p>
+                                      <p className="text-base font-medium text-gray-800 min-w-0 flex-1">{sec.label}{typeof sec.weight === 'number' ? <span className="text-gray-400 font-normal"> {sec.weight}% of score</span> : null}</p>
                                       {sec.is_placeholder && <span className="text-sm text-gray-400 flex-shrink-0">not written</span>}
                                     </div>
                                     {sec.missing.length > 0 && <p className="text-base text-amber-700 mt-1.5 leading-relaxed">Missing: {sec.missing.join('; ')}</p>}
@@ -6256,18 +6343,26 @@ export default function ProjectPage() {
                                   </div>
                                 ))}
                               </div>
-                              {/* Feedback export (S93): clean plain text bundling this
-                                  coach review + the latest jury eval, to copy into an
-                                  email/message or download. */}
+                              {/* Feedback export: clean plain text bundling this coach
+                                  review + the latest jury eval. Weighted -> AOY-shaped
+                                  (carries weights), qualitative -> SMARTIES-shaped. */}
                               {d && (() => {
-                                const fbInput = {
-                                  kind: 'SMARTIES' as const,
-                                  category: c.category,
-                                  overall: c.overall,
-                                  priorities: c.priorities,
-                                  sections: c.sections.map(s => ({ label: s.label, missing: s.missing, suggestions: s.suggestions })),
-                                }
-                                const copyKey = `smarties-fb-${dirId}`
+                                const fbInput = c.scoring_mode === 'weighted'
+                                  ? {
+                                      kind: 'AOY' as const,
+                                      category: c.category_key,
+                                      overall: c.overall,
+                                      priorities: c.priorities,
+                                      sections: c.sections.map(s => ({ label: s.label, weight: s.weight ?? 0, missing: s.missing, suggestions: s.suggestions })),
+                                    }
+                                  : {
+                                      kind: 'SMARTIES' as const,
+                                      category: c.category_key,
+                                      overall: c.overall,
+                                      priorities: c.priorities,
+                                      sections: c.sections.map(s => ({ label: s.label, missing: s.missing, suggestions: s.suggestions })),
+                                    }
+                                const copyKey = `config-fb-${dirId}`
                                 return (
                                   <div className="mt-3 flex items-center gap-2 flex-wrap">
                                     <button
@@ -6550,6 +6645,58 @@ export default function ProjectPage() {
                               )
                             })()}
 
+                            {/* Config jury (S98 Chunk 5): per-section breakdown from
+                                evaluate-entry-config, branching ONCE on scoring_mode.
+                                Weighted mirrors the AOY weighted panel (score x weight,
+                                weighted contribution, MeterBar); qualitative mirrors the
+                                SMARTIES panel (per-section 0-10, holistic overall shown
+                                in the header). This is the from-spec render that replaces
+                                per-show SMARTIES JSX. */}
+                            {(() => {
+                              const cfgOut = evaluation.output as unknown as {
+                                config?: boolean; scoring_mode?: 'weighted' | 'qualitative'
+                                category_key?: string | null; category?: string | null; weight_warning?: string | null
+                                sections?: { key?: string; field_key?: string; label: string; weight?: number; score: number; weighted_contribution?: number; rationale: string; is_placeholder: boolean }[]
+                              } | null
+                              if (!cfgOut?.config) return null
+                              const secs = Array.isArray(cfgOut.sections) ? cfgOut.sections : []
+                              const isWeighted = cfgOut.scoring_mode === 'weighted'
+                              const cat = cfgOut.category_key ?? cfgOut.category ?? null
+                              const maxWeight = isWeighted ? secs.reduce((m, x) => Math.max(m, x.weight || 0), 1) : 1
+                              return (
+                                <div className="mb-5">
+                                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                    <span className="text-xs font-semibold text-gray-600">{isWeighted ? 'Weighted rubric' : 'Case study'}{cat ? `: ${cat}` : ''}</span>
+                                    <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">{isWeighted ? 'config jury' : 'holistic score, no published section weighting'}</span>
+                                  </div>
+                                  {isWeighted && cfgOut.weight_warning && <p className="text-xs text-amber-600 mb-2">{cfgOut.weight_warning}</p>}
+                                  <div className="space-y-2">
+                                    {secs.map((s, i) => {
+                                      const sKey = s.key ?? s.field_key ?? String(i)
+                                      const sDelta = deltas?.[sKey]
+                                      return (
+                                        <div key={sKey} className={`border rounded-lg px-3 py-2.5 ${scoreBg(s.score)}`}>
+                                          <div className="flex items-baseline justify-between gap-2">
+                                            <p className="text-xs text-gray-700 font-medium min-w-0 flex-1">{s.label}{isWeighted && typeof s.weight === 'number' ? <span className="text-gray-400 font-normal"> {s.weight}% of score</span> : null}</p>
+                                            <div className="flex items-baseline gap-1.5 flex-shrink-0">
+                                              <p className={`text-lg font-bold tabular-nums ${scoreColor(s.score)}`}>{s.score}<span className="text-xs text-gray-400">/10</span></p>
+                                              {sDelta !== undefined && sDelta !== 0 && (
+                                                <span className={`text-xs font-semibold tabular-nums ${sDelta > 0 ? 'text-green-600' : 'text-red-500'}`}>{sDelta > 0 ? `↑+${sDelta}` : `↓${sDelta}`}</span>
+                                              )}
+                                            </div>
+                                          </div>
+                                          {isWeighted && <div className="mt-1.5"><MeterBar fraction={(s.weight || 0) / maxWeight} /></div>}
+                                          {isWeighted && typeof s.weighted_contribution === 'number' && <p className="text-xs text-gray-400 mt-1 tabular-nums">Adds {s.weighted_contribution} to the weighted total{s.is_placeholder ? ' · section not written' : ''}</p>}
+                                          {!isWeighted && s.is_placeholder && <p className="text-xs text-gray-400 mt-1">Section not written</p>}
+                                          {s.rationale && <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">{s.rationale}</p>}
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
+                              )
+                            })()}
+
                             {/* AOY market-context modifier (S85, Phase 3, Option B):
                                 a bounded, source-cited adjustment shown ALONGSIDE the
                                 calibrated raw score. The raw score never changes; every
@@ -6628,7 +6775,7 @@ export default function ProjectPage() {
                               )
                             })()}
 
-                            {!((evaluation.output as unknown as { aoy?: boolean } | null)?.aoy) && !((evaluation.output as unknown as { smarties?: boolean } | null)?.smarties) && (
+                            {!((evaluation.output as unknown as { aoy?: boolean } | null)?.aoy) && !((evaluation.output as unknown as { smarties?: boolean } | null)?.smarties) && !((evaluation.output as unknown as { config?: boolean } | null)?.config) && (
                             <div className="grid grid-cols-3 gap-2 mb-5">
                               {SCORE_DIMENSIONS.map(dim => {
                                 const score = evaluation.scores[dim.key] ?? 0
@@ -7369,8 +7516,8 @@ export default function ProjectPage() {
                                   <><svg className="animate-spin h-3 w-3 inline mr-1" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Coaching…</>
                                 ) : isAoyShow(d?.best_show ?? '') ? (
                                   <>✦ {aoyCoaching[dirId] ? 'Re-run AOY Coach' : 'AOY Coach'}</>
-                                ) : isSmartiesShow(d?.best_show ?? '') ? (
-                                  <>✦ {smartiesCoaching[dirId] ? 'Re-run SMARTIES Coach' : 'SMARTIES Coach'}</>
+                                ) : configModeFor(dirId, d?.best_show) ? (
+                                  <>✦ {configCoaching[dirId] ? 'Re-run Coach' : 'Coach Review'}</>
                                 ) : hasCoach ? '✦ Re-run Coach Review' : '✦ Coach Review'}
                               </button>
                             </div>
