@@ -4087,17 +4087,19 @@ export default function ProjectPage() {
       }
 
       const quickIsAoy = isAoyShow(quickEvalShow.trim())
+      const quickIsSmarties = isSmartiesShow(quickEvalShow.trim())
 
-      if (quickIsAoy) {
+      if (quickIsAoy || quickIsSmarties) {
         setQuickEvalPhase('segmenting')
-        // Uploaded AOY entry (S78 bug fix): an AOY entry is scored section by
-        // weighted section, so a single blob cannot be judged. Map the uploaded
-        // document onto the chosen category's weighted sections server-side
-        // (segment-aoy-entry, extractive, no fabrication); it writes one
-        // entry_drafts row per weighted section. The weight-aware jury then scores
+        // Uploaded AOY/SMARTIES entry (S78 AOY, S95 SMARTIES): both shows score
+        // section by fixed/weighted section, so a single blob cannot be judged.
+        // Map the uploaded document onto the sections server-side (segment-aoy-
+        // entry or segment-smarties-entry, both extractive, no fabrication); each
+        // writes one entry_drafts row per section. The respective jury then scores
         // those rows. No single 'entry' blob row is created on this path.
+        const segFnName = quickIsAoy ? 'segment-aoy-entry' : 'segment-smarties-entry'
         const segRes = await fetch(
-          `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/segment-aoy-entry`,
+          `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/${segFnName}`,
           {
             method: 'POST',
             headers: {
@@ -4111,10 +4113,10 @@ export default function ProjectPage() {
         const segData = await segRes.json()
         if (!segRes.ok || segData.error) {
           await supabase.from('directions').delete().eq('id', dir.id)
-          setQuickEvalError(segData.error || `Could not map the uploaded entry to the rubric (status ${segRes.status}).`)
+          setQuickEvalError(segData.error || `Could not map the uploaded entry to the ${quickIsAoy ? 'rubric' : 'SMARTIES form'} (status ${segRes.status}).`)
           return
         }
-        // Refresh entries so the canvas shows the segmented weighted sections.
+        // Refresh entries so the canvas shows the segmented sections.
         const { data: refreshedDrafts } = await supabase.rpc('get_project_entry_drafts', { p_project_id: project.id })
         if (refreshedDrafts) setEntries(refreshedDrafts)
       } else {
@@ -4146,13 +4148,17 @@ export default function ProjectPage() {
       }
 
       // AOY entries score through the weight-aware jury (evaluate-aoy-entry, S75)
-      // on the weighted-section rows segment-aoy-entry just wrote.
-      const quickEvalFnName = quickIsAoy ? 'evaluate-aoy-entry' : 'evaluate-entry'
+      // on the weighted-section rows segment-aoy-entry just wrote. SMARTIES
+      // entries score through the qualitative jury (evaluate-smarties-entry, S92)
+      // on the fixed-section rows segment-smarties-entry just wrote (S95).
+      const quickEvalFnName = quickIsAoy ? 'evaluate-aoy-entry' : quickIsSmarties ? 'evaluate-smarties-entry' : 'evaluate-entry'
       const quickBody: Record<string, unknown> = { project_id: project.id, direction_id: dir.id }
-      if (!quickIsAoy) {
+      if (!quickIsAoy && !quickIsSmarties) {
         // Build 2 (Session 55): quick eval runs judge mode — send candidates
         // so the Next Step card renders (quick eval users need it most),
         // plus existing directions so suggestions never duplicate them.
+        // AOY and SMARTIES juries do not accept these params (neither produces
+        // next-step suggestions).
         quickBody.next_candidates = buildNextCandidates(quickEvalShow.trim())
         quickBody.existing_directions = directions
           .filter(dd => dd.angle !== 'Uploaded entry — direct evaluation' && dd.best_show)
