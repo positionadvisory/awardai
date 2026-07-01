@@ -27,7 +27,7 @@
 // Only v2 config directions render here; AOY / v1 / craft keep the flat box.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   composeSectionText,
   normalizeSection,
@@ -123,6 +123,25 @@ export default function ConfigEntryCanvas({ spec, rows, scoringMode, onSaveSecti
   const [savingKey, setSavingKey] = useState<string | null>(null)
   const [savedKey, setSavedKey] = useState<string | null>(null)
   const [errorKey, setErrorKey] = useState<{ key: string; msg: string } | null>(null)
+
+  // Re-seed the working values when the underlying rows change identity — a new
+  // draft generation (new row ids) or field_values arriving from a load. Without
+  // this the lazy useState initializer runs only at mount, so a freshly generated
+  // draft's field_values never populate the boxes (React keeps the same instance).
+  // Signature includes whether each row has field_values, so a null->present
+  // transition re-seeds too. A user's own save keeps the same ids + presence, so
+  // it does NOT trigger a re-seed and never clobbers saved/typed work.
+  const rowsSignature = rows.map((r) => `${r.id}:${r.field_values ? 1 : 0}`).join('|')
+  const sigRef = useRef(rowsSignature)
+  useEffect(() => {
+    if (sigRef.current === rowsSignature) return
+    sigRef.current = rowsSignature
+    const next: Record<string, EntryFieldValues> = {}
+    sections.forEach((s) => { next[s.key] = initSectionValues(s, rowBySection[s.key]) })
+    setDraft(next)
+    setSavedKey(null)
+    setErrorKey(null)
+  }, [rowsSignature, sections, rowBySection])
 
   const setSectionValues = (sectionKey: string, next: EntryFieldValues) => {
     setDraft((prev) => ({ ...prev, [sectionKey]: next }))
