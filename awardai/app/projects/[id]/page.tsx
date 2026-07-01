@@ -59,7 +59,8 @@ import { isAoyShow, AOY_SHOW_NAME, aoyResolveStored, aoyTrackById, buildAoyBestC
 // Only the canonical PURE helpers + type are imported (client can import lib; edge
 // functions carry byte-identical copies). Resolution = longest show-level prefix of
 // best_show (mirrors the config edge fns) then the category-exact row.
-import { resolveEntryFormCategoryKey, pickEntryForm, type EntryFormSpec } from '@/lib/entry-form'
+import { resolveEntryFormCategoryKey, pickEntryForm, isV2Spec, type EntryFormSpec, type EntryFieldValues } from '@/lib/entry-form'
+import ConfigEntryCanvas from '@/components/ConfigEntryCanvas'
 import AoyEntryPicker from '@/components/AoyEntryPicker'
 import AgencyFactsValidator from '@/components/AgencyFactsValidator'
 import JuryProfilePanel, { JuryCell, RegionalUplift } from '@/components/JuryProfilePanel'
@@ -977,6 +978,7 @@ type EntryDraft = {
   version_c: string | null
   selected: string | null
   custom_text: string | null
+  field_values?: EntryFieldValues | null   // Entry Form v2 — structured sub-field values (v2.1)
   chat_history: ChatMessage[] | null
   award_show: string | null
   category: string | null
@@ -4338,6 +4340,28 @@ export default function ProjectPage() {
     setSavingFieldEdit(false)
   }
 
+  // Entry Form v2 (Chunk v2.2): persist one section's structured sub-field
+  // values PLUS the composed section text. The composed text goes to custom_text
+  // (the row the jury reads, unchanged path); field_values holds the typed data.
+  // Hardened against the RLS silent-no-op class (DM-16): checks returned rows,
+  // because this is customer entry data where a silent zero-row write matters.
+  const saveSectionFields = async (
+    rowId: number,
+    fieldValues: EntryFieldValues,
+    composedText: string
+  ): Promise<string | void> => {
+    const custom = composedText.trim() || null
+    const { data, error } = await supabase
+      .from('entry_drafts')
+      .update({ field_values: fieldValues, custom_text: custom, updated_at: new Date().toISOString() })
+      .eq('id', rowId)
+      .select('id')
+    if (error || !data || data.length === 0) {
+      return 'Could not save this section. Please try again.'
+    }
+    setEntries(prev => prev.map(e => e.id === rowId ? { ...e, field_values: fieldValues, custom_text: custom } : e))
+  }
+
   const refineField = async (field: EntryDraft, dirId: number) => {
     const msg = refineMessage[field.id]?.trim()
     if (!msg || !project) return
@@ -7298,7 +7322,31 @@ export default function ProjectPage() {
 
                         {/* Entry fields */}
                         <div className="divide-y divide-gray-100">
-                          {fields.map(field => {
+                          {(() => {
+                            // Entry Form v2 (Chunk v2.2): a config direction whose
+                            // seeded spec is v2 (typed sub-fields) renders the truthful
+                            // typed canvas. AOY / v1 / craft keep the flat box below.
+                            const ef = entryForms[dirId]
+                            const cfgMode = configModeFor(dirId, d?.best_show)
+                            if (ef && cfgMode && isV2Spec(ef)) {
+                              return (
+                                <ConfigEntryCanvas
+                                  spec={ef}
+                                  scoringMode={cfgMode}
+                                  onSaveSection={saveSectionFields}
+                                  rows={fields.filter(f => f.field_key !== 'entry').map(f => ({
+                                    id: f.id,
+                                    field_key: f.field_key,
+                                    field_label: f.field_label,
+                                    section_weight: f.section_weight,
+                                    version_a: f.version_a,
+                                    custom_text: f.custom_text,
+                                    field_values: f.field_values ?? null,
+                                  }))}
+                                />
+                              )
+                            }
+                            return fields.map(field => {
                             const content = resolveFieldContent(field)
                             const isEditingThis = editingFieldId === field.id
                             const liveContent = isEditingThis ? fieldEditValue : content
@@ -7490,7 +7538,8 @@ export default function ProjectPage() {
                                 </div>
                               </div>
                             )
-                          })}
+                          })
+                          })()}
                         </div>
 
                         {/* Compact re-evaluate bar — always visible at bottom of draft area when an evaluation exists */}
