@@ -6,7 +6,12 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
 
-const ADMIN_EMAIL = 'ben@positionadvisory.com'
+// Admin allowlist. Ben's Shortlist login may be either of these, so include
+// both: a login-email mismatch on the single-hardcoded-email version 403'd
+// every backend admin action (S89, admin-trial.ts) and would silently redirect
+// this page's viewer away too if left unfixed. Compared lowercase against
+// user.email. Byte-aligned with the ADMIN_EMAILS allowlist in admin-trial.ts.
+const ADMIN_EMAILS = ['ben@positionadvisory.com', 'bencondit@gmail.com']
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://gotshortlisted.com'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -85,11 +90,11 @@ export default function AdminPage() {
   const [addError, setAddError]                     = useState<Record<number, string>>({})
   const [decliningId, setDecliningId]               = useState<number | null>(null)
 
-  // ── Gate: only ben ────────────────────────────────────────────────────────
+  // ── Gate: admin allowlist ─────────────────────────────────────────────────
   useEffect(() => {
     if (authLoading) return
     if (!user) { router.replace('/login'); return }
-    if (user.email !== ADMIN_EMAIL) { router.replace('/projects'); return }
+    if (!user.email || !ADMIN_EMAILS.includes(user.email.toLowerCase())) { router.replace('/projects'); return }
   }, [user, authLoading, router])
 
   // ── Fetch all orgs ────────────────────────────────────────────────────────
@@ -115,7 +120,7 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
-    if (user?.email === ADMIN_EMAIL) fetchOrgs()
+    if (user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase())) fetchOrgs()
   }, [user])
 
   // ── Fetch show requests ───────────────────────────────────────────────────
@@ -140,7 +145,7 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
-    if (user?.email === ADMIN_EMAIL) fetchShowRequests()
+    if (user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase())) fetchShowRequests()
   }, [user])
 
   // ── Toggle trial_unlimited ─────────────────────────────────────────────────
@@ -159,7 +164,16 @@ export default function AdminPage() {
         },
         body: JSON.stringify({ org_id: orgId, trial_unlimited: !current }),
       })
-      if (!res.ok) throw new Error('Toggle failed')
+      // Read the body before checking res.ok: admin-trial.ts always returns a
+      // JSON {error} on failure (Forbidden 403, Invalid payload 400, Update
+      // failed 500), but the old code threw a hardcoded 'Toggle failed' string
+      // and discarded it, so a 403 (wrong admin email) looked identical to a
+      // 500 (DB write failed) and gave no clue which org/reason. Surface the
+      // real reason instead.
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        throw new Error(data?.error || `Toggle failed (status ${res.status})`)
+      }
       setOrgs(prev =>
         prev.map(o => o.id === orgId ? { ...o, trial_unlimited: !current } : o)
       )
@@ -661,7 +675,7 @@ export default function AdminPage() {
         )}
 
         <div style={{ marginTop: 16, fontSize: 12, color: '#9ca3af', textAlign: 'right' }}>
-          Accessible only from ben@positionadvisory.com
+          Accessible only to admin accounts
         </div>
       </div>
     </div>
