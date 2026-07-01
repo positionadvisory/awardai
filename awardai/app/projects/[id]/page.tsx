@@ -3455,10 +3455,25 @@ export default function ProjectPage() {
       // campaign path (generate-draft) is untouched.
       // SMARTIES directions route to the dedicated four-section drafter (S92);
       // the campaign and AOY paths are untouched.
+      // Session 99 fix: a non-AOY/non-SMARTIES config show (Women to Watch, a
+      // Clio Creators weighted medium) was resolving evaluate-entry-config +
+      // segment-entry-config for scoring/upload (Chunk 5), but "Generate Draft"
+      // was NEVER wired to generate-entry-draft (Chunk 2) — every config show
+      // fell through to the generic drafter, which invents its own field
+      // structure and writes no section_weight, so the config jury then 404s
+      // with ENTRYEVAL-NODRAFT ("no weighted sections"). configModeFor mirrors
+      // the same check already used for judge/coach routing just below.
       const draftShow = directions.find(d => d.id === directionId)?.best_show ?? ''
       const isAoyDir = isAoyShow(draftShow)
       const isSmartiesDir = isSmartiesShow(draftShow)
-      const draftFnName = isAoyDir ? 'generate-aoy-draft' : isSmartiesDir ? 'generate-smarties-draft' : 'generate-draft'
+      const draftConfigMode = configModeFor(directionId, draftShow)
+      const draftFnName = isAoyDir
+        ? 'generate-aoy-draft'
+        : isSmartiesDir
+          ? 'generate-smarties-draft'
+          : draftConfigMode
+            ? 'generate-entry-draft'
+            : 'generate-draft'
       const body: Record<string, unknown> = { project_id: project.id, direction_id: directionId }
       if (evaluationId) body.evaluation_id = evaluationId
       const focusItems = draftFocusItems[directionId] || []
