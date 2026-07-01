@@ -73,9 +73,50 @@ export interface EntryFormSection {
   sort_order: number
   /** what this section must contain — injected into the drafter prompt. */
   guidance: string
+
+  // ── v2 field model (Entry Form v2, 1 Jul 2026) — all OPTIONAL, additive. ──
+  // A v1 section (no `fields`) is a v2 section with one implicit long_text
+  // field spanning the whole section (see normalizeSection). AOY and any
+  // unseeded show keep working byte-for-byte because these are all optional and
+  // the resolver/jury never require them.
+  /**
+   * The typed sub-fields that compose this section (SMARTIES a/b/c/d parts).
+   * Absent => v1 flat section (one long_text box). See EntryFormField.
+   */
+  fields?: EntryFormField[]
+  /**
+   * Section-level word ceiling: the sum of this section's prose fields'
+   * word counts must not exceed it (soft warn in the canvas). null => no
+   * ceiling. Distinct from per-field `word_limit`. v1 sets neither (word_limit
+   * on the section is the per-field limit for the implicit body field).
+   */
+  word_ceiling?: number | null
+  /**
+   * Does the jury score this section? Defaults true for a section carrying a
+   * weight or appearing in a scored show; a static gate (endorsement letter)
+   * sets false. Absent => derived (see isScoredSection): a section is NOT
+   * scored only when it is a static row (weight null AND no scored fields),
+   * matching the v1 static-row rule.
+   */
+  scored?: boolean
+  /** shown above the sub-fields in the canvas. Falls back to `guidance`. */
+  instructions?: string
+  /**
+   * Optional section-level "provide the source" input rendered after the
+   * section's fields (e.g. the optional source under the Campaign Metrics
+   * table). Distinct from a field-level or table-column source.
+   */
+  source?: EntryFormSource
 }
 
 export interface EntryFormSpec {
+  /**
+   * 1 (or absent) => v1 flat sections. 2 => sections MAY carry typed `fields`.
+   * Detection also works structurally (any section with `fields` is v2), so
+   * this is advisory metadata, not a hard gate — normalizeSection handles both
+   * regardless. Set 2 on the re-seeded SMARTIES spec (Entry Form v2 §8).
+   */
+  form_version?: number
   scoring_mode: ScoringMode
   entry_subject: EntrySubject
   primary_tool: PrimaryTool
@@ -318,4 +359,355 @@ export function aggregateHolistic(
     : Math.round(Math.min(...results.map((s) => s.score)) * 10) / 10
 
   return { overall, sections: results }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ENTRY FORM v2 — typed field model (1 Jul 2026)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// WHY: the v1 flat model (one section = one prose box) cannot represent the real
+// MMA SMARTIES 2026 kit: labelled sub-parts, one-sentence fields, currency /
+// percent fields, a repeatable Objectives list, two typed metric tables with a
+// required per-row source, a Results-from-Objectives cross-reference, and an
+// optional ROI ratio. v2 adds a typed field union UNDER each section. It is an
+// ADDITIVE SUPERSET: a v1 section (no `fields`) normalizes to a v2 section with
+// one implicit long_text field, so AOY and every unseeded show are unchanged.
+// Spec: Show-Customization-EntryForm-v2-DESIGN-SPEC-2026-07-01.md §4/§5.
+//
+// LOAD-BEARING PIPELINE DECISION (§6): the jury still scores the four top-level
+// SECTIONS. The typed sub-fields are INPUTS that COMPOSE into one section text
+// (composeSectionText below), stored in entry_drafts.version_a / custom_text,
+// exactly the rows the jury reads today. So evaluate-entry-config.ts and the
+// byte-frozen evaluate-entry.ts are UNTOUCHED. The composed-text FORMAT is
+// defined ONCE here and copied verbatim into the Deno drafter
+// (generate-entry-draft.ts) + the jury fixture baseline — it joins the existing
+// parity contract (the WIN_RATES/ENTRY_FEES two-representation trap). Deno edge
+// functions cannot import this module, so any copy MUST stay byte-identical.
+
+/** Optional "provide the source" input attached to a field, sub-part, or
+ * section. `required:true` is used only inside a table's source COLUMN; a
+ * sub-part / section source is `required:false` ("...if any"). */
+export interface EntryFormSource {
+  enabled: boolean
+  required: boolean
+}
+
+/** One column of a `table` field. A column with type/role 'source' is the
+ * per-row source input (required for the metric tables). */
+export interface EntryFormTableColumn {
+  key: string
+  label: string
+  /** 'text' is a free cell; 'source' is the per-row source cell. */
+  type: 'text' | 'source'
+  required: boolean
+  example?: string | null
+}
+
+export type EntryFormFieldType =
+  | 'long_text'
+  | 'short_text'
+  | 'currency'
+  | 'amount_or_percent'
+  | 'list'
+  | 'table'
+  | 'derived_list'
+  | 'ratio'
+
+/** A typed sub-field of a section. Common shape + type-specific props. Kept as
+ * one interface (all type-specific props optional) rather than a discriminated
+ * union so the JSONB round-trips and the canvas/compose switch on `type`. */
+export interface EntryFormField {
+  key: string
+  label: string
+  type: EntryFormFieldType
+  required?: boolean
+  help?: string | null
+  /** optional/required source input attached to this field or sub-part. */
+  source?: EntryFormSource
+  // long_text / short_text
+  word_limit?: number | null
+  /** short_text: cap to a single sentence (canvas hint + soft validation). */
+  one_sentence?: boolean
+  // list
+  min_items?: number
+  item_label?: string
+  // table
+  columns?: EntryFormTableColumn[]
+  min_rows?: number
+  // derived_list — references a `list` field in another (or the same) section.
+  source_ref?: { section_key: string; field_key: string }
+  result_label?: string
+  result_required?: boolean
+  // ratio
+  example?: string | null
+}
+
+// ── Stored value shapes (entry_drafts.field_values, per section row) ─────────
+// One entry per field, keyed by field.key. Plus an optional section-level
+// `section_source` string and a `sources` map for field/sub-part sources.
+
+/** A repeatable list item carries a STABLE id (assigned at creation), so a
+ * derived_list result stays linked when the objective text is edited or the
+ * list is reordered (§10 decision: key off stable id, never index or text). */
+export interface EntryListItem {
+  id: string
+  text: string
+}
+
+/** A derived_list row: the referenced objective's stable id + a self-contained
+ * TEXT SNAPSHOT of that objective (refreshed by reconcileDerivedList so
+ * composition needs only this section's values) + the authored result. */
+export interface EntryDerivedRow {
+  ref: string
+  objective: string
+  result: string
+}
+
+/** A table row: column key -> cell string (source column included). */
+export type EntryTableRow = Record<string, string>
+
+/** Per-section structured values. Field values are keyed by field.key; the
+ * concrete type depends on the field's `type`. `sources` holds field/sub-part
+ * source strings keyed by field.key; `section_source` is the section-level one. */
+export interface EntryFieldValues {
+  [fieldKey: string]:
+    | string
+    | EntryListItem[]
+    | EntryDerivedRow[]
+    | EntryTableRow[]
+    | Record<string, string>
+    | undefined
+  sources?: Record<string, string>
+  section_source?: string
+}
+
+// ── Detection + normalization ────────────────────────────────────────────────
+
+/** A section is v2 iff it declares typed `fields`. */
+export function isV2Section(section: EntryFormSection): boolean {
+  return Array.isArray(section.fields) && section.fields.length > 0
+}
+
+/** A spec is v2 iff form_version>=2 OR any section declares `fields`. Structural
+ * detection wins, so an un-versioned but field-carrying spec still resolves. */
+export function isV2Spec(spec: EntryFormSpec): boolean {
+  if ((spec.form_version ?? 1) >= 2) return true
+  return Array.isArray(spec.sections) && spec.sections.some(isV2Section)
+}
+
+/** A section with its `fields` guaranteed present. A v1 flat section becomes a
+ * v2 section with ONE implicit long_text field spanning the whole section, so
+ * every downstream consumer (canvas, compose, drafter) handles one code path. */
+export interface NormalizedSection extends EntryFormSection {
+  fields: EntryFormField[]
+}
+
+/** Pure. v1 flat section -> a v2 section with a single implicit `body`
+ * long_text field carrying the v1 word_limit + guidance. v2 sections pass
+ * through with `instructions`/`word_ceiling` defaulted. */
+export function normalizeSection(section: EntryFormSection): NormalizedSection {
+  if (isV2Section(section)) {
+    return {
+      ...section,
+      fields: section.fields as EntryFormField[],
+      word_ceiling: section.word_ceiling ?? null,
+      instructions: section.instructions ?? section.guidance,
+    }
+  }
+  return {
+    ...section,
+    fields: [
+      {
+        key: 'body',
+        label: section.label,
+        type: 'long_text',
+        required: true,
+        word_limit: section.word_limit ?? null,
+        help: section.guidance,
+      },
+    ],
+    word_ceiling: section.word_ceiling ?? null,
+    instructions: section.instructions ?? section.guidance,
+  }
+}
+
+/** Static row rule (carried from v1 / the AOY endorsement gate): a section is
+ * NOT scored when it is explicitly `scored:false`, OR (legacy shape) it carries
+ * no weight AND no word_limit AND no typed fields. Everything else is scored. */
+export function isScoredSection(section: EntryFormSection): boolean {
+  if (section.scored === false) return false // explicit opt-out (static gate)
+  if (section.scored === true) return true
+  const legacyStatic =
+    (section.weight === null || section.weight === undefined) &&
+    (section.word_limit === null || section.word_limit === undefined) &&
+    !isV2Section(section)
+  return !legacyStatic
+}
+
+// ── Word counting (shared with the canvas soft-limit UX) ─────────────────────
+
+/** Pure. Whitespace-delimited word count; empty/whitespace -> 0. */
+export function countWords(text: string | null | undefined): number {
+  if (!text) return 0
+  const t = String(text).trim()
+  if (!t) return 0
+  return t.split(/\s+/).length
+}
+
+/** Pure. Sum of word counts across a section's PROSE fields (long_text +
+ * short_text) for the section word_ceiling soft check. */
+export function sectionWordCount(
+  section: EntryFormSection,
+  values: EntryFieldValues | null | undefined
+): number {
+  const norm = normalizeSection(section)
+  const v = values ?? {}
+  return norm.fields.reduce((sum, f) => {
+    if (f.type !== 'long_text' && f.type !== 'short_text') return sum
+    const val = v[f.key]
+    return sum + (typeof val === 'string' ? countWords(val) : 0)
+  }, 0)
+}
+
+// ── derived_list reconciliation (§10 decision: stable ids) ───────────────────
+
+/** Pure. Rebuild a derived_list's rows from the live objectives list, keyed by
+ * stable id: an existing result is preserved when its objective still exists
+ * (text snapshot refreshed); a removed objective drops its row (the caller
+ * confirms first if that row had a result — see the canvas); a new objective
+ * appends an empty row. Order follows the live objectives list. */
+export function reconcileDerivedList(
+  existing: EntryDerivedRow[] | null | undefined,
+  objectives: EntryListItem[] | null | undefined
+): EntryDerivedRow[] {
+  const prior = new Map<string, EntryDerivedRow>()
+  ;(existing ?? []).forEach((r) => {
+    if (r && typeof r.ref === 'string') prior.set(r.ref, r)
+  })
+  return (objectives ?? [])
+    .filter((o) => o && typeof o.id === 'string')
+    .map((o) => {
+      const kept = prior.get(o.id)
+      return {
+        ref: o.id,
+        objective: o.text ?? '',
+        result: kept ? kept.result : '',
+      }
+    })
+}
+
+/** Pure. The derived_list rows whose objective was removed AND that still carry
+ * a written result — the canvas warns before dropping these (no silent loss). */
+export function orphanedDerivedResults(
+  existing: EntryDerivedRow[] | null | undefined,
+  objectives: EntryListItem[] | null | undefined
+): EntryDerivedRow[] {
+  const liveIds = new Set((objectives ?? []).map((o) => o.id))
+  return (existing ?? []).filter(
+    (r) => r && !liveIds.has(r.ref) && (r.result ?? '').trim().length > 0
+  )
+}
+
+// ── Composition — the section text the jury reads (defined ONCE) ─────────────
+//
+// FORMAT (deterministic, byte-stable — copied verbatim into the Deno drafter +
+// the jury fixture). A section composes to its fields rendered IN ORDER, each
+// non-empty field a block, blocks joined by a blank line. Empty fields are
+// skipped (so an unaddressed section composes to ''), which the jury's
+// placeholder detection reads as a placeholder exactly as today. A v1 section
+// composes to just its body prose (byte-identical to the old flat text), so
+// nothing regresses for AOY / craft.
+
+function renderTableRow(row: EntryTableRow, columns: EntryFormTableColumn[]): string {
+  const parts = columns
+    .map((c) => {
+      const cell = (row?.[c.key] ?? '').toString().trim()
+      return cell ? `${c.label}: ${cell}` : ''
+    })
+    .filter(Boolean)
+  return parts.join('; ')
+}
+
+function renderField(field: EntryFormField, values: EntryFieldValues): string | null {
+  const v = values ?? {}
+  const sources = (v.sources as Record<string, string> | undefined) ?? {}
+  const srcRaw = sources[field.key]
+  const srcLine =
+    field.source?.enabled && typeof srcRaw === 'string' && srcRaw.trim()
+      ? `\nSource: ${srcRaw.trim()}`
+      : ''
+
+  switch (field.type) {
+    case 'long_text': {
+      // Prose block: label header, then the paragraph on its own line.
+      const val = typeof v[field.key] === 'string' ? (v[field.key] as string).trim() : ''
+      if (!val) return null
+      return `${field.label}\n${val}${srcLine}`
+    }
+    case 'short_text':
+    case 'currency':
+    case 'amount_or_percent':
+    case 'ratio': {
+      // One-liners (one-sentence strategy, budget figures, ROI): inline
+      // `Label: value`, cleaner than a prose block for a single sentence.
+      const val = typeof v[field.key] === 'string' ? (v[field.key] as string).trim() : ''
+      if (!val) return null
+      return `${field.label}: ${val}${srcLine}`
+    }
+    case 'list': {
+      const items = Array.isArray(v[field.key]) ? (v[field.key] as EntryListItem[]) : []
+      const lines = items
+        .map((it) => (it && typeof it.text === 'string' ? it.text.trim() : ''))
+        .filter(Boolean)
+        .map((t) => `- ${t}`)
+      if (lines.length === 0) return null
+      return `${field.label}:\n${lines.join('\n')}${srcLine}`
+    }
+    case 'table': {
+      const rows = Array.isArray(v[field.key]) ? (v[field.key] as EntryTableRow[]) : []
+      const cols = field.columns ?? []
+      const lines = rows
+        .map((r) => renderTableRow(r, cols))
+        .filter(Boolean)
+        .map((t) => `- ${t}`)
+      if (lines.length === 0) return null
+      return `${field.label}:\n${lines.join('\n')}${srcLine}`
+    }
+    case 'derived_list': {
+      const rows = Array.isArray(v[field.key]) ? (v[field.key] as EntryDerivedRow[]) : []
+      const lines = rows
+        .map((r) => {
+          const obj = (r?.objective ?? '').trim()
+          const res = (r?.result ?? '').trim()
+          if (!obj && !res) return ''
+          return `- ${obj}: ${res}`
+        })
+        .filter(Boolean)
+      if (lines.length === 0) return null
+      return `${field.label}:\n${lines.join('\n')}`
+    }
+    default:
+      return null
+  }
+}
+
+/** Pure. Compose a section's typed field values into the single section text
+ * the jury + downloads read (entry_drafts.version_a / custom_text). v1 flat
+ * section -> the body prose verbatim (no regression). Empty section -> ''.
+ * DEFINED ONCE: any copy (Deno drafter, jury fixture) must stay byte-identical. */
+export function composeSectionText(
+  section: EntryFormSection,
+  values: EntryFieldValues | null | undefined
+): string {
+  const norm = normalizeSection(section)
+  const v = values ?? {}
+  const blocks = norm.fields
+    .map((f) => renderField(f, v))
+    .filter((b): b is string => b !== null)
+  const sectionSrc =
+    section.source?.enabled && typeof v.section_source === 'string' && v.section_source.trim()
+      ? `Source: ${v.section_source.trim()}`
+      : ''
+  if (sectionSrc) blocks.push(sectionSrc)
+  return blocks.join('\n\n')
 }
