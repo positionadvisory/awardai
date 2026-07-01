@@ -217,6 +217,24 @@ const categoriesForShow = (showName: string): string[] => {
   return []
 }
 
+// Session 99 — shows with NO category concept at all, not just an undocumented
+// list. Distinct from Clio Entertainment/Sports/Creators/ANDY/Gerety/ROI
+// Festival (categoriesForShow() also returns [] for those, but real categories
+// exist and are simply not yet in SHOW_CATEGORIES per the research pipeline —
+// never conflate "not yet documented" with "does not exist"). Women to Watch
+// judges ONE uniform nomination form per the verified entry kit (Show-Pilots-
+// EntryForm-Research-2026-07-01.md §1): there is no category to pick, so the
+// free-text input + "Suggest for me" (which 500s on an empty candidate list,
+// S99 bug report) are both the wrong UI here, not just unpopulated.
+const NO_CATEGORY_SHOWS = ['Campaign Asia Women to Watch APAC']
+const showHasNoCategoryConcept = (showName: string): boolean =>
+  NO_CATEGORY_SHOWS.some(s => s.toLowerCase() === (showName || '').trim().toLowerCase())
+// The fixed value written to best_category for a no-category show. Any string
+// is functionally safe (the config resolver's category-exact lookup always
+// misses and falls back to the show-level entry_form row — the only row these
+// shows have), so this is chosen for display only.
+const NO_CATEGORY_PLACEHOLDER = 'Nomination'
+
 // Build 2 (Session 55): candidate list sent to evaluate-entry for the
 // next_opportunities field (judge mode). Only shows with verified category
 // lists qualify (SHOW_CATEGORIES keys) — the no-category-list shows are
@@ -9081,7 +9099,15 @@ export default function ProjectPage() {
                 )}
                 <ShowCombobox
                   value={quickEvalShow}
-                  onChange={v => { setQuickEvalShow(v); setQuickEvalCategory(''); setQuickEvalDetectedFields(prev => ({ ...prev, show: false })); setQuickEvalSuggestion(null) }}
+                  onChange={v => {
+                    setQuickEvalShow(v)
+                    // Session 99: a no-category show (Women to Watch) has no field to
+                    // fill; write the fixed placeholder directly instead of '' so the
+                    // resolver has something to store on the direction immediately.
+                    setQuickEvalCategory(showHasNoCategoryConcept(v) ? NO_CATEGORY_PLACEHOLDER : '')
+                    setQuickEvalDetectedFields(prev => ({ ...prev, show: false }))
+                    setQuickEvalSuggestion(null)
+                  }}
                   options={Array.from(new Set([...(project.target_shows ?? []), ...kbShows]))}
                   placeholder={(project.target_shows ?? []).length > 0 ? 'Or type another show…' : 'e.g. Cannes Lions, Effies APAC, WARC…'}
                 />
@@ -9089,18 +9115,20 @@ export default function ProjectPage() {
               <div>
                 <div className="flex items-center gap-2 mb-1.5">
                   <label className="text-xs text-gray-500">Category</label>
-                  {!isAoyShow(quickEvalShow) && quickEvalDetectedFields.category && !quickEvalDetecting && (
+                  {!isAoyShow(quickEvalShow) && !showHasNoCategoryConcept(quickEvalShow) && quickEvalDetectedFields.category && !quickEvalDetecting && (
                     <span className={`text-xs font-medium ${quickEvalDetectedFields.confidence === 'low' ? 'text-amber-600' : 'text-green-600'}`}>
                       {quickEvalDetectedFields.confidence === 'low' ? '? verify' : '✓ detected'}
                     </span>
                   )}
-                  {!isAoyShow(quickEvalShow) && quickEvalSuggestion && quickEvalCategory && !quickEvalSuggesting && (
+                  {!isAoyShow(quickEvalShow) && !showHasNoCategoryConcept(quickEvalShow) && quickEvalSuggestion && quickEvalCategory && !quickEvalSuggesting && (
                     <span className={`text-xs font-medium ${quickEvalSuggestion.confidence === 'low' ? 'text-amber-600' : 'text-green-600'}`}>
                       ✦ suggested
                     </span>
                   )}
-                  {/* Session 52 — for users who don't know the right category (non-AOY only) */}
-                  {!isAoyShow(quickEvalShow) && (
+                  {/* Session 52 — for users who don't know the right category (non-AOY,
+                      non-no-category-show only: "suggest for me" has nothing to suggest
+                      among zero candidates and hard-fails, S99 bug report). */}
+                  {!isAoyShow(quickEvalShow) && !showHasNoCategoryConcept(quickEvalShow) && (
                     <button
                       type="button"
                       onClick={suggestQuickEvalCategory}
@@ -9118,6 +9146,14 @@ export default function ProjectPage() {
                      Writes a canonical best_category that resolves to a rubric stem.
                      Keyed on the show string so it resets when the show changes. */
                   <AoyEntryPicker key={`qe-${quickEvalShow}`} onChange={v => setQuickEvalCategory(v)} />
+                ) : showHasNoCategoryConcept(quickEvalShow) ? (
+                  /* Session 99: Women to Watch judges one uniform nomination form, no
+                     category to pick. Show a static note instead of a free-text box
+                     that invites a meaningless answer, and skip "Suggest for me"
+                     entirely (nothing to suggest among zero candidates). */
+                  <p className="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                    This show has one uniform nomination form — no category to choose.
+                  </p>
                 ) : (
                   <>
                     {/* Free-text category input with optional suggestions for known shows */}
