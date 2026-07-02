@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
+export const dynamic = 'force-dynamic'
+
 const ADMIN_EMAIL     = 'ben@positionadvisory.com'
 const SUPABASE_URL    = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const ANON_KEY        = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
