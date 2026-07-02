@@ -102,13 +102,6 @@ export default function UpgradePage() {
             <Logo size={20} />
             <span className="sl-serif" style={{ fontSize: isMobile ? 18 : 22, lineHeight: 1 }}>Shortlist</span>
           </a>
-          <a
-            href="/projects"
-            className="sl-mono"
-            style={{ fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--muted-dark)', textDecoration: 'none', opacity: 0.7 }}
-          >
-            Skip for now
-          </a>
         </div>
       </nav>
 
