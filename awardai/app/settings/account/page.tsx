@@ -390,7 +390,7 @@ export default function AccountPage() {
                 disabled={portalLoading}
                 style={{ padding: '9px 18px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', color: '#374151', fontSize: 14, fontWeight: 500, cursor: portalLoading ? 'default' : 'pointer', opacity: portalLoading ? 0.7 : 1 }}
               >
-                {portalLoading ? 'Opening…' : 'Manage billing, invoices & payment method →'}
+                {portalLoading ? 'Opening…' : 'Manage plan, billing & cancellation →'}
               </button>
               <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 6 }}>
                 Opens Stripe portal · cancel, update card, download receipts

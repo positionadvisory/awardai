@@ -25,11 +25,11 @@ const Eyebrow = ({ children }: { children: React.ReactNode }) => (
 /* ── Feature rows ────────────────────────────────────────────────────────── */
 
 const features: { label: string; detail: string }[] = [
-  { label: 'Entry directions',   detail: 'AI-generated strategic angles, show recommendations, and category fits — ready before your team picks up the brief.' },
+  { label: 'Entry directions',   detail: 'AI-generated strategic angles, show recommendations, and category fits. Ready before your team picks up the brief.' },
   { label: 'First drafts',       detail: 'Field-by-field entry copy across every section. Structured, calibrated, and editable. Your team edits, not starts from scratch.' },
   { label: 'Jury evaluation',    detail: 'Score your entry against real jury criteria before you submit. Catch weak sections. Strengthen what matters.' },
   { label: 'Video script scoring', detail: 'AI feedback on your case study film script, calibrated to what juries actually respond to.' },
-  { label: 'Press kit generation', detail: 'LinkedIn, X, and Instagram copy, plus a press hook — ready to announce the shortlist before it happens.' },
+  { label: 'Press kit generation', detail: 'LinkedIn, X, and Instagram copy, plus a press hook, ready to announce the shortlist before it happens.' },
   { label: 'Agency profile',     detail: 'Upload your credentials once. Every entry pulls your positioning, voice, and sector strengths automatically.' },
   { label: 'Unlimited entries',  detail: 'No per-entry charges. Unlimited drafts, evaluations, and press kits within each of your 5 active projects.' },
   { label: '30+ shows covered',  detail: 'Cannes Lions, D&AD, One Show, Clio, Effies, SABRE, PRCA, Spikes, SMARTIES, and more. Show data is baked in.' },
@@ -224,15 +224,6 @@ export default function UpgradePage() {
               </p>
             </div>
 
-            {/* Skip link */}
-            <div style={{ marginTop: 16, textAlign: 'center' }}>
-              <a
-                href="/projects"
-                style={{ fontSize: 12, color: 'var(--muted-dark)', textDecoration: 'underline', textUnderlineOffset: 3, opacity: 0.6 }}
-              >
-                Continue without subscribing
-              </a>
-            </div>
           </div>
         </div>
       </div>
