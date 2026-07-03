@@ -1595,6 +1595,41 @@ export default function ProjectPage() {
         }
       })
 
+    // Fetch persisted AOY coach feedback for this project (Chunk 5, S106/S111
+    // decision, 4 Jul). Dedicated coach_feedback table, never `evaluations`
+    // (see the migration comment for the full reasoning). One row per
+    // direction per draft_generation; hydrate straight into the existing
+    // aoyCoaching state so the panel, staleness check, and Copy/Download
+    // export all keep reading from the same place a live coach run writes to.
+    // Non-critical: a failed fetch just means coaching starts blank, same as
+    // before this chunk shipped.
+    supabase
+      .from('coach_feedback')
+      .select('direction_id, pillar, category_key, draft_generation, sections, priorities, overall')
+      .eq('project_id', projectId)
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (error) { console.error('coach_feedback fetch failed', error); return }
+        if (!data || data.length === 0) return
+        const map: Record<number, AoyCoaching> = {}
+        for (const row of data as Array<{
+          direction_id: number; pillar: string | null; category_key: string | null
+          draft_generation: number; sections: AoyCoaching['sections']; priorities: string[] | null
+          overall: string | null
+        }>) {
+          map[row.direction_id] = {
+            aoy: true,
+            pillar: row.pillar ?? '',
+            category_key: row.category_key ?? '',
+            draft_generation: row.draft_generation,
+            sections: Array.isArray(row.sections) ? row.sections : [],
+            priorities: row.priorities ?? [],
+            overall: row.overall ?? '',
+          }
+        }
+        setAoyCoaching(prev => ({ ...map, ...prev }))
+      })
+
     // Session 52 (P-03) payload diet:
     //  - projects: explicit columns, NO materials JSONB (extracted_text alone
     //    can be 250KB) — slim materials metadata comes from the
@@ -6413,6 +6448,13 @@ export default function ProjectPage() {
                         )}
                         {isAoyShow(d?.best_show ?? '') && aoyCoaching[dirId] && (() => {
                           const c = aoyCoaching[dirId]
+                          // Chunk 5 staleness flag: the persisted/live coaching is
+                          // keyed to the draft_generation it was run against. If the
+                          // draft has since been regenerated (maxGen is this scope's
+                          // current-generation count, same variable the judge/coach
+                          // needsReEval check above already uses), say so plainly
+                          // instead of silently showing advice for an older draft.
+                          const coachStale = maxGen > c.draft_generation
                           return (
                             <div className="border-b border-gray-200 bg-green-50/40 px-5 py-4">
                               <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -6420,6 +6462,9 @@ export default function ProjectPage() {
                                 <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full capitalize">{c.pillar} pillar</span>
                                 <span className="text-xs text-gray-400">advisory, not a score</span>
                               </div>
+                              {coachStale && (
+                                <p className="text-xs text-amber-700 mb-2">Draft changed since this coaching. Re-run AOY Coach for advice on the current version.</p>
+                              )}
                               {c.overall && <p className="text-sm text-gray-700">{c.overall}</p>}
                               {c.priorities.length > 0 && (
                                 <div className="mt-2">
