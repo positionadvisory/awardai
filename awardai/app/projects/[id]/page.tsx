@@ -4125,6 +4125,21 @@ export default function ProjectPage() {
     return () => clearTimeout(t)
   }, [tab, justScoredDirId, entries])
 
+  // AOY score-first landing (S106 chunk 2): an AOY project opens on Materials,
+  // not Brief. AOY has no brief, and landing there was the lost-time feedback.
+  // Fires once after the project loads; campaign projects are never redirected.
+  // projectIsAoy is computed in render (after the loading guard), so the AOY
+  // signal is recomputed here from loaded state.
+  const aoyLandingRedirectedRef = useRef(false)
+  useEffect(() => {
+    if (aoyLandingRedirectedRef.current || fetching || !project) return
+    aoyLandingRedirectedRef.current = true
+    const isAoy = (project.target_shows ?? []).some(isAoyShow)
+      || project.entry_type === 'aoy'
+      || directions.some(d => isAoyShow(d.best_show))
+    if (isAoy && tab === 'brief') setTab('materials')
+  }, [fetching, project, directions, tab])
+
   const evaluateUploadedEntry = async () => {
     if (!project || quickEvalMaterialIdx === null || !user) return
     const material = project.materials[quickEvalMaterialIdx]
@@ -4771,6 +4786,9 @@ export default function ProjectPage() {
   const spineHasJudge = Object.values(evaluations).some(s => !!s.judge)
   const spineHasCoach = Object.values(evaluations).some(s => !!s.coach)
   const spineFactsDone = !!project.agency_facts || project.entry_type === 'aoy'
+  // Materials step is done when a draft is uploaded AND a category is set
+  // (an AOY direction carries best_category), per the score-first flow (spec 4).
+  const spineAoyCategorySet = directions.some(d => (d.best_category ?? '').trim() !== '')
 
   // AOY step key -> existing Tab view. Shared keys map to themselves.
   const AOY_STEP_TO_TAB: Record<string, Tab> = {
@@ -4784,7 +4802,7 @@ export default function ProjectPage() {
   }
 
   const aoySpineSteps: SpineStep[] = [
-    { key: 'materials', label: 'Materials', done: (project.materials?.length ?? 0) > 0,
+    { key: 'materials', label: 'Materials', done: (project.materials?.length ?? 0) > 0 && spineAoyCategorySet,
       summary: project.materials?.length ? String(project.materials.length) : undefined },
     { key: 'jury', label: 'Jury Read', done: spineHasJudge,
       summary: spineBestJudge !== null ? spineBestJudge.toFixed(1) : undefined },
@@ -5365,7 +5383,9 @@ export default function ProjectPage() {
         {tab === 'materials' && (
           <div className="max-w-2xl">
             <p className="text-sm text-gray-500 mb-5">
-              Upload supporting files — case studies, results decks, campaign documents. Text and chart data will be extracted and used when generating entry drafts.
+              {projectIsAoy
+                ? 'Upload your draft entry: a case study, results deck, or agency write-up. Pick your category, then get a jury read on it. Agency facts are pulled from the draft in the background.'
+                : 'Upload supporting files — case studies, results decks, campaign documents. Text and chart data will be extracted and used when generating entry drafts.'}
             </p>
             {(project.materials || []).length < 5 ? (
               <label className={`block w-full border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
@@ -5411,7 +5431,7 @@ export default function ProjectPage() {
                             onClick={() => openQuickEvalModal(i)}
                             className="bg-green-800 hover:bg-green-700 text-white text-xs font-medium px-3 py-1.5 rounded transition-colors"
                           >
-                            Evaluate as Entry
+                            {projectIsAoy ? 'Get jury read' : 'Evaluate as Entry'}
                           </button>
                         )}
                         <button onClick={() => deleteFile(i)} className="text-gray-400 hover:text-red-600 transition-colors text-xs">Remove</button>
