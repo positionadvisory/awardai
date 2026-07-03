@@ -4125,6 +4125,21 @@ export default function ProjectPage() {
     return () => clearTimeout(t)
   }, [tab, justScoredDirId, entries])
 
+  // AOY score-first landing (S106 chunk 2): an AOY project opens on Materials,
+  // not Brief. AOY has no brief, and landing there was the lost-time feedback.
+  // Fires once after the project loads; campaign projects are never redirected.
+  // projectIsAoy is computed in render (after the loading guard), so the AOY
+  // signal is recomputed here from loaded state.
+  const aoyLandingRedirectedRef = useRef(false)
+  useEffect(() => {
+    if (aoyLandingRedirectedRef.current || fetching || !project) return
+    aoyLandingRedirectedRef.current = true
+    const isAoy = (project.target_shows ?? []).some(isAoyShow)
+      || project.entry_type === 'aoy'
+      || directions.some(d => isAoyShow(d.best_show))
+    if (isAoy && tab === 'brief') setTab('materials')
+  }, [fetching, project, directions, tab])
+
   const evaluateUploadedEntry = async () => {
     if (!project || quickEvalMaterialIdx === null || !user) return
     const material = project.materials[quickEvalMaterialIdx]
@@ -4757,7 +4772,49 @@ export default function ProjectPage() {
   const spinePressKitStarted = Object.keys(pressKitDrafts).length > 0 || Object.keys(pressKitOutputs).length > 0
   const spineScriptDone = !!(scriptText && scriptText.trim()) || !!project.script_text
 
-  const spineSteps: SpineStep[] = [
+  // AOY spine (S106 redesign, chunk 1): score-first, mode-aware, gated on
+  // projectIsAoy. The campaign spine below is byte-unchanged. AOY has no Brief
+  // step: its inputs are agency facts, not a campaign brief, and starting an
+  // AOY user on Brief was the source of the lost-time feedback. Order:
+  // Materials, Jury Read, Verify Facts, Directions, Refine, Video Script,
+  // Press Kit. Endorsements (target step 6) arrives with its checklist in
+  // chunk 6. Two steps share one view (the S54/S55 draft+evaluated to Entries
+  // precedent): Jury Read and Refine route to Entries. Verify Facts routes to
+  // Directions on an INTERIM basis (AgencyFactsValidator renders in the
+  // Directions tab today; chunk 3 gives Verify Facts its own view). The
+  // score-first landing (default tab) and category-before-read are chunk 2.
+  const spineHasJudge = Object.values(evaluations).some(s => !!s.judge)
+  const spineHasCoach = Object.values(evaluations).some(s => !!s.coach)
+  const spineFactsDone = !!project.agency_facts || project.entry_type === 'aoy'
+  // Materials step is done when a draft is uploaded AND a category is set
+  // (an AOY direction carries best_category), per the score-first flow (spec 4).
+  const spineAoyCategorySet = directions.some(d => (d.best_category ?? '').trim() !== '')
+
+  // AOY step key -> existing Tab view. Shared keys map to themselves.
+  const AOY_STEP_TO_TAB: Record<string, Tab> = {
+    materials: 'materials',
+    jury: 'entries',
+    facts: 'directions',   // interim; chunk 3 gives facts its own view
+    directions: 'directions',
+    refine: 'entries',
+    script: 'script',
+    presskit: 'presskit',
+  }
+
+  const aoySpineSteps: SpineStep[] = [
+    { key: 'materials', label: 'Materials', done: (project.materials?.length ?? 0) > 0 && spineAoyCategorySet,
+      summary: project.materials?.length ? String(project.materials.length) : undefined },
+    { key: 'jury', label: 'Jury Read', done: spineHasJudge,
+      summary: spineBestJudge !== null ? spineBestJudge.toFixed(1) : undefined },
+    { key: 'facts', label: 'Verify Facts', done: spineFactsDone },
+    { key: 'directions', label: 'Directions', done: directions.length > 0,
+      summary: directions.length > 0 ? String(directions.length) : undefined },
+    { key: 'refine', label: 'Refine', done: spineHasCoach },
+    { key: 'script', label: 'Video Script', done: spineScriptDone },
+    { key: 'presskit', label: 'Press Kit', done: spinePressKitStarted },
+  ]
+
+  const campaignSpineSteps: SpineStep[] = [
     { key: 'brief', label: 'Brief', done: !!((project.combined_text || briefText || '').trim()) },
     { key: 'materials', label: 'Materials', done: (project.materials?.length ?? 0) > 0,
       summary: project.materials?.length ? String(project.materials.length) : undefined },
@@ -4773,10 +4830,24 @@ export default function ProjectPage() {
     { key: 'presskit', label: 'Press Kit', done: spinePressKitStarted },
   ]
 
-  const spineActiveKey = tab === 'entries' ? 'draft' : tab
+  const spineSteps: SpineStep[] = projectIsAoy ? aoySpineSteps : campaignSpineSteps
+
+  // Which spine step highlights for the current tab. AOY shares views across
+  // steps (Jury Read + Refine -> Entries; Verify Facts + Directions ->
+  // Directions), so the primary step per tab wins; a tab with no AOY step
+  // (e.g. the default 'brief', retired for AOY and redirected in chunk 2)
+  // falls back to Materials, the AOY entry point.
+  const spineActiveKey = projectIsAoy
+    ? (tab === 'entries' ? 'jury'
+        : tab === 'directions' ? 'directions'
+        : (tab === 'materials' || tab === 'script' || tab === 'presskit') ? tab
+        : 'materials')
+    : (tab === 'entries' ? 'draft' : tab)
 
   const handleSpineStepClick = (step: SpineStep) => {
-    const target: Tab = (step.key === 'draft' || step.key === 'evaluated') ? 'entries' : (step.key as Tab)
+    const target: Tab = projectIsAoy
+      ? (AOY_STEP_TO_TAB[step.key] ?? 'materials')
+      : ((step.key === 'draft' || step.key === 'evaluated') ? 'entries' : (step.key as Tab))
     track('spine_step_clicked', { project_id: Number(projectId), step: step.key, was_empty: !step.done })
     setTab(target)
   }
@@ -5312,7 +5383,9 @@ export default function ProjectPage() {
         {tab === 'materials' && (
           <div className="max-w-2xl">
             <p className="text-sm text-gray-500 mb-5">
-              Upload supporting files — case studies, results decks, campaign documents. Text and chart data will be extracted and used when generating entry drafts.
+              {projectIsAoy
+                ? 'Upload your draft entry: a case study, results deck, or agency write-up. Pick your category, then get a jury read on it. Agency facts are pulled from the draft in the background.'
+                : 'Upload supporting files — case studies, results decks, campaign documents. Text and chart data will be extracted and used when generating entry drafts.'}
             </p>
             {(project.materials || []).length < 5 ? (
               <label className={`block w-full border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
@@ -5358,7 +5431,7 @@ export default function ProjectPage() {
                             onClick={() => openQuickEvalModal(i)}
                             className="bg-green-800 hover:bg-green-700 text-white text-xs font-medium px-3 py-1.5 rounded transition-colors"
                           >
-                            Evaluate as Entry
+                            {projectIsAoy ? 'Get jury read' : 'Evaluate as Entry'}
                           </button>
                         )}
                         <button onClick={() => deleteFile(i)} className="text-gray-400 hover:text-red-600 transition-colors text-xs">Remove</button>
