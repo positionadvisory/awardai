@@ -4757,7 +4757,46 @@ export default function ProjectPage() {
   const spinePressKitStarted = Object.keys(pressKitDrafts).length > 0 || Object.keys(pressKitOutputs).length > 0
   const spineScriptDone = !!(scriptText && scriptText.trim()) || !!project.script_text
 
-  const spineSteps: SpineStep[] = [
+  // AOY spine (S106 redesign, chunk 1): score-first, mode-aware, gated on
+  // projectIsAoy. The campaign spine below is byte-unchanged. AOY has no Brief
+  // step: its inputs are agency facts, not a campaign brief, and starting an
+  // AOY user on Brief was the source of the lost-time feedback. Order:
+  // Materials, Jury Read, Verify Facts, Directions, Refine, Video Script,
+  // Press Kit. Endorsements (target step 6) arrives with its checklist in
+  // chunk 6. Two steps share one view (the S54/S55 draft+evaluated to Entries
+  // precedent): Jury Read and Refine route to Entries. Verify Facts routes to
+  // Directions on an INTERIM basis (AgencyFactsValidator renders in the
+  // Directions tab today; chunk 3 gives Verify Facts its own view). The
+  // score-first landing (default tab) and category-before-read are chunk 2.
+  const spineHasJudge = Object.values(evaluations).some(s => !!s.judge)
+  const spineHasCoach = Object.values(evaluations).some(s => !!s.coach)
+  const spineFactsDone = !!project.agency_facts || project.entry_type === 'aoy'
+
+  // AOY step key -> existing Tab view. Shared keys map to themselves.
+  const AOY_STEP_TO_TAB: Record<string, Tab> = {
+    materials: 'materials',
+    jury: 'entries',
+    facts: 'directions',   // interim; chunk 3 gives facts its own view
+    directions: 'directions',
+    refine: 'entries',
+    script: 'script',
+    presskit: 'presskit',
+  }
+
+  const aoySpineSteps: SpineStep[] = [
+    { key: 'materials', label: 'Materials', done: (project.materials?.length ?? 0) > 0,
+      summary: project.materials?.length ? String(project.materials.length) : undefined },
+    { key: 'jury', label: 'Jury Read', done: spineHasJudge,
+      summary: spineBestJudge !== null ? spineBestJudge.toFixed(1) : undefined },
+    { key: 'facts', label: 'Verify Facts', done: spineFactsDone },
+    { key: 'directions', label: 'Directions', done: directions.length > 0,
+      summary: directions.length > 0 ? String(directions.length) : undefined },
+    { key: 'refine', label: 'Refine', done: spineHasCoach },
+    { key: 'script', label: 'Video Script', done: spineScriptDone },
+    { key: 'presskit', label: 'Press Kit', done: spinePressKitStarted },
+  ]
+
+  const campaignSpineSteps: SpineStep[] = [
     { key: 'brief', label: 'Brief', done: !!((project.combined_text || briefText || '').trim()) },
     { key: 'materials', label: 'Materials', done: (project.materials?.length ?? 0) > 0,
       summary: project.materials?.length ? String(project.materials.length) : undefined },
@@ -4773,10 +4812,24 @@ export default function ProjectPage() {
     { key: 'presskit', label: 'Press Kit', done: spinePressKitStarted },
   ]
 
-  const spineActiveKey = tab === 'entries' ? 'draft' : tab
+  const spineSteps: SpineStep[] = projectIsAoy ? aoySpineSteps : campaignSpineSteps
+
+  // Which spine step highlights for the current tab. AOY shares views across
+  // steps (Jury Read + Refine -> Entries; Verify Facts + Directions ->
+  // Directions), so the primary step per tab wins; a tab with no AOY step
+  // (e.g. the default 'brief', retired for AOY and redirected in chunk 2)
+  // falls back to Materials, the AOY entry point.
+  const spineActiveKey = projectIsAoy
+    ? (tab === 'entries' ? 'jury'
+        : tab === 'directions' ? 'directions'
+        : (tab === 'materials' || tab === 'script' || tab === 'presskit') ? tab
+        : 'materials')
+    : (tab === 'entries' ? 'draft' : tab)
 
   const handleSpineStepClick = (step: SpineStep) => {
-    const target: Tab = (step.key === 'draft' || step.key === 'evaluated') ? 'entries' : (step.key as Tab)
+    const target: Tab = projectIsAoy
+      ? (AOY_STEP_TO_TAB[step.key] ?? 'materials')
+      : ((step.key === 'draft' || step.key === 'evaluated') ? 'entries' : (step.key as Tab))
     track('spine_step_clicked', { project_id: Number(projectId), step: step.key, was_empty: !step.done })
     setTab(target)
   }
