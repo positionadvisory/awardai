@@ -1050,7 +1050,7 @@ type Evaluation = {
   output?: EvaluationOutput | null
 }
 
-type Tab = 'brief' | 'materials' | 'entries' | 'script' | 'directions' | 'presskit'
+type Tab = 'brief' | 'materials' | 'entries' | 'script' | 'directions' | 'facts' | 'presskit'
 
 const SCORE_DIMENSIONS: { key: keyof EvaluationScores; label: string }[] = [
   { key: 'strategic_clarity', label: 'Strategic Clarity' },
@@ -4779,9 +4779,9 @@ export default function ProjectPage() {
   // Materials, Jury Read, Verify Facts, Directions, Refine, Video Script,
   // Press Kit. Endorsements (target step 6) arrives with its checklist in
   // chunk 6. Two steps share one view (the S54/S55 draft+evaluated to Entries
-  // precedent): Jury Read and Refine route to Entries. Verify Facts routes to
-  // Directions on an INTERIM basis (AgencyFactsValidator renders in the
-  // Directions tab today; chunk 3 gives Verify Facts its own view). The
+  // precedent): Jury Read and Refine route to Entries. Verify Facts has its
+  // own view since chunk 3 (AgencyFactsValidator moved out of the Directions
+  // tab into the 'facts' tab below; never gates the Jury Read score). The
   // score-first landing (default tab) and category-before-read are chunk 2.
   const spineHasJudge = Object.values(evaluations).some(s => !!s.judge)
   const spineHasCoach = Object.values(evaluations).some(s => !!s.coach)
@@ -4794,7 +4794,7 @@ export default function ProjectPage() {
   const AOY_STEP_TO_TAB: Record<string, Tab> = {
     materials: 'materials',
     jury: 'entries',
-    facts: 'directions',   // interim; chunk 3 gives facts its own view
+    facts: 'facts',
     directions: 'directions',
     refine: 'entries',
     script: 'script',
@@ -4840,7 +4840,7 @@ export default function ProjectPage() {
   const spineActiveKey = projectIsAoy
     ? (tab === 'entries' ? 'jury'
         : tab === 'directions' ? 'directions'
-        : (tab === 'materials' || tab === 'script' || tab === 'presskit') ? tab
+        : (tab === 'materials' || tab === 'facts' || tab === 'script' || tab === 'presskit') ? tab
         : 'materials')
     : (tab === 'entries' ? 'draft' : tab)
 
@@ -5447,6 +5447,28 @@ export default function ProjectPage() {
           </div>
         )}
 
+        {/* ── VERIFY FACTS ── */}
+        {tab === 'facts' && (
+          <div>
+            {/* AOY chunk 3 (S107 cont.): Verify Facts is its own non-blocking
+                step, moved out of the Directions tab. It never gates the Jury
+                Read score (evaluateUploadedEntry never reads agency_facts) —
+                it gates regeneration (generate-aoy-draft) and, from chunk 4,
+                Directions. */}
+            <div className="mb-4">
+              <h2 className="text-sm font-medium text-gray-700">Verify Facts</h2>
+              <p className="text-gray-400 text-xs mt-0.5">Sanity-check the figures extracted from your entry. Confirming them sharpens Directions and any redraft — it does not affect the jury score you already have.</p>
+            </div>
+            {projectIsAoy && (
+              <AgencyFactsValidator
+                projectId={project.id}
+                getToken={getToken}
+                onPropagated={() => setProject(p => (p ? { ...p, entry_type: 'aoy' } : p))}
+              />
+            )}
+          </div>
+        )}
+
         {/* ── DIRECTIONS ── */}
         {tab === 'directions' && (
           <div>
@@ -5454,7 +5476,9 @@ export default function ProjectPage() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-sm font-medium text-gray-700">Award Directions</h2>
-                <p className="text-gray-400 text-xs mt-0.5">AI-recommended show and category combinations. Generate a draft from any direction, then evaluate it.</p>
+                <p className="text-gray-400 text-xs mt-0.5">{projectIsAoy
+                  ? 'Category-fit recommendations and market-scoped positioning, sharpest once your facts are confirmed.'
+                  : 'AI-recommended show and category combinations. Generate a draft from any direction, then evaluate it.'}</p>
               </div>
               <div className="flex items-center gap-2">
                 {/* AOY-only project tools — shown ONLY for an AOY project (see
@@ -5466,9 +5490,17 @@ export default function ProjectPage() {
                       className="border border-green-700 text-green-800 hover:bg-green-50 text-sm font-medium px-4 py-2 rounded transition-colors">
                       Add AOY entry
                     </button>
-                    {/* Session 77 — AOY entry-slate strategy (where should we enter). */}
+                    {/* Session 77 — AOY entry-slate strategy (where should we enter).
+                        AOY chunk 4 (S107 cont.): this is Directions' Next-Step-card
+                        analog, so once facts are confirmed it becomes the primary
+                        (solid) action instead of the AI-generate button; before
+                        that it stays secondary and the nudge below points at
+                        Verify Facts. Non-blocking either way — the recommender
+                        runs on whatever evidence exists (spec §3/§8). */}
                     <button onClick={() => { setStrategySeed(''); setStrategyError(''); setShowStrategyModal(true) }}
-                      className="border border-green-700 text-green-800 hover:bg-green-50 text-sm font-medium px-4 py-2 rounded transition-colors">
+                      className={spineFactsDone
+                        ? "bg-green-800 hover:bg-green-700 text-white text-sm font-medium px-4 py-2 rounded transition-colors"
+                        : "border border-green-700 text-green-800 hover:bg-green-50 text-sm font-medium px-4 py-2 rounded transition-colors"}>
                       Plan AOY entries
                     </button>
                   </>
@@ -5482,6 +5514,18 @@ export default function ProjectPage() {
                 </button>
               </div>
             </div>
+
+            {/* AOY chunk 4 (S107 cont.): non-blocking nudge toward Verify Facts.
+                Directions still fully works without it (facts are a later
+                confirmation, never a gate, spec §8) — this only sequences the
+                UX so Plan AOY entries / Best-fit category read as sharper once
+                real numbers back them. */}
+            {projectIsAoy && !spineFactsDone && (
+              <div className="mb-4 flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                <p className="text-xs text-amber-800">Category recommendations use whatever evidence exists. Verify your facts first for sharper picks.</p>
+                <button onClick={() => setTab('facts')} className="text-xs font-medium text-amber-800 hover:text-amber-900 underline flex-shrink-0">Verify Facts</button>
+              </div>
+            )}
 
             {/* Session 72 — Add AOY entry modal: controlled, market-scoped picker. */}
             {showAoyDirModal && (
@@ -5537,19 +5581,6 @@ export default function ProjectPage() {
                     </button>
                   </div>
                 </div>
-              </div>
-            )}
-
-            {/* AOY Phase 2 (S73) — agency facts: extract -> point-by-point validate
-                -> propagate org-wide. Shown only for an AOY project (projectIsAoy:
-                AOY targeted, entry_type set, or any AOY direction exists). */}
-            {projectIsAoy && (
-              <div className="mb-5">
-                <AgencyFactsValidator
-                  projectId={project.id}
-                  getToken={getToken}
-                  onPropagated={() => setProject(p => (p ? { ...p, entry_type: 'aoy' } : p))}
-                />
               </div>
             )}
 
