@@ -1433,6 +1433,13 @@ export default function ProjectPage() {
   const [quickEvalShow, setQuickEvalShow] = useState('')
   const [quickEvalCategory, setQuickEvalCategory] = useState('')
   const [quickEvaluating, setQuickEvaluating] = useState(false)
+  // S110 follow-up (S109 546 fix): a state-based `disabled` prop lags one
+  // render behind a click, so two fast clicks (or one double-click) can both
+  // read the same stale closure's quickEvaluating===false and both pass
+  // through before either setQuickEvaluating(true) flushes -- confirmed in
+  // Supabase logs as two segment-aoy-entry invocations ~0.3s apart per click.
+  // A ref is synchronous and closes that window; the state stays for the UI.
+  const quickEvaluatingRef = useRef(false)
   // S81: two-phase progress for uploaded AOY entries (segment, then jury score).
   const [quickEvalPhase, setQuickEvalPhase] = useState<'segmenting' | 'scoring' | null>(null)
   // S82: after a Quick Eval, land on the direction that was just scored, not the
@@ -3083,7 +3090,18 @@ export default function ProjectPage() {
     setUploadError('')
     setUploadProgress('Uploading file…')
 
-    const path = `${project.id}/${Date.now()}-${file.name}`
+    // S110 follow-up (S109 546 fix): Supabase Storage rejects object keys
+    // containing certain characters, square brackets among them. A compressor-
+    // added suffix like '[32]-compressed.pdf' made the raw filename fail
+    // upload with "Invalid key", silently ('No files uploaded yet') -- looked
+    // like a broken uploader. Sanitize only the STORAGE KEY's filename portion;
+    // the display name above (Material.name) keeps the original file.name.
+    const safeFileName = file.name
+      .normalize('NFKD')
+      .replace(/[^a-zA-Z0-9.\-_]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'file'
+    const path = `${project.id}/${Date.now()}-${safeFileName}`
     const { error: uploadErr } = await supabase.storage.from('project-materials').upload(path, file)
     if (uploadErr) {
       setUploadError(uploadErr.message)
@@ -4141,6 +4159,7 @@ export default function ProjectPage() {
   }, [fetching, project, directions, tab])
 
   const evaluateUploadedEntry = async () => {
+    if (quickEvaluatingRef.current) return
     if (!project || quickEvalMaterialIdx === null || !user) return
     const material = project.materials[quickEvalMaterialIdx]
     if (!material || !materialHasText(material)) return
@@ -4149,6 +4168,7 @@ export default function ProjectPage() {
       return
     }
 
+    quickEvaluatingRef.current = true
     setQuickEvaluating(true)
     setQuickEvalError('')
 
@@ -4362,6 +4382,7 @@ export default function ProjectPage() {
     } catch (err) {
       setQuickEvalError(err instanceof Error ? err.message : 'Network error.')
     } finally {
+      quickEvaluatingRef.current = false
       setQuickEvaluating(false)
       setQuickEvalPhase(null)
     }
