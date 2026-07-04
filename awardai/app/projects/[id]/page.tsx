@@ -2856,7 +2856,7 @@ export default function ProjectPage() {
   const [savingEndorsement, setSavingEndorsement] = useState(false)
   const toggleEndorsementItem = async (key: EndorsementItemKey) => {
     if (!project) return
-    const current = project.endorsements_checklist || {}
+    const current: Record<string, boolean> = project.endorsements_checklist || {}
     const next = { ...current, [key]: !current[key] }
     setSavingEndorsement(true)
     const { data, error } = await supabase
