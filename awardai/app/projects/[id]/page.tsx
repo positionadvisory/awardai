@@ -63,6 +63,7 @@ import { resolveEntryFormCategoryKey, pickEntryForm, isV2Spec, type EntryFormSpe
 import ConfigEntryCanvas from '@/components/ConfigEntryCanvas'
 import AoyEntryPicker from '@/components/AoyEntryPicker'
 import AgencyFactsValidator from '@/components/AgencyFactsValidator'
+import EndorsementsChecklist, { ENDORSEMENT_ITEMS, EndorsementItemKey } from '@/components/EndorsementsChecklist'
 import JuryProfilePanel, { JuryCell, RegionalUplift } from '@/components/JuryProfilePanel'
 
 // ── ErrorBanner — renders a friendly message with a small diagnostic code ────
@@ -858,6 +859,8 @@ type Project = {
   // AOY entry-type discriminator (S71) + validated agency-facts record (S73).
   entry_type: string | null
   agency_facts: Record<string, unknown> | null
+  // AOY endorsements checklist (chunk 6): item_key -> boolean, hygiene-only.
+  endorsements_checklist: Record<string, boolean> | null
 }
 
 type Direction = {
@@ -1050,7 +1053,7 @@ type Evaluation = {
   output?: EvaluationOutput | null
 }
 
-type Tab = 'brief' | 'materials' | 'entries' | 'script' | 'directions' | 'facts' | 'presskit'
+type Tab = 'brief' | 'materials' | 'entries' | 'script' | 'directions' | 'facts' | 'endorsements' | 'presskit'
 
 const SCORE_DIMENSIONS: { key: keyof EvaluationScores; label: string }[] = [
   { key: 'strategic_clarity', label: 'Strategic Clarity' },
@@ -1641,7 +1644,7 @@ export default function ProjectPage() {
     //    active judge eval per direction is backfilled by a targeted query below
     Promise.all([
       supabase.from('projects')
-        .select('id, campaign_name, client_name, combined_text, target_shows, status, script_text, script_analysis, tonal_brief, entry_type, agency_facts')
+        .select('id, campaign_name, client_name, combined_text, target_shows, status, script_text, script_analysis, tonal_brief, entry_type, agency_facts, endorsements_checklist')
         .eq('id', projectId).single(),
       supabase.from('directions').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
       // RPC preserves the old ordering: sort_order ASC, id ASC (deterministic across generations)
@@ -2845,6 +2848,29 @@ export default function ProjectPage() {
     setTargetShows(prev =>
       prev.includes(show) ? prev.filter(s => s !== show) : [...prev, show]
     )
+  }
+
+  // AOY chunk 6: endorsements checklist toggle. Hygiene-only state, never
+  // touches scoring. DM-16: check the returned row before trusting the local
+  // optimistic state — a silent RLS no-op must not look saved when it isn't.
+  const [savingEndorsement, setSavingEndorsement] = useState(false)
+  const toggleEndorsementItem = async (key: EndorsementItemKey) => {
+    if (!project) return
+    const current = project.endorsements_checklist || {}
+    const next = { ...current, [key]: !current[key] }
+    setSavingEndorsement(true)
+    const { data, error } = await supabase
+      .from('projects')
+      .update({ endorsements_checklist: next, updated_at: new Date().toISOString() })
+      .eq('id', projectId)
+      .select('endorsements_checklist')
+      .single()
+    if (!error && data) {
+      setProject(p => p ? { ...p, endorsements_checklist: data.endorsements_checklist as Record<string, boolean> } : p)
+    } else {
+      console.error('endorsements checklist save failed', error)
+    }
+    setSavingEndorsement(false)
   }
 
   // Check if a typed show name is unknown (not in kbShows) and open the request modal
@@ -4842,6 +4868,10 @@ export default function ProjectPage() {
   const spineHasJudge = Object.values(evaluations).some(s => !!s.judge)
   const spineHasCoach = Object.values(evaluations).some(s => !!s.coach)
   const spineFactsDone = !!project.agency_facts || project.entry_type === 'aoy'
+  // AOY chunk 6: endorsements is a hygiene checklist, never a scoring input.
+  // Done when every fixed item (EndorsementsChecklist) is checked.
+  const spineEndorsementsChecklist: Record<string, boolean> = project.endorsements_checklist || {}
+  const spineEndorsementsDone = ENDORSEMENT_ITEMS.every(i => !!spineEndorsementsChecklist[i.key])
   // Materials step is done when a draft is uploaded AND a category is set
   // (an AOY direction carries best_category), per the score-first flow (spec 4).
   const spineAoyCategorySet = directions.some(d => (d.best_category ?? '').trim() !== '')
@@ -4853,6 +4883,7 @@ export default function ProjectPage() {
     facts: 'facts',
     directions: 'directions',
     refine: 'entries',
+    endorsements: 'endorsements',
     script: 'script',
     presskit: 'presskit',
   }
@@ -4866,6 +4897,7 @@ export default function ProjectPage() {
     { key: 'directions', label: 'Directions', done: directions.length > 0,
       summary: directions.length > 0 ? String(directions.length) : undefined },
     { key: 'refine', label: 'Refine', done: spineHasCoach },
+    { key: 'endorsements', label: 'Endorsements', done: spineEndorsementsDone },
     { key: 'script', label: 'Video Script', done: spineScriptDone },
     { key: 'presskit', label: 'Press Kit', done: spinePressKitStarted },
   ]
@@ -4896,7 +4928,7 @@ export default function ProjectPage() {
   const spineActiveKey = projectIsAoy
     ? (tab === 'entries' ? 'jury'
         : tab === 'directions' ? 'directions'
-        : (tab === 'materials' || tab === 'facts' || tab === 'script' || tab === 'presskit') ? tab
+        : (tab === 'materials' || tab === 'facts' || tab === 'endorsements' || tab === 'script' || tab === 'presskit') ? tab
         : 'materials')
     : (tab === 'entries' ? 'draft' : tab)
 
@@ -5520,6 +5552,28 @@ export default function ProjectPage() {
                 projectId={project.id}
                 getToken={getToken}
                 onPropagated={() => setProject(p => (p ? { ...p, entry_type: 'aoy' } : p))}
+              />
+            )}
+          </div>
+        )}
+
+        {/* ── ENDORSEMENTS ── */}
+        {tab === 'endorsements' && (
+          <div>
+            {/* AOY chunk 6 (2026-07-04): CEO/CFO sign-off readiness. Hygiene
+                callout only -- never lowers the score. The AOY seed's
+                endorsement gate row stays weight:null and excluded from the
+                budget meter (S74); this step is presentation of readiness,
+                not a scoring change. */}
+            <div className="mb-4">
+              <h2 className="text-sm font-medium text-gray-700">Endorsements</h2>
+              <p className="text-gray-400 text-xs mt-0.5">Sign-off readiness for submission. This never changes your jury score.</p>
+            </div>
+            {projectIsAoy && (
+              <EndorsementsChecklist
+                checklist={project.endorsements_checklist || {}}
+                onToggle={toggleEndorsementItem}
+                saving={savingEndorsement}
               />
             )}
           </div>
@@ -7838,7 +7892,9 @@ export default function ProjectPage() {
                 Shown only while no script exists; respects the toggle. */}
             {guidanceEnabled && !spineScriptDone && (
               <p className="text-gray-700 text-sm mb-4">
-                A two-minute case study script, scored for win likelihood, in about twenty minutes.
+                {projectIsAoy
+                  ? 'A two-minute agency highlight reel or sizzle of the work, scored for win likelihood, in about twenty minutes.'
+                  : 'A two-minute case study script, scored for win likelihood, in about twenty minutes.'}
               </p>
             )}
 
@@ -7862,8 +7918,12 @@ export default function ProjectPage() {
             {/* Mode description */}
             <p className="text-sm text-gray-500 mb-5">
               {scriptMode === 'generate'
-                ? 'Generate a 2-minute award case study film script from your uploaded materials or a completed entry draft. The script follows the Hook → Challenge → Idea → Execution → Results → Close structure used at Cannes, D&AD, and Effies.'
-                : 'Upload your existing video script and get an optimised version with detailed reasoning on every change — written by a simulated 20-year award jury veteran.'}
+                ? (projectIsAoy
+                    ? 'Generate a 2-minute agency highlight reel or sizzle of the work from your uploaded materials or a completed entry draft. The script follows the Hook → Challenge → Idea → Execution → Results → Close structure used at Cannes, D&AD, and Effies.'
+                    : 'Generate a 2-minute award case study film script from your uploaded materials or a completed entry draft. The script follows the Hook → Challenge → Idea → Execution → Results → Close structure used at Cannes, D&AD, and Effies.')
+                : (projectIsAoy
+                    ? 'Upload your existing highlight reel script and get an optimised version with detailed reasoning on every change — written by a simulated 20-year award jury veteran.'
+                    : 'Upload your existing video script and get an optimised version with detailed reasoning on every change — written by a simulated 20-year award jury veteran.')}
             </p>
 
             {/* Source selector — generate mode only */}
