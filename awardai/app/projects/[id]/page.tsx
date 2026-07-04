@@ -54,7 +54,7 @@ import ShowsDrawer from '@/components/shows/ShowsDrawer'
 import { MATERIALS_EVAL_STATEMENTS, JURY_EVAL_STATEMENTS, COACH_REVIEW_STATEMENTS } from '@/lib/generatingStatements'
 import { appErrorFromResponse, formatError, parseErrorString } from '@/lib/errorMessages'
 import { computeRoiIndex, normaliseKbShow, DEADLINES_2026 } from '@/lib/shows-data'
-import { isAoyShow, AOY_SHOW_NAME, aoyResolveStored, aoyTrackById, buildAoyBestCategory } from '@/lib/aoy-taxonomy'
+import { isAoyShow, AOY_SHOW_NAME, aoyResolveStored, aoyTrackById, buildAoyBestCategory, pillarForKey, normalizeAoyCategory, type AoyPillar } from '@/lib/aoy-taxonomy'
 // Show Customization Architecture Chunk 5 (S98): config-driven entry_form resolver.
 // Only the canonical PURE helpers + type are imported (client can import lib; edge
 // functions carry byte-identical copies). Resolution = longest show-level prefix of
@@ -63,6 +63,7 @@ import { resolveEntryFormCategoryKey, pickEntryForm, isV2Spec, type EntryFormSpe
 import ConfigEntryCanvas from '@/components/ConfigEntryCanvas'
 import AoyEntryPicker from '@/components/AoyEntryPicker'
 import AgencyFactsValidator from '@/components/AgencyFactsValidator'
+import PillarFactsValidator from '@/components/PillarFactsValidator'
 import EndorsementsChecklist, { ENDORSEMENT_ITEMS, EndorsementItemKey } from '@/components/EndorsementsChecklist'
 import JuryProfilePanel, { JuryCell, RegionalUplift } from '@/components/JuryProfilePanel'
 
@@ -1494,6 +1495,13 @@ export default function ProjectPage() {
   const [coachingForDirectionId, setCoachingForDirectionId] = useState<number | null>(null)
   const [coachingError, setCoachingError] = useState('')
 
+  // AOY flow redesign, chunk 7 (2026-07-04): which People/Brand pillars
+  // have SAVED facts on this project (project_pillar_facts, per-project only,
+  // no propagation -- see aoy-pillar-facts-2026-07-04.sql). Non-critical: a
+  // failed fetch just means the facts step starts blank for that pillar, same
+  // degrade-gracefully posture as the coach_feedback fetch above it.
+  const [pillarFactsSaved, setPillarFactsSaved] = useState<Set<AoyPillar>>(new Set())
+
   // S98 Chunk 5 — config-driven show customization, client side.
   // entryForms: resolved entry_form spec per directionId (null = craft/none/AOY).
   // The config Coach reuses the shared coaching spinner state (coaching /
@@ -1631,6 +1639,24 @@ export default function ProjectPage() {
           }
         }
         setAoyCoaching(prev => ({ ...map, ...prev }))
+      })
+
+    // Fetch which pillars have SAVED facts for this project (AOY chunk 7).
+    // Slim: only the pillar column, never the facts jsonb blob itself here --
+    // the validator re-fetches nothing, it just starts blank and the user
+    // extracts/edits/saves fresh, same UX as Agency facts today. This read is
+    // ONLY used to mark the Verify Facts spine step done for a people/brand
+    // project (spineFactsDone below); project_pillar_facts has zero client
+    // write path, read-only via its org-scoped SELECT grant.
+    supabase
+      .from('project_pillar_facts')
+      .select('pillar')
+      .eq('project_id', projectId)
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (error) { console.error('project_pillar_facts fetch failed', error); return }
+        if (!data) return
+        setPillarFactsSaved(new Set(data.map((r: { pillar: string }) => r.pillar as AoyPillar)))
       })
 
     // Session 52 (P-03) payload diet:
@@ -4830,6 +4856,23 @@ export default function ProjectPage() {
     project.entry_type === 'aoy' ||
     directions.some(d => isAoyShow(d.best_show))
 
+  // AOY flow redesign, chunk 7 (2026-07-04): which AOY pillars this project's
+  // directions actually touch. A project can be mixed (e.g. one Agency
+  // direction + one People direction), so this is a SET, not a single value.
+  // Agency stays on the existing AgencyFactsValidator/projects.agency_facts
+  // path untouched; People/Brand render PillarFactsValidator instead. When no
+  // AOY direction exists yet (fresh project, Materials not done), default to
+  // showing Agency -- the common case and the pre-chunk-7 behavior, so a
+  // project with no pillar decided yet is not silently blank.
+  const projectAoyPillars: Set<AoyPillar> = new Set(
+    directions
+      .filter(d => isAoyShow(d.best_show))
+      .map(d => pillarForKey(normalizeAoyCategory(d.best_category)))
+  )
+  const showAgencyFacts = projectAoyPillars.size === 0 || projectAoyPillars.has('agency')
+  const showPeopleFacts = projectAoyPillars.has('people')
+  const showBrandFacts = projectAoyPillars.has('brand')
+
   // Session 55: the TABS const + tab strip were REMOVED — the spine and the
   // strip read as near-duplicate rows (Ben). The Progress Spine is now the
   // workspace's ONLY navigation row (it always was fully clickable; draft and
@@ -4867,7 +4910,14 @@ export default function ProjectPage() {
   // score-first landing (default tab) and category-before-read are chunk 2.
   const spineHasJudge = Object.values(evaluations).some(s => !!s.judge)
   const spineHasCoach = Object.values(evaluations).some(s => !!s.coach)
-  const spineFactsDone = !!project.agency_facts || project.entry_type === 'aoy'
+  // Chunk 7: facts-done now accounts for People/Brand too, so the spine step
+  // does not stay perpetually undone on a project with no Agency direction.
+  // Non-blocking either way (spec's own rule, unchanged): this only marks the
+  // step, it never gates Jury Read.
+  const spineFactsDone =
+    !!project.agency_facts || project.entry_type === 'aoy' ||
+    (showPeopleFacts && pillarFactsSaved.has('people')) ||
+    (showBrandFacts && pillarFactsSaved.has('brand'))
   // AOY chunk 6: endorsements is a hygiene checklist, never a scoring input.
   // Done when every fixed item (EndorsementsChecklist) is checked.
   const spineEndorsementsChecklist: Record<string, boolean> = project.endorsements_checklist || {}
@@ -5547,12 +5597,37 @@ export default function ProjectPage() {
               <h2 className="text-sm font-medium text-gray-700">Verify Facts</h2>
               <p className="text-gray-400 text-xs mt-0.5">Sanity-check the figures extracted from your entry. Confirming them sharpens Directions and any redraft — it does not affect the jury score you already have.</p>
             </div>
-            {projectIsAoy && (
+            {/* AOY chunk 7 (2026-07-04): render one validator per pillar the
+                project's directions actually touch (a mixed project can show
+                more than one). Agency keeps its existing org-propagated path
+                untouched; People/Brand are per-project only, saved via the
+                new /api/pillar-facts route -- see projectAoyPillars above. */}
+            {projectIsAoy && showAgencyFacts && (
               <AgencyFactsValidator
                 projectId={project.id}
                 getToken={getToken}
                 onPropagated={() => setProject(p => (p ? { ...p, entry_type: 'aoy' } : p))}
               />
+            )}
+            {projectIsAoy && showPeopleFacts && (
+              <div className={showAgencyFacts ? 'mt-4' : ''}>
+                <PillarFactsValidator
+                  projectId={project.id}
+                  pillar="people"
+                  getToken={getToken}
+                  onSaved={() => setPillarFactsSaved(prev => new Set(Array.from(prev)).add('people'))}
+                />
+              </div>
+            )}
+            {projectIsAoy && showBrandFacts && (
+              <div className={(showAgencyFacts || showPeopleFacts) ? 'mt-4' : ''}>
+                <PillarFactsValidator
+                  projectId={project.id}
+                  pillar="brand"
+                  getToken={getToken}
+                  onSaved={() => setPillarFactsSaved(prev => new Set(Array.from(prev)).add('brand'))}
+                />
+              </div>
             )}
           </div>
         )}
