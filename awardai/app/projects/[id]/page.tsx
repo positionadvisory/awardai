@@ -1345,6 +1345,15 @@ export default function ProjectPage() {
   // Draft generation
   const [generatingDraft, setGeneratingDraft] = useState(false)
   const [generateDraftError, setGenerateDraftError] = useState('')
+  // Session 116 fix (546-class bug): the error banner for this error lives in the
+  // Directions tab (legacy "Generate Draft" flow), but "Generate Improved Draft
+  // from this Jury Evaluation" is a separate CTA rendered in the Entries tab
+  // evaluation card. A failure there (rate limit / no facts / no rubric / AI
+  // error / network) set generateDraftError correctly but nothing rendered it in
+  // the Entries tab, so the button just spun and reverted with no visible error.
+  // Track which direction the error belongs to so the Entries-tab card can show
+  // its own banner without duplicating it on every evaluation card.
+  const [generateDraftErrorDirId, setGenerateDraftErrorDirId] = useState<number | null>(null)
   const [generatingForDirectionId, setGeneratingForDirectionId] = useState<number | null>(null)
 
   // Evaluation
@@ -3569,6 +3578,7 @@ export default function ProjectPage() {
     if (!project) return
     setGeneratingDraft(true)
     setGenerateDraftError('')
+    setGenerateDraftErrorDirId(null)
     setGeneratingForDirectionId(directionId)
     try {
       const accessToken = await getToken()
@@ -3612,6 +3622,7 @@ export default function ProjectPage() {
       const data = await res.json()
       if (!res.ok || data.error) {
         setGenerateDraftError(formatError(appErrorFromResponse(data, res.status, 'DRAFT')))
+        setGenerateDraftErrorDirId(directionId)
         return
       }
       if (data.entry_drafts?.length) {
@@ -3629,6 +3640,7 @@ export default function ProjectPage() {
       setTab('entries')
     } catch (err) {
       setGenerateDraftError(formatError({ message: 'Network error — check your connection and try again.', retryable: true, code: 'DRAFT-NET' }))
+      setGenerateDraftErrorDirId(directionId)
     } finally { setGeneratingDraft(false); setGeneratingForDirectionId(null) }
   }
 
@@ -7383,6 +7395,9 @@ export default function ProjectPage() {
                               <p className="text-xs text-gray-400 text-center mt-2">
                                 The new draft will directly address every gap and recommendation above. Previous drafts are kept for comparison.
                               </p>
+                              {generateDraftError && generateDraftErrorDirId === dirId && (
+                                <div className="mt-3"><ErrorBanner error={generateDraftError} /></div>
+                              )}
                             </div>
                           </div>
                           ) : null}
