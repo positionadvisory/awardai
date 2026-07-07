@@ -237,6 +237,18 @@ const showHasNoCategoryConcept = (showName: string): boolean =>
 // shows have), so this is chosen for display only.
 const NO_CATEGORY_PLACEHOLDER = 'Nomination'
 
+// A show whose category list is not yet seeded in SHOW_CATEGORIES (SABRE, Clio
+// Entertainment/Sports/Creators, ANDY, Gerety, ROI Festival). Real categories
+// exist (unlike showHasNoCategoryConcept); they are simply not documented yet, so
+// categoriesForShow() returns []. For these, "Suggest for me" has zero candidates
+// and 500s, and forcing a required category is a dead end, so category is optional
+// and the suggest button is hidden until the taxonomy is seeded. Both gates key
+// off categoriesForShow(), so seeding the list restores both (self-heal).
+const showHasNoCategoryList = (showName: string): boolean =>
+  !isAoyShow(showName) &&
+  !showHasNoCategoryConcept(showName) &&
+  categoriesForShow(showName).length === 0
+
 // Build 2 (Session 55): candidate list sent to evaluate-entry for the
 // next_opportunities field (judge mode). Only shows with verified category
 // lists qualify (SHOW_CATEGORIES keys) — the no-category-list shows are
@@ -4262,8 +4274,15 @@ export default function ProjectPage() {
     if (!project || quickEvalMaterialIdx === null || !user) return
     const material = project.materials[quickEvalMaterialIdx]
     if (!material || !materialHasText(material)) return
-    if (!quickEvalShow.trim() || !quickEvalCategory.trim()) {
-      setQuickEvalError('Please enter both an award show and category.')
+    // Category optional for shows with no seeded category list (SABRE etc.): their
+    // entry_form resolves at show level, so category never affects scoring.
+    const categoryOptional = showHasNoCategoryList(quickEvalShow) || showHasNoCategoryConcept(quickEvalShow)
+    if (!quickEvalShow.trim()) {
+      setQuickEvalError('Please enter an award show.')
+      return
+    }
+    if (!categoryOptional && !quickEvalCategory.trim()) {
+      setQuickEvalError('Please enter a category.')
       return
     }
 
@@ -4315,7 +4334,7 @@ export default function ProjectPage() {
             project_id: project.id,
             org_id: currentOrgId,
             created_by: user.id,
-            name: `${quickEvalShow.trim()} — ${quickEvalCategory.trim()}`,
+            name: quickEvalCategory.trim() ? `${quickEvalShow.trim()} — ${quickEvalCategory.trim()}` : quickEvalShow.trim(),
             best_show: quickEvalShow.trim(),
             best_category: quickEvalCategory.trim(),
             angle: 'Uploaded entry — direct evaluation',
@@ -9434,7 +9453,7 @@ export default function ProjectPage() {
               </div>
               <div>
                 <div className="flex items-center gap-2 mb-1.5">
-                  <label className="text-xs text-gray-500">Category</label>
+                  <label className="text-xs text-gray-500">Category{showHasNoCategoryList(quickEvalShow) ? ' (optional)' : ''}</label>
                   {!isAoyShow(quickEvalShow) && !showHasNoCategoryConcept(quickEvalShow) && quickEvalDetectedFields.category && !quickEvalDetecting && (
                     <span className={`text-xs font-medium ${quickEvalDetectedFields.confidence === 'low' ? 'text-amber-600' : 'text-green-600'}`}>
                       {quickEvalDetectedFields.confidence === 'low' ? '? verify' : '✓ detected'}
@@ -9448,7 +9467,7 @@ export default function ProjectPage() {
                   {/* Session 52 — for users who don't know the right category (non-AOY,
                       non-no-category-show only: "suggest for me" has nothing to suggest
                       among zero candidates and hard-fails, S99 bug report). */}
-                  {!isAoyShow(quickEvalShow) && !showHasNoCategoryConcept(quickEvalShow) && (
+                  {!isAoyShow(quickEvalShow) && !showHasNoCategoryConcept(quickEvalShow) && categoriesForShow(quickEvalShow).length > 0 && (
                     <button
                       type="button"
                       onClick={suggestQuickEvalCategory}
@@ -9482,7 +9501,7 @@ export default function ProjectPage() {
                       list="quickeval-categories"
                       value={quickEvalCategory}
                       onChange={e => { setQuickEvalCategory(e.target.value); setQuickEvalDetectedFields(prev => ({ ...prev, category: false })); setQuickEvalSuggestion(null) }}
-                      placeholder="e.g. Seasonal Marketing, Film Craft, Creative Effectiveness…"
+                      placeholder={categoriesForShow(quickEvalShow).length > 0 ? 'e.g. Seasonal Marketing, Film Craft, Creative Effectiveness…' : 'Type a category if you know it (optional)'}
                       className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
                     />
                     <datalist id="quickeval-categories">
