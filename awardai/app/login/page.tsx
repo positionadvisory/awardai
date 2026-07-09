@@ -232,6 +232,9 @@ export default function LoginPage() {
             <TextLink onClick={() => switchMode('otp-email')}>Email me a code</TextLink>
             <TextLink onClick={() => switchMode('forgot-email')}>Forgot password?</TextLink>
           </div>
+          <div style={{ textAlign: 'center', marginTop: 2 }}>
+            <TextLink onClick={() => switchMode('reset')}>Already have a reset code?</TextLink>
+          </div>
         </form>
       )
     }
@@ -281,6 +284,10 @@ export default function LoginPage() {
     if (mode === 'reset') {
       return (
         <form onSubmit={submitReset} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--muted-dark)', lineHeight: 1.5 }}>
+            Enter the 6-digit reset code from your email and choose a new password. Requested a code already and came back to a fresh page? Enter your email, that code, and a new password here.
+          </p>
+          {EmailField}
           {CodeField}
           {NewPasswordField}
           <Messages error={error} notice={notice} />
