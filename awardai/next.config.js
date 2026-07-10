@@ -4,6 +4,8 @@ const nextConfig = {
     return [
       // Serve the FAQ HTML at /faq without the .html extension
       { source: '/faq', destination: '/faq.html' },
+      // Serve the TNO report at /tno-report without the .html extension
+      { source: '/tno-report', destination: '/tno-report.html' },
     ]
   },
   webpack: (config) => {

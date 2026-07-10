@@ -89,6 +89,7 @@ const Nav = ({ onCTA, m }: { onCTA: () => void; m: boolean }) => (
           <a href="#built" style={{ textDecoration: 'none', opacity: 0.85, color: 'inherit' }}>What&apos;s built</a>
           <a href="#pricing" style={{ textDecoration: 'none', opacity: 0.85, color: 'inherit' }}>Pricing</a>
           <a href="#founder" style={{ textDecoration: 'none', opacity: 0.85, color: 'inherit' }}>Founder</a>
+          <a href="/faq" style={{ textDecoration: 'none', opacity: 0.85, color: 'inherit' }}>FAQ</a>
         </>}
         <button onClick={onCTA} className="sl-mono" style={{ fontSize: m ? 10 : 11, letterSpacing: '0.16em', textTransform: 'uppercase', padding: m ? '6px 10px' : '8px 14px', border: '1px solid rgba(245,238,224,0.25)', background: 'transparent', color: 'var(--bone)', cursor: 'pointer', fontFamily: 'inherit' }}>
           {m ? 'Start free' : 'Sign in'}
