@@ -80,10 +80,15 @@ export function parseDataRequests(text: string | null | undefined): ParsedReques
 
 /** Normalized form used for diffing/dedup: lowercase, collapsed whitespace, no edge punctuation. */
 export function normalizeRequestText(s: string): string {
+  // Trim edge whitespace + common punctuation. Deliberately an explicit ASCII/
+  // dash class, NOT \p{P} with the /u flag: this project's TS target is below
+  // ES2015, which rejects the unicode flag (same downlevel constraint as the
+  // Set-spread gotcha). Hyphen is last in the class so it stays literal.
+  const EDGE = "[\\s.,;:!?\"'()\\]\\[{}\\u2013\\u2014-]+"
   return (s || '')
     .toLowerCase()
     .replace(/\s+/g, ' ')
-    .replace(/^[\s\p{P}]+|[\s\p{P}]+$/gu, '')
+    .replace(new RegExp('^' + EDGE + '|' + EDGE + '$', 'g'), '')
     .trim()
 }
 
