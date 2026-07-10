@@ -1748,10 +1748,19 @@ export default function ProjectPage() {
       }
       if (dirs) setDirections(dirs)
 
+      // Explicit param types below, not inference: both `drafts` and
+      // `dataNeededRows` come back from untyped supabase-js calls (this repo
+      // has no generated Database type on the client), so an unannotated
+      // callback param here is genuinely implicit-any under strict mode --
+      // esbuild does not catch this (S113); the Vercel preview did.
       const dataNeededById = new Map<number, DataNeededItem[]>(
-        (dataNeededRows ?? []).map(r => [r.id, (r.data_needed as DataNeededItem[] | null) ?? []])
+        ((dataNeededRows ?? []) as { id: number; data_needed: DataNeededItem[] | null }[]).map(
+          (r: { id: number; data_needed: DataNeededItem[] | null }) => [r.id, r.data_needed ?? []] as [number, DataNeededItem[]]
+        )
       )
-      const draftsList = (drafts || []).map(d => ({ ...d, data_needed: dataNeededById.get(d.id) ?? [] }))
+      const draftsList = ((drafts || []) as EntryDraft[]).map(
+        (d: EntryDraft) => ({ ...d, data_needed: dataNeededById.get(d.id) ?? [] })
+      )
       if (drafts !== null) setEntries(draftsList)
 
       if (evals && evals.length > 0 && draftsList.length > 0) {
