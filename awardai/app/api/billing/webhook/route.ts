@@ -17,7 +17,7 @@ const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY!
 //       keep pro access, email the owner. Downgrade happens at the first Stripe
 //       retry event AFTER grace expires (~day 7-10 depending on retry schedule).
 //   * Failed first charge after trial (customer has never paid a real invoice):
-//       no grace - immediate downgrade + email. They already had 14 free days.
+//       no grace - immediate downgrade + email. They already had 7 free days.
 //   * invoice.paid or subscription back to active: clear flag, restore pro.
 //
 // ⚠️ Stripe Dashboard: the webhook endpoint must be subscribed to
@@ -232,7 +232,7 @@ export async function POST(req: NextRequest) {
           'Your Shortlist trial has ended - payment didn\'t go through',
           `
 <p>Hi {{NAME}},</p>
-<p>Your 14-day Shortlist trial has ended, but we couldn\'t charge the card on file, so your account is back on the free plan for now.</p>
+<p>Your 7-day Shortlist trial has ended, but we couldn\'t charge the card on file, so your account is back on the free plan for now.</p>
 <p>Update your card in <a href="${BILLING_URL}">your billing settings</a> and you\'ll pick up exactly where you left off - all your projects and entries are still there.</p>
 <p>Any questions, just reply to this email.</p>
 <p>— Ben</p>
@@ -325,7 +325,7 @@ export async function POST(req: NextRequest) {
         'Your Shortlist trial ends in 3 days',
         `
 <p>Hi {{NAME}},</p>
-<p>Your 14-day Shortlist trial ends in 3 days. After that, your subscription activates at $299/month — no action needed if you want to keep going.</p>
+<p>Your 7-day Shortlist trial ends in 3 days. After that, your subscription activates at $299/month — no action needed if you want to keep going.</p>
 <p>If you\'d like to cancel before then, you can do so in <a href="${BILLING_URL}">your billing settings</a>.</p>
 <p>Any questions, just reply to this email.</p>
 <p>— Ben</p>

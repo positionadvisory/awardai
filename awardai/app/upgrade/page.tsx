@@ -115,7 +115,7 @@ export default function UpgradePage() {
         </h1>
 
         <p style={{ marginTop: 24, fontSize: isMobile ? 16 : 18, lineHeight: 1.6, color: 'var(--muted-dark)', maxWidth: 560 }}>
-          Shortlist Pro gives your team everything built into the platform. Start a 14-day free trial today. No commitment, and you can cancel anytime before the trial ends.
+          Shortlist Pro gives your team everything built into the platform. Start a 7-day free trial today. No commitment, and you can cancel anytime before the trial ends.
         </p>
       </div>
 
@@ -154,7 +154,7 @@ export default function UpgradePage() {
               </div>
 
               <div style={{ marginTop: 4, paddingLeft: 2 }}>
-                <span style={{ fontSize: 12, color: 'var(--gold)' }}>14 days free to start</span>
+                <span style={{ fontSize: 12, color: 'var(--gold)' }}>7 days free to start</span>
               </div>
 
               {/* Divider */}
@@ -205,7 +205,7 @@ export default function UpgradePage() {
                     transition: 'background 180ms ease',
                   }}
                 >
-                  <span>{loading ? 'Redirecting to checkout...' : 'Start 14-day free trial'}</span>
+                  <span>{loading ? 'Redirecting to checkout...' : 'Start 7-day free trial'}</span>
                   {!loading && (
                     <span style={{ display: 'inline-block', width: 18, height: 1, background: 'var(--ink)', transform: hov ? 'translateX(4px)' : 'translateX(0)', transition: 'transform 180ms ease' }} />
                   )}

@@ -370,7 +370,7 @@ export default function AccountPage() {
           {isFree && (
             <div style={{ marginTop: 16 }}>
               <div style={{ fontSize: 13, color: '#166534', background: '#dcfce7', borderRadius: 6, padding: '8px 12px', marginBottom: 12 }}>
-                14-day free trial · $299/month after · card required
+                7-day free trial · $299/month after · card required
               </div>
               <button
                 onClick={handleUpgrade}

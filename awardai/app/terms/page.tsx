@@ -291,7 +291,7 @@ export default function TermsPage() {
           {/* Section 6 */}
           <section className="terms-section">
             <h2>6. Subscriptions and cancellation</h2>
-            <p className="terms-p"><strong>Billing.</strong> Subscriptions are billed monthly, in advance. Your subscription begins with a 14-day free trial; a valid payment method is required to start the trial. If you do not cancel before the trial ends, you will be charged the monthly subscription fee.</p>
+            <p className="terms-p"><strong>Billing.</strong> Subscriptions are billed monthly, in advance. Your subscription begins with a 7-day free trial; a valid payment method is required to start the trial. If you do not cancel before the trial ends, you will be charged the monthly subscription fee.</p>
             <p className="terms-p"><strong>Cancellation.</strong> You can cancel your subscription at any time from your account settings. On cancellation, you retain access to the platform until the end of your current paid billing period. We do not provide refunds for any unused portion of a billing period.</p>
             <p className="terms-p"><strong>Data after cancellation.</strong> Following the end of your subscription, your account data and uploaded materials will be retained for 90 days to allow for reactivation or data export. After this period, your data will be permanently deleted from our systems. We are not responsible for loss of data following this deletion window.</p>
             <p className="terms-p">If you wish to export your data before deletion, contact us at <a className="terms-a" href="mailto:ben@positionadvisory.com">ben@positionadvisory.com</a>.</p>

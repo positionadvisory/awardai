@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
     line_items:     [{ price: process.env.STRIPE_PRO_PRICE_ID!, quantity: 1 }],
     metadata:       { org_id: String(profile.org_id) },
     subscription_data: {
-      trial_period_days:        14,
+      trial_period_days:        7,
       metadata:                 { org_id: String(profile.org_id) },
     },
     // Card required upfront — charges automatically after trial
