@@ -55,6 +55,10 @@ import { MATERIALS_EVAL_STATEMENTS, JURY_EVAL_STATEMENTS, COACH_REVIEW_STATEMENT
 import { appErrorFromResponse, formatError, parseErrorString } from '@/lib/errorMessages'
 import { computeRoiIndex, normaliseKbShow, DEADLINES_2026 } from '@/lib/shows-data'
 import { isAoyShow, AOY_SHOW_NAME, aoyResolveStored, aoyTrackById, buildAoyBestCategory, pillarForKey, normalizeAoyCategory, type AoyPillar } from '@/lib/aoy-taxonomy'
+// Workbench P2 Chunk 1 (S138): source-agnostic section-workbench surface. Rendered
+// read-only behind ?workbench=1 this phase; the write-path cutover is P2 Chunk 4.
+import SectionWorkbench from '@/components/SectionWorkbench'
+import EvalSummaryBar from '@/components/EvalSummaryBar'
 // Show Customization Architecture Chunk 5 (S98): config-driven entry_form resolver.
 // Only the canonical PURE helpers + type are imported (client can import lib; edge
 // functions carry byte-identical copies). Resolution = longest show-level prefix of
@@ -1400,6 +1404,15 @@ export default function ProjectPage() {
   const [refineErrors, setRefineErrors] = useState<Record<number, string>>({})
   // S137 P1 — expand/collapse for assistant turns in the per-section refine thread
   const [expandedChatTurns, setExpandedChatTurns] = useState<Record<string, boolean>>({})
+
+  // Workbench P2 Chunk 1 (S138) — read-only preview of the new section-workbench
+  // surface, gated by ?workbench=1. Read via window.location.search in an effect,
+  // never useSearchParams (that needs a Suspense boundary or the Vercel build fails).
+  const [workbenchPreview, setWorkbenchPreview] = useState(false)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    setWorkbenchPreview(new URLSearchParams(window.location.search).get('workbench') === '1')
+  }, [])
 
   // Feature #4 — inline field editing
   const [editingFieldId, setEditingFieldId] = useState<number | null>(null)
@@ -7684,6 +7697,65 @@ export default function ProjectPage() {
                               {weightSum > 0 && weightSum !== 100 && (
                                 <p className="text-xs text-amber-600 mt-1.5">Section weights total {weightSum}%, not 100%. Check the category rubric.</p>
                               )}
+                            </div>
+                          )
+                        })()}
+
+                        {/* Workbench P2 Chunk 1 (S138) — read-only preview surface,
+                            gated by ?workbench=1. Purely additive: renders ABOVE the
+                            legacy canvas, passes NO write callbacks (edit/refine/data/
+                            restore all stay on the legacy path), and reads only data
+                            already loaded (fields text + the stored evaluation). Score/
+                            rationale/gap-attribution enrichment + jump chips scoring is
+                            P2 Chunk 2; this proves the components + summary bar render. */}
+                        {workbenchPreview && project?.entry_type === 'aoy' && (() => {
+                          const wbFields = fields.filter(f => f.field_key !== 'entry')
+                          if (wbFields.length === 0) return null
+                          // AOY stores per-section jury scores keyed by field_key in
+                          // evaluations.scores; the fixed 6-dim type does not describe
+                          // that shape, so cast to a keyed record. Explicit Record type
+                          // on the fallback (S113: a computed-key index on `|| {}` fails
+                          // strict-mode typecheck even when esbuild is clean).
+                          const secScores: Record<string, number> =
+                            (evaluation?.scores as unknown as Record<string, number>) ?? {}
+                          const aoyOut = (evaluation?.output ?? null) as Record<string, unknown> | null
+                          const verdict = typeof aoyOut?.verdict === 'string' ? aoyOut.verdict : null
+                          const summarySections = wbFields.map(f => ({
+                            key: f.field_key, label: f.field_label, score: secScores[f.field_key] ?? null,
+                          }))
+                          const jumpToSection = (key: string) => {
+                            if (typeof document === 'undefined') return
+                            document.getElementById(`wb-${dirId}-${key}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                          }
+                          return (
+                            <div className="border-b border-gray-100 bg-white">
+                              <div className="px-5 pt-3 pb-1">
+                                <p className="text-xs font-medium uppercase tracking-wide text-green-700">
+                                  Section workbench — preview (read-only)
+                                </p>
+                              </div>
+                              <EvalSummaryBar
+                                overallScore={evaluation?.overall_score ?? null}
+                                verdict={verdict}
+                                sections={summarySections}
+                                strengths={evaluation?.strengths}
+                                unattributedGaps={evaluation?.gaps}
+                                onJumpToSection={jumpToSection}
+                              />
+                              <div className="divide-y divide-gray-100">
+                                {wbFields.map(f => (
+                                  <SectionWorkbench
+                                    key={f.id}
+                                    anchorId={`wb-${dirId}-${f.field_key}`}
+                                    sectionKey={f.field_key}
+                                    label={f.field_label}
+                                    weight={f.section_weight ?? null}
+                                    text={resolveFieldContent(f)}
+                                    wordLimit={f.word_limit}
+                                    score={secScores[f.field_key] ?? null}
+                                  />
+                                ))}
+                              </div>
                             </div>
                           )
                         })()}
