@@ -1398,6 +1398,8 @@ export default function ProjectPage() {
   const [refineMessage, setRefineMessage] = useState<Record<number, string>>({})
   const [refiningFieldId, setRefiningFieldId] = useState<number | null>(null)
   const [refineErrors, setRefineErrors] = useState<Record<number, string>>({})
+  // S137 P1 — expand/collapse for assistant turns in the per-section refine thread
+  const [expandedChatTurns, setExpandedChatTurns] = useState<Record<string, boolean>>({})
 
   // Feature #4 — inline field editing
   const [editingFieldId, setEditingFieldId] = useState<number | null>(null)
@@ -7712,7 +7714,14 @@ export default function ProjectPage() {
                                 />
                               )
                             }
-                            return fields.map(field => {
+                            return (
+                              <>
+                              {fields.some(f => f.field_key !== 'entry') && (
+                                <div className="px-5 pt-3 pb-2">
+                                  <p className="text-xs text-gray-400">Tip: click any section's text (or ✎ Edit) to edit it directly. Use the box under each section to refine it with AI. Cmd/Ctrl+Enter sends.</p>
+                                </div>
+                              )}
+                              {fields.map(field => {
                             const content = resolveFieldContent(field)
                             const isEditingThis = editingFieldId === field.id
                             const liveContent = isEditingThis ? fieldEditValue : content
@@ -7749,7 +7758,7 @@ export default function ProjectPage() {
                             }
 
                             const isRefining = refiningFieldId === field.id
-                            const userHistory = (field.chat_history || []).filter(m => m.role === 'user')
+                            const chatThread = field.chat_history || []
                             return (
                               <div key={field.id} className="px-5 py-5">
 
@@ -7790,6 +7799,11 @@ export default function ProjectPage() {
                                         {wordCount} / {field.word_limit}w
                                       </span>
                                     )}
+                                    <button
+                                      onClick={() => { if (editingFieldId !== field.id) { setEditingFieldId(field.id); setFieldEditValue(content) } }}
+                                      className="text-xs text-gray-400 hover:text-gray-700 transition-colors">
+                                      ✎ Edit
+                                    </button>
                                     <button onClick={() => content && navigator.clipboard.writeText(content)}
                                       className="text-xs text-gray-400 hover:text-gray-700 transition-colors">
                                       Copy
@@ -7861,36 +7875,56 @@ export default function ProjectPage() {
                                   </div>
                                 )}
 
-                                {userHistory.length > 0 && (
-                                  <div className="mb-3 space-y-1.5">
-                                    {userHistory.map((msg, i) => (
-                                      <div key={i} className="flex items-center gap-2 text-xs text-gray-400">
-                                        <span className="text-gray-300">↺</span>
-                                        <span className="italic">"{msg.content}"</span>
-                                        {msg.version_created && (
-                                          <span className="text-green-700 font-medium uppercase">→ {msg.version_created}</span>
-                                        )}
-                                      </div>
-                                    ))}
+                                {chatThread.length > 0 && (
+                                  <div className={`mb-3 space-y-2 ${chatThread.length > 8 ? 'max-h-64 overflow-y-auto pr-1' : ''}`}>
+                                    {chatThread.map((msg, i) => {
+                                      if (msg.role === 'user') {
+                                        return (
+                                          <div key={i} className="flex items-start gap-2 text-xs text-gray-400">
+                                            <span className="text-gray-300 mt-0.5">↺</span>
+                                            <span className="italic">"{msg.content}"</span>
+                                            {msg.version_created && (
+                                              <span className="text-green-700 font-medium uppercase flex-shrink-0">→ {msg.version_created}</span>
+                                            )}
+                                          </div>
+                                        )
+                                      }
+                                      const turnKey = `${field.id}:${i}`
+                                      const isOpen = expandedChatTurns[turnKey] ?? false
+                                      return (
+                                        <div key={i} className="ml-5 text-xs">
+                                          <button
+                                            onClick={() => setExpandedChatTurns(prev => ({ ...prev, [turnKey]: !isOpen }))}
+                                            className="text-gray-400 hover:text-gray-600 transition-colors"
+                                          >
+                                            {isOpen ? 'Hide revision ↑' : 'Show revision ↓'}
+                                          </button>
+                                          {isOpen && (
+                                            <p className="mt-1 text-gray-500 leading-relaxed whitespace-pre-wrap bg-gray-50 rounded p-2">{msg.content}</p>
+                                          )}
+                                        </div>
+                                      )
+                                    })}
                                   </div>
                                 )}
 
                                 {refineErrors[field.id] && (
                                   <p className="text-xs text-red-600 mb-2">{refineErrors[field.id]}</p>
                                 )}
-                                <div className="flex gap-2">
-                                  <input
+                                <div className="flex gap-2 items-end">
+                                  <textarea
                                     value={refineMessage[field.id] || ''}
                                     onChange={e => setRefineMessage(prev => ({ ...prev, [field.id]: e.target.value }))}
                                     onKeyDown={e => {
-                                      if (e.key === 'Enter' && !e.shiftKey) {
+                                      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                                         e.preventDefault()
                                         refineField(field, dirId)
                                       }
                                     }}
+                                    rows={Math.min(6, Math.max(3, ((refineMessage[field.id] || '').match(/\n/g) || []).length + 2))}
                                     placeholder={`Refine with AI — e.g. "make this punchier" or "cut to ${field.word_limit ? field.word_limit + ' words' : '100 words'}"`}
                                     disabled={isRefining}
-                                    className="flex-1 bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors disabled:opacity-50"
+                                    className="flex-1 bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors disabled:opacity-50 resize-none"
                                   />
                                   <button
                                     onClick={() => refineField(field, dirId)}
@@ -7904,7 +7938,9 @@ export default function ProjectPage() {
                                 </div>
                               </div>
                             )
-                          })
+                          })}
+                              </>
+                            )
                           })()}
                         </div>
 
