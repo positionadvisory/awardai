@@ -7718,7 +7718,7 @@ export default function ProjectPage() {
                           // strict-mode typecheck even when esbuild is clean).
                           const secScores: Record<string, number> =
                             (evaluation?.scores as unknown as Record<string, number>) ?? {}
-                          const aoyOut = (evaluation?.output ?? null) as Record<string, unknown> | null
+                          const aoyOut = (evaluation?.output ?? null) as unknown as Record<string, unknown> | null
                           const verdict = typeof aoyOut?.verdict === 'string' ? aoyOut.verdict : null
                           const summarySections = wbFields.map(f => ({
                             key: f.field_key, label: f.field_label, score: secScores[f.field_key] ?? null,
