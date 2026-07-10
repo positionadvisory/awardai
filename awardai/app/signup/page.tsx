@@ -247,7 +247,7 @@ function SignupContent() {
         {step === 'details' ? (
           <>
             <p style={{ margin: '0 0 24px', fontSize: 13, color: 'var(--muted-dark)', lineHeight: 1.5 }}>
-              14-day free trial. No commitment required.
+              7-day free trial. No commitment required.
             </p>
 
             <form onSubmit={handleDetails} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

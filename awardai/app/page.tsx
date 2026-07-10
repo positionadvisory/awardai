@@ -493,7 +493,7 @@ const Pricing = ({ onCTA, m }: { onCTA: () => void; m: boolean }) => (
         </div>
       </div>
       <div style={{ marginTop: m ? 24 : 32 }}>
-        <p className="sl-mono" style={{ margin: 0, fontSize: 12, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--muted-dark)' }}>14-day free trial · Card required · Cancel anytime</p>
+        <p className="sl-mono" style={{ margin: 0, fontSize: 12, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--muted-dark)' }}>7-day free trial · Card required · Cancel anytime</p>
       </div>
     </Container>
   </section>
