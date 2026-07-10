@@ -57,7 +57,7 @@ import { computeRoiIndex, normaliseKbShow, DEADLINES_2026 } from '@/lib/shows-da
 import { isAoyShow, AOY_SHOW_NAME, aoyResolveStored, aoyTrackById, buildAoyBestCategory, pillarForKey, normalizeAoyCategory, type AoyPillar } from '@/lib/aoy-taxonomy'
 // Workbench P2 Chunk 1 (S138): source-agnostic section-workbench surface. Rendered
 // read-only behind ?workbench=1 this phase; the write-path cutover is P2 Chunk 4.
-import SectionWorkbench from '@/components/SectionWorkbench'
+import SectionWorkbench, { type SectionRevision } from '@/components/SectionWorkbench'
 import EvalSummaryBar from '@/components/EvalSummaryBar'
 import { mapAoyEvaluation, type StoredEvalSection } from '@/lib/aoy-eval-map'
 import { parseDataRequests, mergeScannedItems, normalizeRequestText, type DataNeededItem } from '@/lib/data-needed'
@@ -1019,7 +1019,8 @@ type EntryDraft = {
   selected: string | null
   custom_text: string | null
   field_values?: EntryFieldValues | null   // Entry Form v2 — structured sub-field values (v2.1)
-  data_needed?: DataNeededItem[] | null    // Workbench P2 Chunk 3 — per-section data-needed checklist, merged in client-side after load (see the entry_drafts data_needed supplemental select below); NOT part of the get_project_entry_drafts RPC yet (that's Chunk 4)
+  data_needed?: DataNeededItem[] | null    // Workbench P2 Chunk 3 — per-section data-needed checklist; Chunk 4 folded this into the get_project_entry_drafts RPC directly (the Chunk 3 supplemental select is retired)
+  revisions?: SectionRevision[] | null      // Workbench P2 Chunk 4 — linear version history, AOY only: { ts, source, text, instruction? }. Returned by get_project_entry_drafts.
   chat_history: ChatMessage[] | null
   award_show: string | null
   category: string | null
@@ -1713,7 +1714,7 @@ export default function ProjectPage() {
     //    get_project_materials_meta RPC instead (has_text/text_words per item)
     //  - entry_drafts: get_project_entry_drafts RPC — current generation full,
     //    older generations slimmed server-side to one resolved content each
-    //    (version_b/c/selected/custom_text/chat_history NULL)
+    //    (version_b/c/selected/custom_text/chat_history/revisions/data_needed NULL)
     //  - evaluations: explicit columns, NO eval_chat_history — chat for the
     //    active judge eval per direction is backfilled by a targeted query below
     Promise.all([
@@ -1721,23 +1722,18 @@ export default function ProjectPage() {
         .select('id, campaign_name, client_name, combined_text, target_shows, status, script_text, script_analysis, tonal_brief, entry_type, agency_facts, endorsements_checklist')
         .eq('id', projectId).single(),
       supabase.from('directions').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
-      // RPC preserves the old ordering: sort_order ASC, id ASC (deterministic across generations)
+      // RPC preserves the old ordering: sort_order ASC, id ASC (deterministic across generations).
+      // Workbench P2 Chunk 4: revisions + data_needed are now returned directly
+      // by the RPC (folded in server-side), so the Chunk 3 supplemental
+      // data_needed select + client-side merge below are retired.
       supabase.rpc('get_project_entry_drafts', { p_project_id: projectId }),
       supabase.from('evaluations')
         .select('id, entry_draft_id, overall_score, scores, strengths, gaps, recommendations, output, model_used, evaluation_mode, changes_analysis, created_at')
         .eq('project_id', projectId).order('created_at', { ascending: false }),
       supabase.rpc('get_project_materials_meta', { p_project_id: projectId }),
-      // Workbench P2 Chunk 3: get_project_entry_drafts is FROZEN for this chunk
-      // (Chunk 4 pulls data_needed/revisions into the RPC itself). Direct
-      // select instead, same RLS as every other entry_drafts write in this
-      // file (entry_drafts_org_select). Tiny payload (jsonb array, default
-      // '[]', not the heavy per-generation content the Session 52 payload
-      // diet above is protecting against), so no gating on entry_type.
-      supabase.from('entry_drafts').select('id, data_needed').eq('project_id', projectId),
-    ]).then(([{ data: proj }, { data: dirs }, { data: drafts }, { data: evals }, { data: matsMeta, error: matsErr }, { data: dataNeededRows, error: dataNeededErr }]) => {
+    ]).then(([{ data: proj }, { data: dirs }, { data: drafts }, { data: evals }, { data: matsMeta, error: matsErr }]) => {
       if (cancelled) return
       if (matsErr) console.error('materials meta fetch failed', matsErr)
-      if (dataNeededErr) console.error('data_needed fetch failed', dataNeededErr)
       if (proj) {
         setProject({ ...proj, materials: ((matsMeta as Material[] | null) ?? []) })
         setBriefText(proj.combined_text || '')
@@ -1748,19 +1744,7 @@ export default function ProjectPage() {
       }
       if (dirs) setDirections(dirs)
 
-      // Explicit param types below, not inference: both `drafts` and
-      // `dataNeededRows` come back from untyped supabase-js calls (this repo
-      // has no generated Database type on the client), so an unannotated
-      // callback param here is genuinely implicit-any under strict mode --
-      // esbuild does not catch this (S113); the Vercel preview did.
-      const dataNeededById = new Map<number, DataNeededItem[]>(
-        ((dataNeededRows ?? []) as { id: number; data_needed: DataNeededItem[] | null }[]).map(
-          (r: { id: number; data_needed: DataNeededItem[] | null }) => [r.id, r.data_needed ?? []] as [number, DataNeededItem[]]
-        )
-      )
-      const draftsList = ((drafts || []) as EntryDraft[]).map(
-        (d: EntryDraft) => ({ ...d, data_needed: dataNeededById.get(d.id) ?? [] })
-      )
+      const draftsList = (drafts || []) as EntryDraft[]
       if (drafts !== null) setEntries(draftsList)
 
       if (evals && evals.length > 0 && draftsList.length > 0) {
@@ -4594,6 +4578,58 @@ export default function ProjectPage() {
       return 'Could not save this section. Please try again.'
     }
     setEntries(prev => prev.map(e => e.id === rowId ? { ...e, field_values: fieldValues, custom_text: custom } : e))
+  }
+
+  // Workbench P2 Chunk 4 (S143) — linear-history write path, AOY-only.
+  //
+  // Manual save (SectionWorkbench's onSaveText) and restore both go through
+  // this one client-side write. Refine-apply's revision entry is appended
+  // SERVER-SIDE inside edit-entry.ts (the edge fn branches on entry_type and
+  // returns the full updated row for AOY; refineField below already applies
+  // whatever it returns via setEntries, so no separate client call is needed
+  // for the refine path).
+  //
+  // DM-16: checks returned rows before mutating local state (same shape as
+  // persistDataNeeded below). Never writes version_a/b/c/selected -- AOY
+  // display precedence is custom_text > version_a only (brief). Campaign
+  // entries never call this function (only SectionWorkbench, which only
+  // renders for workbenchPreview && entry_type === 'aoy', wires onSaveText/
+  // onRestore to it), so the old version-shift model for campaign entries is
+  // untouched by construction, not just by convention.
+  const appendRevision = async (
+    field: EntryDraft,
+    text: string,
+    source: SectionRevision['source'],
+    instruction?: string
+  ): Promise<boolean> => {
+    const trimmed = text.trim()
+    const revision: SectionRevision = {
+      ts: new Date().toISOString(),
+      source,
+      text: trimmed,
+      ...(instruction ? { instruction } : {}),
+    }
+    const nextRevisions = [...(field.revisions ?? []), revision]
+    const { data, error } = await supabase
+      .from('entry_drafts')
+      .update({ custom_text: trimmed || null, revisions: nextRevisions, updated_at: new Date().toISOString() })
+      .eq('id', field.id)
+      .select('id')
+    if (error || !data || data.length === 0) {
+      console.error('revision write failed or matched zero rows', error)
+      return false
+    }
+    setEntries(prev => prev.map(e => e.id === field.id ? { ...e, custom_text: trimmed || null, revisions: nextRevisions } : e))
+    return true
+  }
+
+  // Restore = write that revision's text back to custom_text + append a
+  // 'restore' revision. Never deletes history (brief) -- the restored-from
+  // entry stays in the array, so the timeline shows exactly what happened.
+  const restoreRevision = async (field: EntryDraft, revisionIndex: number): Promise<boolean> => {
+    const rev = (field.revisions ?? [])[revisionIndex]
+    if (!rev) return false
+    return appendRevision(field, rev.text, 'restore')
   }
 
   // Workbench P2 Chunk 3 (S138 continued) — data-needed writes.
@@ -7829,16 +7865,20 @@ export default function ProjectPage() {
                           )
                         })()}
 
-                        {/* Workbench P2 Chunk 2 (S138): read-only preview surface,
-                            gated by ?workbench=1. Purely additive: renders ABOVE the
-                            legacy canvas and reads only data already loaded (fields
-                            text + the stored evaluation). Chunk 2 maps the stored AOY
-                            eval onto the cards + chips by section key (never order):
-                            per-section score, jury rationale, and section-attributed
-                            gaps; unmatched gaps stay in the summary bar. Chips jump-
-                            scroll to their card and the Jury re-eval lives in the
-                            summary bar. Text edit, refine, data-needed, and restore
-                            stay on the legacy write path (P2 Chunks 3-4). */}
+                        {/* Workbench P2 Chunks 2-4 (S138-S143), gated by ?workbench=1.
+                            Purely additive: renders ABOVE the legacy canvas. Chunk 2
+                            maps the stored AOY eval onto the cards + chips by section
+                            key (never order): per-section score, jury rationale, and
+                            section-attributed gaps; unmatched gaps stay in the summary
+                            bar. Chips jump-scroll to their card and the Jury re-eval
+                            lives in the summary bar. Chunk 4: manual save + restore
+                            write here (onSaveText/onRestore -> appendRevision/
+                            restoreRevision); refine still posts through the legacy box
+                            below (its output lands in custom_text + revisions via the
+                            edge fn and shows up here on the next render, same row).
+                            The legacy A/B/C chips + inline-edit trigger are suppressed
+                            below (wbActive) so there is exactly one write surface per
+                            section text, not two with different revision fidelity. */}
                         {workbenchPreview && project?.entry_type === 'aoy' && (() => {
                           const wbFields = fields.filter(f => f.field_key !== 'entry')
                           if (wbFields.length === 0) return null
@@ -7880,7 +7920,7 @@ export default function ProjectPage() {
                             <div className="border-b border-gray-100 bg-white">
                               <div className="px-5 pt-3 pb-1">
                                 <p className="text-xs font-medium uppercase tracking-wide text-green-700">
-                                  Section workbench — preview (read-only)
+                                  Section workbench — preview
                                 </p>
                               </div>
                               <EvalSummaryBar
@@ -7908,11 +7948,14 @@ export default function ProjectPage() {
                                     rationale={evalMap.bySection[f.field_key]?.rationale ?? null}
                                     gaps={evalMap.bySection[f.field_key]?.gaps}
                                     dataItems={f.data_needed ?? []}
+                                    revisions={f.revisions ?? []}
                                     scanningData={!!scanningData[f.id]}
                                     onScanData={() => scanSectionData(f)}
                                     onToggleData={(id, done) => toggleDataNeededItem(f, id, done)}
                                     onAddData={(text) => addDataNeededItem(f, text)}
                                     onTrackGap={(gapText) => trackGapAsDataNeeded(f, gapText)}
+                                    onSaveText={(text) => appendRevision(f, text, 'manual')}
+                                    onRestore={(idx) => { void restoreRevision(f, idx) }}
                                   />
                                 ))}
                               </div>
@@ -7961,6 +8004,14 @@ export default function ProjectPage() {
                             const overLimit = !!(field.word_limit && wordCount > field.word_limit)
                             const isUploadedDoc = field.field_key === 'entry'
                             const isExpanded = expandedEntryFields[field.id] ?? false
+                            // Workbench P2 Chunk 4: this same section already has a
+                            // SectionWorkbench card above (with History replacing the
+                            // chips) whenever the workbench preview is on for an AOY
+                            // project. Suppress the legacy chip UI + inline-edit
+                            // trigger in that case so there is one write surface, not
+                            // two with different revision fidelity (the legacy inline
+                            // edit writes custom_text only, no revisions entry).
+                            const wbActive = workbenchPreview && project?.entry_type === 'aoy'
 
                             if (isUploadedDoc) {
                               return (
@@ -8002,7 +8053,7 @@ export default function ProjectPage() {
                                         {field.section_weight}% of score
                                       </span>
                                     )}
-                                    {(field.version_b || field.version_c) && (
+                                    {(field.version_b || field.version_c) && !wbActive && (
                                       <div className="flex items-center gap-1">
                                         {(['a', 'b', 'c'] as const).map(v => {
                                           const hasV = v === 'a' ? !!field.version_a : v === 'b' ? !!field.version_b : !!field.version_c
@@ -8031,11 +8082,13 @@ export default function ProjectPage() {
                                         {wordCount} / {field.word_limit}w
                                       </span>
                                     )}
-                                    <button
-                                      onClick={() => { if (editingFieldId !== field.id) { setEditingFieldId(field.id); setFieldEditValue(content) } }}
-                                      className="text-xs text-gray-400 hover:text-gray-700 transition-colors">
-                                      ✎ Edit
-                                    </button>
+                                    {!wbActive && (
+                                      <button
+                                        onClick={() => { if (editingFieldId !== field.id) { setEditingFieldId(field.id); setFieldEditValue(content) } }}
+                                        className="text-xs text-gray-400 hover:text-gray-700 transition-colors">
+                                        ✎ Edit
+                                      </button>
+                                    )}
                                     <button onClick={() => content && navigator.clipboard.writeText(content)}
                                       className="text-xs text-gray-400 hover:text-gray-700 transition-colors">
                                       Copy
@@ -8088,12 +8141,12 @@ export default function ProjectPage() {
                                   </div>
                                 ) : (
                                   <div
-                                    className="group relative cursor-text mb-4"
-                                    onClick={() => {
+                                    className={wbActive ? 'mb-4' : 'group relative cursor-text mb-4'}
+                                    onClick={wbActive ? undefined : () => {
                                       setEditingFieldId(field.id)
                                       setFieldEditValue(content)
                                     }}
-                                    title="Click to edit"
+                                    title={wbActive ? undefined : 'Click to edit'}
                                   >
                                     <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
                                       {content || <span className="italic text-gray-400">Not yet generated</span>}
@@ -8101,9 +8154,11 @@ export default function ProjectPage() {
                                     {field.custom_text?.trim() && (
                                       <span className="text-xs text-blue-600 font-medium mt-0.5 block">✎ manually edited</span>
                                     )}
-                                    <span className="absolute top-0 right-0 text-xs text-gray-300 group-hover:text-gray-500 transition-colors opacity-0 group-hover:opacity-100 pointer-events-none select-none">
-                                      ✎ edit
-                                    </span>
+                                    {!wbActive && (
+                                      <span className="absolute top-0 right-0 text-xs text-gray-300 group-hover:text-gray-500 transition-colors opacity-0 group-hover:opacity-100 pointer-events-none select-none">
+                                        ✎ edit
+                                      </span>
+                                    )}
                                   </div>
                                 )}
 
