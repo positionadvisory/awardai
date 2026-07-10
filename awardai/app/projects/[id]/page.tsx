@@ -59,6 +59,7 @@ import { isAoyShow, AOY_SHOW_NAME, aoyResolveStored, aoyTrackById, buildAoyBestC
 // read-only behind ?workbench=1 this phase; the write-path cutover is P2 Chunk 4.
 import SectionWorkbench from '@/components/SectionWorkbench'
 import EvalSummaryBar from '@/components/EvalSummaryBar'
+import { mapAoyEvaluation, type StoredEvalSection } from '@/lib/aoy-eval-map'
 // Show Customization Architecture Chunk 5 (S98): config-driven entry_form resolver.
 // Only the canonical PURE helpers + type are imported (client can import lib; edge
 // functions carry byte-identical copies). Resolution = longest show-level prefix of
@@ -7701,13 +7702,16 @@ export default function ProjectPage() {
                           )
                         })()}
 
-                        {/* Workbench P2 Chunk 1 (S138) — read-only preview surface,
+                        {/* Workbench P2 Chunk 2 (S138): read-only preview surface,
                             gated by ?workbench=1. Purely additive: renders ABOVE the
-                            legacy canvas, passes NO write callbacks (edit/refine/data/
-                            restore all stay on the legacy path), and reads only data
-                            already loaded (fields text + the stored evaluation). Score/
-                            rationale/gap-attribution enrichment + jump chips scoring is
-                            P2 Chunk 2; this proves the components + summary bar render. */}
+                            legacy canvas and reads only data already loaded (fields
+                            text + the stored evaluation). Chunk 2 maps the stored AOY
+                            eval onto the cards + chips by section key (never order):
+                            per-section score, jury rationale, and section-attributed
+                            gaps; unmatched gaps stay in the summary bar. Chips jump-
+                            scroll to their card and the Jury re-eval lives in the
+                            summary bar. Text edit, refine, data-needed, and restore
+                            stay on the legacy write path (P2 Chunks 3-4). */}
                         {workbenchPreview && project?.entry_type === 'aoy' && (() => {
                           const wbFields = fields.filter(f => f.field_key !== 'entry')
                           if (wbFields.length === 0) return null
@@ -7716,12 +7720,30 @@ export default function ProjectPage() {
                           // that shape, so cast to a keyed record. Explicit Record type
                           // on the fallback (S113: a computed-key index on `|| {}` fails
                           // strict-mode typecheck even when esbuild is clean).
+                          // Map the stored AOY eval onto cards + chips by section KEY
+                          // (field_key), never array order. Scores live in
+                          // evaluations.scores; rationale + the weighted section list
+                          // live in output.sections; gaps are entry-level and attributed
+                          // to a section by label-word match (fail-soft: unmatched gaps
+                          // go to the summary bar, never dropped). Casts are explicit
+                          // Record/typed so strict typecheck holds even where esbuild is
+                          // clean (S113).
                           const secScores: Record<string, number> =
                             (evaluation?.scores as unknown as Record<string, number>) ?? {}
                           const aoyOut = (evaluation?.output ?? null) as unknown as Record<string, unknown> | null
                           const verdict = typeof aoyOut?.verdict === 'string' ? aoyOut.verdict : null
+                          const evalMap = mapAoyEvaluation(
+                            {
+                              scores: secScores,
+                              sections: (aoyOut?.sections as unknown as StoredEvalSection[]) ?? null,
+                              gaps: evaluation?.gaps ?? null,
+                            },
+                            wbFields.map(f => f.field_key),
+                          )
                           const summarySections = wbFields.map(f => ({
-                            key: f.field_key, label: f.field_label, score: secScores[f.field_key] ?? null,
+                            key: f.field_key,
+                            label: f.field_label,
+                            score: evalMap.bySection[f.field_key]?.score ?? null,
                           }))
                           const jumpToSection = (key: string) => {
                             if (typeof document === 'undefined') return
@@ -7739,8 +7761,11 @@ export default function ProjectPage() {
                                 verdict={verdict}
                                 sections={summarySections}
                                 strengths={evaluation?.strengths}
-                                unattributedGaps={evaluation?.gaps}
+                                unattributedGaps={evalMap.unattributedGaps}
                                 onJumpToSection={jumpToSection}
+                                onReRunEval={() => evaluateEntry(dirId, 'judge', evalBoth.judge?.id)}
+                                reRunning={evaluatingMode[dirId] === 'judge'}
+                                reRunLabel={hasJudge ? 'Re-run Jury Eval' : 'Jury Evaluation'}
                               />
                               <div className="divide-y divide-gray-100">
                                 {wbFields.map(f => (
@@ -7752,7 +7777,9 @@ export default function ProjectPage() {
                                     weight={f.section_weight ?? null}
                                     text={resolveFieldContent(f)}
                                     wordLimit={f.word_limit}
-                                    score={secScores[f.field_key] ?? null}
+                                    score={evalMap.bySection[f.field_key]?.score ?? null}
+                                    rationale={evalMap.bySection[f.field_key]?.rationale ?? null}
+                                    gaps={evalMap.bySection[f.field_key]?.gaps}
                                   />
                                 ))}
                               </div>
