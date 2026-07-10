@@ -179,6 +179,14 @@ p.body b{color:var(--ink);font-weight:600}
 .ctarow .ghost{background:transparent;color:#a8843f;border:1px solid var(--paper-line)}
 .ctarow .ghost:hover{border-color:var(--gold)}
 @media(max-width:560px){.topnav .inner{height:54px}.topnav .brand .wm{font-size:1.1rem}.ctarow a{flex:1 1 auto;text-align:center}}
+
+/* Clickable table of contents */
+html{scroll-behavior:smooth}
+a.tocitem{cursor:pointer;text-decoration:none;color:inherit}
+a.tocitem .n{transition:background .15s ease,color .15s ease}
+a.tocitem:hover .n{background:var(--gold);color:var(--ground-deep)}
+a.tocitem:hover span:last-child{color:var(--ink)}
+#sec1,#sec2,#sec3{scroll-margin-top:78px}
 </style>
 </head>
 <body>
@@ -210,9 +218,9 @@ p.body b{color:var(--ink);font-weight:600}
   <div class="toc"><div class="read">
     <div class="lab"><span class="dot"></span>In this report</div>
     <div class="tocgrid">
-      <div class="tocitem"><span class="n">1</span><span>The strangers judging you are not strangers to each other</span></div>
-      <div class="tocitem"><span class="n">2</span><span>Independents already win this by setting clear targets with a plan</span></div>
-      <div class="tocitem"><span class="n">3</span><span>How you should attack the next awards cycle</span></div>
+      <a class="tocitem" href="#sec1"><span class="n">1</span><span>The strangers judging you are not strangers to each other</span></a>
+      <a class="tocitem" href="#sec2"><span class="n">2</span><span>Independents already win this by setting clear targets with a plan</span></a>
+      <a class="tocitem" href="#sec3"><span class="n">3</span><span>How you should attack the next awards cycle</span></a>
     </div>
   </div></div>
 
@@ -225,7 +233,7 @@ p.body b{color:var(--ink);font-weight:600}
   </div></div>
 
   <!-- SECTION ONE -->
-  <div class="read"><div class="sec">
+  <div class="read" id="sec1"><div class="sec">
     <div class="seceyebrow"><span class="dot"></span>Section One</div>
     <h2 class="title">The strangers judging you are not strangers to each other</h2>
     <p class="body">The instinct is to treat each jury as a fresh roomful of strangers.</p>
@@ -269,7 +277,7 @@ p.body b{color:var(--ink);font-weight:600}
   </div></div>
 
   <!-- SECTION TWO -->
-  <div class="read"><div class="sec">
+  <div class="read" id="sec2"><div class="sec">
     <div class="seceyebrow"><span class="dot"></span>Section Two</div>
     <h2 class="title">Independents already win this by setting clear targets with a plan</h2>
     <p class="body">The WARC rankings are the closest thing the industry has to a global scoreboard, and the holding companies quote them to their own shareholders as proof of dominance. Independents still top them. On the creative side specifically, the gap between #1 and #3 independent is close, and worth knowing by name.</p>
@@ -289,7 +297,7 @@ p.body b{color:var(--ink);font-weight:600}
   </div></div>
 
   <!-- SECTION THREE -->
-  <div class="read"><div class="sec">
+  <div class="read" id="sec3"><div class="sec">
     <div class="seceyebrow"><span class="dot"></span>Section Three</div>
     <h2 class="title">How you should attack the next awards cycle</h2>
     <p class="lede">Four changes, in order. This is the part to keep.</p>
