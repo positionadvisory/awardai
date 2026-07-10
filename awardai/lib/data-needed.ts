@@ -27,9 +27,20 @@ export type ParsedRequest = {
 }
 
 // A trailing "Owner: Name" token inside a bracket assigns the ask to a person.
-// Case-insensitive, anchored to the end of the bracket content so an "Owner:"
-// mentioned mid-sentence is not mistaken for the assignment.
-const OWNER_RE = /[;,.]?\s*Owner:\s*([^\]]+?)\s*$/i
+// Case-insensitive, anchored to the end of the bracket content. The owner
+// capture is DELIBERATELY BOUNDED to 1-3 word-tokens (first/last name, or an
+// initial): an unbounded `[^\]]+?` here (the original Chunk 1 shape) will
+// happily swallow a whole runaway sentence as "the owner" whenever the literal
+// substring "Owner:" occurs anywhere before the bracket's end, which is not
+// the same guarantee as "mentioned mid-sentence is ignored" -- it only looks
+// anchored because $ forces the capture to reach the string end, and a short
+// name usually does. Found via the Chunk 3 fixture (data-needed-fixture.mjs
+// check 7): "a note that Owner: Nicky flagged this earlier in the review"
+// mis-captured owner="Nicky flagged this earlier in the review". Bounding to
+// 1-3 tokens makes a genuine trailing "Owner: Name" match while a mid-sentence
+// "Owner:" followed by ordinary prose fails to match at all (falls through to
+// owner: null), because the prose can't be squeezed into <=3 tokens before $.
+const OWNER_RE = /[;,.]?\s*Owner:\s*([A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*){0,2})\s*$/i
 
 // The drafter emits explicit placeholders as [INSERT FIGURE: description] when a
 // figure a section needs is not in the source material (see the config drafter

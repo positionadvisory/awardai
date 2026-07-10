@@ -60,6 +60,7 @@ import { isAoyShow, AOY_SHOW_NAME, aoyResolveStored, aoyTrackById, buildAoyBestC
 import SectionWorkbench from '@/components/SectionWorkbench'
 import EvalSummaryBar from '@/components/EvalSummaryBar'
 import { mapAoyEvaluation, type StoredEvalSection } from '@/lib/aoy-eval-map'
+import { parseDataRequests, mergeScannedItems, normalizeRequestText, type DataNeededItem } from '@/lib/data-needed'
 // Show Customization Architecture Chunk 5 (S98): config-driven entry_form resolver.
 // Only the canonical PURE helpers + type are imported (client can import lib; edge
 // functions carry byte-identical copies). Resolution = longest show-level prefix of
@@ -1018,6 +1019,7 @@ type EntryDraft = {
   selected: string | null
   custom_text: string | null
   field_values?: EntryFieldValues | null   // Entry Form v2 — structured sub-field values (v2.1)
+  data_needed?: DataNeededItem[] | null    // Workbench P2 Chunk 3 — per-section data-needed checklist, merged in client-side after load (see the entry_drafts data_needed supplemental select below); NOT part of the get_project_entry_drafts RPC yet (that's Chunk 4)
   chat_history: ChatMessage[] | null
   award_show: string | null
   category: string | null
@@ -1415,6 +1417,15 @@ export default function ProjectPage() {
     setWorkbenchPreview(new URLSearchParams(window.location.search).get('workbench') === '1')
   }, [])
 
+  // Workbench P2 Chunk 3 (S138 continued) — data-needed checklist write surface.
+  // scanningData is keyed by entry_draft id so multiple sections can scan
+  // independently. autoScannedFieldIds is a ref (not state): it tracks which
+  // field ids have already had their once-on-first-render auto-scan fired,
+  // so the effect below never re-scans a section just because entries updated
+  // for an unrelated reason (e.g. a different section's toggle write).
+  const [scanningData, setScanningData] = useState<Record<number, boolean>>({})
+  const autoScannedFieldIds = useRef<Set<number>>(new Set())
+
   // Feature #4 — inline field editing
   const [editingFieldId, setEditingFieldId] = useState<number | null>(null)
   const [fieldEditValue, setFieldEditValue] = useState('')
@@ -1716,9 +1727,17 @@ export default function ProjectPage() {
         .select('id, entry_draft_id, overall_score, scores, strengths, gaps, recommendations, output, model_used, evaluation_mode, changes_analysis, created_at')
         .eq('project_id', projectId).order('created_at', { ascending: false }),
       supabase.rpc('get_project_materials_meta', { p_project_id: projectId }),
-    ]).then(([{ data: proj }, { data: dirs }, { data: drafts }, { data: evals }, { data: matsMeta, error: matsErr }]) => {
+      // Workbench P2 Chunk 3: get_project_entry_drafts is FROZEN for this chunk
+      // (Chunk 4 pulls data_needed/revisions into the RPC itself). Direct
+      // select instead, same RLS as every other entry_drafts write in this
+      // file (entry_drafts_org_select). Tiny payload (jsonb array, default
+      // '[]', not the heavy per-generation content the Session 52 payload
+      // diet above is protecting against), so no gating on entry_type.
+      supabase.from('entry_drafts').select('id, data_needed').eq('project_id', projectId),
+    ]).then(([{ data: proj }, { data: dirs }, { data: drafts }, { data: evals }, { data: matsMeta, error: matsErr }, { data: dataNeededRows, error: dataNeededErr }]) => {
       if (cancelled) return
       if (matsErr) console.error('materials meta fetch failed', matsErr)
+      if (dataNeededErr) console.error('data_needed fetch failed', dataNeededErr)
       if (proj) {
         setProject({ ...proj, materials: ((matsMeta as Material[] | null) ?? []) })
         setBriefText(proj.combined_text || '')
@@ -1729,7 +1748,19 @@ export default function ProjectPage() {
       }
       if (dirs) setDirections(dirs)
 
-      const draftsList = drafts || []
+      // Explicit param types below, not inference: both `drafts` and
+      // `dataNeededRows` come back from untyped supabase-js calls (this repo
+      // has no generated Database type on the client), so an unannotated
+      // callback param here is genuinely implicit-any under strict mode --
+      // esbuild does not catch this (S113); the Vercel preview did.
+      const dataNeededById = new Map<number, DataNeededItem[]>(
+        ((dataNeededRows ?? []) as { id: number; data_needed: DataNeededItem[] | null }[]).map(
+          (r: { id: number; data_needed: DataNeededItem[] | null }) => [r.id, r.data_needed ?? []] as [number, DataNeededItem[]]
+        )
+      )
+      const draftsList = ((drafts || []) as EntryDraft[]).map(
+        (d: EntryDraft) => ({ ...d, data_needed: dataNeededById.get(d.id) ?? [] })
+      )
       if (drafts !== null) setEntries(draftsList)
 
       if (evals && evals.length > 0 && draftsList.length > 0) {
@@ -4564,6 +4595,102 @@ export default function ProjectPage() {
     }
     setEntries(prev => prev.map(e => e.id === rowId ? { ...e, field_values: fieldValues, custom_text: custom } : e))
   }
+
+  // Workbench P2 Chunk 3 (S138 continued) — data-needed writes.
+  //
+  // All four handlers below share one persistence primitive so the DM-16
+  // check (never trust a silent zero-row write) lives in exactly one place.
+  // Checking an item off, adding one, scanning, or tracking a gap never
+  // triggers or blocks on an eval -- that decoupling from evaluation cadence
+  // is the whole point of the checklist (brief, Chunk 3).
+  const persistDataNeeded = async (fieldId: number, next: DataNeededItem[]): Promise<boolean> => {
+    const { data, error } = await supabase
+      .from('entry_drafts')
+      .update({ data_needed: next, updated_at: new Date().toISOString() })
+      .eq('id', fieldId)
+      .select('id')
+    if (error || !data || data.length === 0) {
+      console.error('data_needed write failed or matched zero rows', error)
+      return false
+    }
+    setEntries(prev => prev.map(e => e.id === fieldId ? { ...e, data_needed: next } : e))
+    return true
+  }
+
+  const makeDataNeededId = (): string =>
+    (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+      ? crypto.randomUUID()
+      : `dn-${Date.now()}-${Math.random().toString(36).slice(2)}`
+
+  // "Scan for data requests": runs the pure parser over the section's current
+  // text and merges (never silently deletes a user-checked item; a re-scan
+  // only appends genuinely new asks, diffed by normalized text -- see
+  // mergeScannedItems in lib/data-needed.ts). Only writes to the DB when the
+  // merge actually changed something, so re-scanning a section with nothing
+  // new never fires a write.
+  const scanSectionData = async (field: EntryDraft) => {
+    setScanningData(prev => ({ ...prev, [field.id]: true }))
+    try {
+      const text = resolveFieldContent(field)
+      const parsed = parseDataRequests(text)
+      const existing = field.data_needed ?? []
+      const merged = mergeScannedItems(existing, parsed, makeDataNeededId)
+      if (merged !== existing) {
+        await persistDataNeeded(field.id, merged)
+      }
+    } finally {
+      setScanningData(prev => ({ ...prev, [field.id]: false }))
+    }
+  }
+
+  const addDataNeededItem = async (field: EntryDraft, text: string) => {
+    const trimmed = text.trim()
+    if (!trimmed) return
+    const existing = field.data_needed ?? []
+    const item: DataNeededItem = { id: makeDataNeededId(), text: trimmed, owner: null, done: false, source: 'manual' }
+    await persistDataNeeded(field.id, [...existing, item])
+  }
+
+  const toggleDataNeededItem = async (field: EntryDraft, id: string, done: boolean) => {
+    const existing = field.data_needed ?? []
+    const next = existing.map(i => i.id === id ? { ...i, done } : i)
+    await persistDataNeeded(field.id, next)
+  }
+
+  // "Track this" on a jury gap: promotes an entry-level gap string into a
+  // section-tied, ownable checklist item (source: 'jury'). Dedupes against
+  // whatever is already tracked by normalized text so re-tracking the same
+  // gap (or a re-render re-firing the click) is a no-op, matching the parser
+  // scan's own de-dup discipline.
+  const trackGapAsDataNeeded = async (field: EntryDraft, gapText: string) => {
+    const existing = field.data_needed ?? []
+    const key = normalizeRequestText(gapText)
+    if (existing.some(i => normalizeRequestText(i.text) === key)) return
+    const item: DataNeededItem = { id: makeDataNeededId(), text: gapText, owner: null, done: false, source: 'jury' }
+    await persistDataNeeded(field.id, [...existing, item])
+  }
+
+  // Auto-scan once per section with no tracked items yet (brief: "once on
+  // first workbench render for a section with no items"). Gated on the
+  // workbench flag + AOY so this never fires for the legacy canvas. Guarded
+  // by the autoScannedFieldIds ref (not state) so re-renders triggered by
+  // scanning one section, or by an unrelated toggle write updating `entries`,
+  // never re-trigger a scan for a field already covered this session.
+  useEffect(() => {
+    if (!workbenchPreview || project?.entry_type !== 'aoy') return
+    const candidates = entries.filter(e =>
+      e.field_key !== 'entry' &&
+      (e.data_needed?.length ?? 0) === 0 &&
+      !autoScannedFieldIds.current.has(e.id)
+    )
+    for (const field of candidates) {
+      autoScannedFieldIds.current.add(field.id)
+      void scanSectionData(field)
+    }
+    // entries is intentionally not deep-compared: the ref guard above makes
+    // extra effect firings a cheap no-op rather than a correctness issue.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workbenchPreview, project?.entry_type, entries])
 
   const refineField = async (field: EntryDraft, dirId: number) => {
     const msg = refineMessage[field.id]?.trim()
@@ -7780,6 +7907,12 @@ export default function ProjectPage() {
                                     score={evalMap.bySection[f.field_key]?.score ?? null}
                                     rationale={evalMap.bySection[f.field_key]?.rationale ?? null}
                                     gaps={evalMap.bySection[f.field_key]?.gaps}
+                                    dataItems={f.data_needed ?? []}
+                                    scanningData={!!scanningData[f.id]}
+                                    onScanData={() => scanSectionData(f)}
+                                    onToggleData={(id, done) => toggleDataNeededItem(f, id, done)}
+                                    onAddData={(text) => addDataNeededItem(f, text)}
+                                    onTrackGap={(gapText) => trackGapAsDataNeeded(f, gapText)}
                                   />
                                 ))}
                               </div>
