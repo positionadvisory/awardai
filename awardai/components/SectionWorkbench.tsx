@@ -17,7 +17,7 @@
 
 import { useState } from 'react'
 import DataNeededList from '@/components/DataNeededList'
-import type { DataNeededItem } from '@/lib/data-needed'
+import { normalizeRequestText, type DataNeededItem } from '@/lib/data-needed'
 
 export type SectionRevision = {
   ts: string
@@ -44,6 +44,9 @@ type Props = {
   onAddData?: (text: string) => void
   onScanData?: () => void
   scanningData?: boolean
+  // Chunk 3: "track this" on a jury gap appends it to the data-needed list
+  // (source: 'jury'). Absent => gaps render read-only, same as today.
+  onTrackGap?: (text: string) => void
   // P4 mount point.
   chatSlot?: React.ReactNode
   // DOM id so a summary-bar chip can scroll this card into view.
@@ -75,7 +78,7 @@ function shortTs(ts: string): string {
 export default function SectionWorkbench({
   sectionKey, label, weight, text, wordLimit, score, rationale, gaps,
   dataItems, revisions, onSaveText, onRestore,
-  onToggleData, onAddData, onScanData, scanningData, chatSlot, anchorId,
+  onToggleData, onAddData, onScanData, scanningData, onTrackGap, chatSlot, anchorId,
 }: Props) {
   const [editing, setEditing] = useState(false)
   const [buffer, setBuffer] = useState('')
@@ -142,12 +145,38 @@ export default function SectionWorkbench({
         </div>
       )}
 
-      {/* Section-tied gaps */}
+      {/* Section-tied gaps. A gap can be promoted ("tracked") into the
+          data-needed checklist below so a qualitative jury note becomes a
+          trackable, ownable ask instead of living only as prose. Tracked-ness
+          is derived from dataItems by normalized text, not a separate flag:
+          the gap string and the tracked item's text are typically identical
+          (trackGap below passes the gap text through verbatim), so this stays
+          correct even if the parent re-renders with a fresh gaps array. */}
       {(gaps?.length ?? 0) > 0 && (
         <ul className="mt-2 grid grid-cols-1 gap-1">
-          {gaps!.map((g, i) => (
-            <li key={i} className="text-sm leading-snug text-amber-700">△ {g}</li>
-          ))}
+          {gaps!.map((g, i) => {
+            const alreadyTracked = (dataItems ?? []).some(
+              item => normalizeRequestText(item.text) === normalizeRequestText(g)
+            )
+            return (
+              <li key={i} className="flex items-start justify-between gap-2 text-sm leading-snug text-amber-700">
+                <span>△ {g}</span>
+                {onTrackGap && (
+                  alreadyTracked ? (
+                    <span className="flex-shrink-0 text-xs text-gray-400">Tracked</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onTrackGap(g)}
+                      className="flex-shrink-0 text-xs text-green-700 hover:text-green-600 transition-colors"
+                    >
+                      Track this
+                    </button>
+                  )
+                )}
+              </li>
+            )
+          })}
         </ul>
       )}
 
