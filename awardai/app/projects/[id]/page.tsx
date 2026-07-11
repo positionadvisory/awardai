@@ -9,6 +9,17 @@ import GeneratingBar from '@/components/GeneratingBar'
 import ProjectProgressSpine, { SpineStep } from '@/components/ProjectProgressSpine'
 import NextStepCard, { NextStepAction, NextStepOpportunity, NextStepDirectionRef } from '@/components/NextStepCard'
 
+// Workbench (S150): in-flight statements for the legacy per-field Refine box
+// (the campaign / non-workbench path, !wbActive). Mirrors SectionChat's
+// APPLY_STATEMENTS so the two refine surfaces read the same. No em-dashes.
+const REFINE_STATEMENTS = [
+  'Reading the current text.',
+  'Weighing the rubric and the tracked gaps.',
+  'Drafting the revision.',
+  'Tightening the language.',
+  'Checking every figure stays put.',
+]
+
 /* ── Avatar dropdown (top-right nav) ─────────────────────────────────────── */
 function AvatarMenu({ email, onSignOut }: { email: string; onSignOut: () => void }) {
   const [open, setOpen] = useState(false)
@@ -1415,6 +1426,10 @@ export default function ProjectPage() {
   // Phase 2 — field refinement via edit-entry Edge Function
   const [refineMessage, setRefineMessage] = useState<Record<number, string>>({})
   const [refiningFieldId, setRefiningFieldId] = useState<number | null>(null)
+  // Workbench (S150): keeps the shared GeneratingBar mounted for one field
+  // through its completion animation, even after refiningFieldId resets to
+  // null. Same pattern as SectionChat's barVisible. One refine runs at a time.
+  const [refineBarFieldId, setRefineBarFieldId] = useState<number | null>(null)
   const [refineErrors, setRefineErrors] = useState<Record<number, string>>({})
   // S137 P1 — expand/collapse for assistant turns in the per-section refine thread
   const [expandedChatTurns, setExpandedChatTurns] = useState<Record<string, boolean>>({})
@@ -4829,6 +4844,7 @@ export default function ProjectPage() {
     if (!msg || !project) return
 
     setRefiningFieldId(field.id)
+    setRefineBarFieldId(field.id)
     setRefineErrors(prev => { const next = { ...prev }; delete next[field.id]; return next })
     try {
       const accessToken = await getToken()
@@ -8423,6 +8439,17 @@ export default function ProjectPage() {
                                   </div>
                                 )}
 
+                                {refineBarFieldId === field.id && (
+                                  <div className="mb-2">
+                                    <GeneratingBar
+                                      isGenerating={isRefining}
+                                      estimatedDuration={22_000}
+                                      statementInterval={3_500}
+                                      statements={REFINE_STATEMENTS}
+                                      onComplete={() => setRefineBarFieldId(null)}
+                                    />
+                                  </div>
+                                )}
                                 {refineErrors[field.id] && (
                                   <p className="text-xs text-red-600 mb-2">{refineErrors[field.id]}</p>
                                 )}
