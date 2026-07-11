@@ -1440,9 +1440,13 @@ export default function ProjectPage() {
   const [chatErrors, setChatErrors] = useState<Record<number, string>>({})
 
   // Workbench P2 Chunk 1 (S138) — read-only preview of the new section-workbench
-  // surface, gated by ?workbench=1. Read via window.location.search in an effect,
-  // never useSearchParams (that needs a Suspense boundary or the Vercel build fails).
-  const [workbenchPreview, setWorkbenchPreview] = useState(false)
+  // surface. S151: the AOY Workbench is now ON by default for every user (Ben's
+  // call, 11 Jul 2026 — the P0-P4 arc is complete and Nicky is the only active
+  // AOY editor, so we want her real feedback on the default experience).
+  // `?workbench=0` still forces the legacy canvas as a fallback. Read via
+  // window.location.search in an effect, never useSearchParams (that needs a
+  // Suspense boundary or the Vercel build fails).
+  const [workbenchPreview, setWorkbenchPreview] = useState(true)
   // P3 (S146) — directional section re-scores held for the session, keyed by
   // directionId -> section_key. Merged over any section_rescores loaded from the
   // evaluation row (local wins, being the freshest). recheckingSection / rescoreError
@@ -1452,7 +1456,8 @@ export default function ProjectPage() {
   const [rescoreError, setRescoreError] = useState<Record<string, string>>({})
   useEffect(() => {
     if (typeof window === 'undefined') return
-    setWorkbenchPreview(new URLSearchParams(window.location.search).get('workbench') === '1')
+    // On by default; only an explicit ?workbench=0 opts back to the legacy canvas.
+    setWorkbenchPreview(new URLSearchParams(window.location.search).get('workbench') !== '0')
   }, [])
 
   // Workbench P2 Chunk 3 (S138 continued) — data-needed checklist write surface.
