@@ -8170,7 +8170,7 @@ export default function ProjectPage() {
                             <div className="border-b border-gray-100 bg-white">
                               <div className="px-5 pt-3 pb-1">
                                 <p className="text-xs font-medium uppercase tracking-wide text-green-700">
-                                  Section workbench — preview
+                                  Section workbench
                                 </p>
                               </div>
                               <EvalSummaryBar
