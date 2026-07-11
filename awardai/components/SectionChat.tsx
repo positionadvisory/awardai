@@ -8,7 +8,8 @@
 // state is the input buffer and the collapse/expand toggles for old apply
 // turns.
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import GeneratingBar from './GeneratingBar'
 
 export type ChatTurn = {
   role: 'user' | 'assistant'
@@ -16,6 +17,23 @@ export type ChatTurn = {
   mode?: 'discuss' | 'apply'
   version_created?: string
 }
+
+// S149: mode-specific loading statements for the in-flight progress bar. Short,
+// understated, no em-dashes (house rule). Discuss is the faster call (1500
+// tokens); Apply rewrites the whole section (up to 4096) so it runs longer.
+const DISCUSS_STATEMENTS = [
+  'Reading the section.',
+  'Weighing it against the rubric.',
+  'Thinking it through.',
+  'Pulling the thread together.',
+]
+const APPLY_STATEMENTS = [
+  'Reading the current text.',
+  'Weighing the rubric and the tracked gaps.',
+  'Drafting the revision.',
+  'Tightening the language.',
+  'Checking every figure stays put.',
+]
 
 type Props = {
   thread: ChatTurn[]
@@ -39,9 +57,21 @@ export default function SectionChat({ thread, onSend, busy, busyMode, error, pla
   // window in a way a state-only `disabled` check cannot.
   const inFlightRef = useRef(false)
 
+  // S149: show the shared GeneratingBar (the same gold progress bar the jury
+  // eval, coach, and script actions use) while a Discuss/Apply call is in
+  // flight, so a multi-second edit-entry round trip never reads as a frozen
+  // panel. Kept mounted through the completion animation via barVisible: busy
+  // flips false the moment the call resolves, the bar fills to 100% then
+  // onComplete hides it. barMode is captured at fire time so the duration and
+  // statements stay stable even after the parent clears busyMode.
+  const [barVisible, setBarVisible] = useState(false)
+  const [barMode, setBarMode] = useState<'discuss' | 'apply'>('apply')
+  useEffect(() => { if (busy) setBarVisible(true) }, [busy])
+
   const fire = async (mode: 'discuss' | 'apply') => {
     const trimmed = message.trim()
     if (!trimmed || inFlightRef.current || busy) return
+    setBarMode(mode)
     inFlightRef.current = true
     try {
       await onSend(trimmed, mode)
@@ -105,6 +135,18 @@ export default function SectionChat({ thread, onSend, busy, busyMode, error, pla
       )}
 
       {error && <p className="mb-2 text-xs text-red-600">{error}</p>}
+
+      {barVisible && (
+        <div className="mb-2">
+          <GeneratingBar
+            isGenerating={busy}
+            estimatedDuration={barMode === 'apply' ? 22_000 : 9_000}
+            statementInterval={3_500}
+            statements={barMode === 'apply' ? APPLY_STATEMENTS : DISCUSS_STATEMENTS}
+            onComplete={() => setBarVisible(false)}
+          />
+        </div>
+      )}
 
       <textarea
         value={message}
