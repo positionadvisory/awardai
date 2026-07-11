@@ -60,6 +60,7 @@ import { isAoyShow, AOY_SHOW_NAME, aoyResolveStored, aoyTrackById, buildAoyBestC
 import SectionWorkbench, { type SectionRevision } from '@/components/SectionWorkbench'
 import EvalSummaryBar from '@/components/EvalSummaryBar'
 import { mapAoyEvaluation, type StoredEvalSection } from '@/lib/aoy-eval-map'
+import { isRescoreStale, computeIndicativeTotal, type SectionRescore } from '@/lib/section-rescore'
 import { parseDataRequests, mergeScannedItems, normalizeRequestText, type DataNeededItem } from '@/lib/data-needed'
 // Show Customization Architecture Chunk 5 (S98): config-driven entry_form resolver.
 // Only the canonical PURE helpers + type are imported (client can import lib; edge
@@ -1072,6 +1073,9 @@ type Evaluation = {
   eval_chat_history?: ChatMessage[]
   // v3: structured output — null/undefined means legacy display
   output?: EvaluationOutput | null
+  // P3 (S146): directional per-section re-scores, keyed by section_key. Separate from
+  // scores/output; NEVER the official score. Empty {} for rows predating the feature.
+  section_rescores?: Record<string, SectionRescore> | null
 }
 
 type Tab = 'brief' | 'materials' | 'entries' | 'script' | 'directions' | 'facts' | 'endorsements' | 'presskit'
@@ -1413,6 +1417,13 @@ export default function ProjectPage() {
   // surface, gated by ?workbench=1. Read via window.location.search in an effect,
   // never useSearchParams (that needs a Suspense boundary or the Vercel build fails).
   const [workbenchPreview, setWorkbenchPreview] = useState(false)
+  // P3 (S146) — directional section re-scores held for the session, keyed by
+  // directionId -> section_key. Merged over any section_rescores loaded from the
+  // evaluation row (local wins, being the freshest). recheckingSection / rescoreError
+  // are keyed by `${dirId}:${section_key}`.
+  const [sectionRescores, setSectionRescores] = useState<Record<number, Record<string, SectionRescore>>>({})
+  const [recheckingSection, setRecheckingSection] = useState<Record<string, boolean>>({})
+  const [rescoreError, setRescoreError] = useState<Record<string, string>>({})
   useEffect(() => {
     if (typeof window === 'undefined') return
     setWorkbenchPreview(new URLSearchParams(window.location.search).get('workbench') === '1')
@@ -1728,7 +1739,7 @@ export default function ProjectPage() {
       // data_needed select + client-side merge below are retired.
       supabase.rpc('get_project_entry_drafts', { p_project_id: projectId }),
       supabase.from('evaluations')
-        .select('id, entry_draft_id, overall_score, scores, strengths, gaps, recommendations, output, model_used, evaluation_mode, changes_analysis, created_at')
+        .select('id, entry_draft_id, overall_score, scores, strengths, gaps, recommendations, output, model_used, evaluation_mode, changes_analysis, created_at, section_rescores')
         .eq('project_id', projectId).order('created_at', { ascending: false }),
       supabase.rpc('get_project_materials_meta', { p_project_id: projectId }),
     ]).then(([{ data: proj }, { data: dirs }, { data: drafts }, { data: evals }, { data: matsMeta, error: matsErr }]) => {
@@ -4630,6 +4641,53 @@ export default function ProjectPage() {
     const rev = (field.revisions ?? [])[revisionIndex]
     if (!rev) return false
     return appendRevision(field, rev.text, 'restore')
+  }
+
+  // Workbench P3 (S146) — section-level DIRECTIONAL re-score. Calls the new
+  // evaluate-aoy-section edge fn (Opus, byte-copies the frozen scorer's prompt) to
+  // re-check ONE section's current text. The result NEVER overwrites the official
+  // evaluation; it is held in sectionRescores (and persisted server-side in
+  // evaluations.section_rescores) and always shown as directional. Requires an
+  // existing judge evaluation (evaluationId); the caller only wires this when one
+  // exists. Same fetch shape as evaluateEntry.
+  const recheckSection = async (dirId: number, evaluationId: number | undefined, field: EntryDraft) => {
+    if (!project || !evaluationId) return
+    const stateKey = `${dirId}:${field.field_key}`
+    setRecheckingSection(prev => ({ ...prev, [stateKey]: true }))
+    setRescoreError(prev => { const next = { ...prev }; delete next[stateKey]; return next })
+    try {
+      const accessToken = await getToken()
+      if (!accessToken) return
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/evaluate-aoy-section`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}`, 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
+          body: JSON.stringify({ project_id: project.id, direction_id: dirId, evaluation_id: evaluationId, section_key: field.field_key }),
+        }
+      )
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        setRescoreError(prev => ({ ...prev, [stateKey]: formatError(appErrorFromResponse(data, res.status, 'AOYSECTION')) }))
+        return
+      }
+      if (typeof data.score === 'number') {
+        const rescore: SectionRescore = {
+          score: data.score,
+          rationale: typeof data.rationale === 'string' ? data.rationale : '',
+          at: typeof data.at === 'string' ? data.at : new Date().toISOString(),
+          text_hash: typeof data.text_hash === 'string' ? data.text_hash : '',
+        }
+        setSectionRescores(prev => ({
+          ...prev,
+          [dirId]: { ...(prev[dirId] ?? {}), [field.field_key]: rescore },
+        }))
+      }
+    } catch {
+      setRescoreError(prev => ({ ...prev, [stateKey]: 'Network error. Please try again.' }))
+    } finally {
+      setRecheckingSection(prev => ({ ...prev, [stateKey]: false }))
+    }
   }
 
   // Workbench P2 Chunk 3 (S138 continued) — data-needed writes.
@@ -7916,6 +7974,33 @@ export default function ProjectPage() {
                             if (typeof document === 'undefined') return
                             document.getElementById(`wb-${dirId}-${key}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
                           }
+                          // P3 (S146): directional section re-scores. Local (this session)
+                          // wins over any persisted on the evaluation row. Keyed by
+                          // section_key (field_key), same key the cards + eval map use.
+                          const localRescores = sectionRescores[dirId] ?? {}
+                          const storedRescores: Record<string, SectionRescore> =
+                            (evaluation?.section_rescores as Record<string, SectionRescore>) ?? {}
+                          const rescoreFor = (key: string): SectionRescore | null =>
+                            localRescores[key] ?? storedRescores[key] ?? null
+                          const judgeEvalId = evalBoth.judge?.id
+                          const deltaByKey: Record<string, number> = {}
+                          let rescoredCount = 0
+                          for (const f of wbFields) {
+                            const r = rescoreFor(f.field_key)
+                            if (!r) continue
+                            rescoredCount++
+                            const official = evalMap.bySection[f.field_key]?.score
+                            if (typeof official === 'number') {
+                              deltaByKey[f.field_key] = Math.round((r.score - official) * 10) / 10
+                            }
+                          }
+                          const indicativeTotal = rescoredCount > 0
+                            ? computeIndicativeTotal(wbFields.map(f => ({
+                                weight: f.section_weight,
+                                official: evalMap.bySection[f.field_key]?.score ?? null,
+                                rescore: rescoreFor(f.field_key)?.score ?? null,
+                              })))
+                            : null
                           return (
                             <div className="border-b border-gray-100 bg-white">
                               <div className="px-5 pt-3 pb-1">
@@ -7933,16 +8018,23 @@ export default function ProjectPage() {
                                 onReRunEval={() => evaluateEntry(dirId, 'judge', evalBoth.judge?.id)}
                                 reRunning={evaluatingMode[dirId] === 'judge'}
                                 reRunLabel={hasJudge ? 'Re-run Jury Eval' : 'Jury Evaluation'}
+                                indicativeTotal={indicativeTotal}
+                                rescoredCount={rescoredCount}
+                                deltaByKey={deltaByKey}
                               />
                               <div className="divide-y divide-gray-100">
-                                {wbFields.map(f => (
+                                {wbFields.map(f => {
+                                  const r = rescoreFor(f.field_key)
+                                  const currentText = resolveFieldContent(f)
+                                  const secError = rescoreError[`${dirId}:${f.field_key}`]
+                                  return (
+                                  <div key={f.id}>
                                   <SectionWorkbench
-                                    key={f.id}
                                     anchorId={`wb-${dirId}-${f.field_key}`}
                                     sectionKey={f.field_key}
                                     label={f.field_label}
                                     weight={f.section_weight ?? null}
-                                    text={resolveFieldContent(f)}
+                                    text={currentText}
                                     wordLimit={f.word_limit}
                                     score={evalMap.bySection[f.field_key]?.score ?? null}
                                     rationale={evalMap.bySection[f.field_key]?.rationale ?? null}
@@ -7956,8 +8048,17 @@ export default function ProjectPage() {
                                     onTrackGap={(gapText) => trackGapAsDataNeeded(f, gapText)}
                                     onSaveText={(text) => appendRevision(f, text, 'manual')}
                                     onRestore={(idx) => { void restoreRevision(f, idx) }}
+                                    onRecheck={judgeEvalId ? () => recheckSection(dirId, judgeEvalId, f) : undefined}
+                                    rechecking={!!recheckingSection[`${dirId}:${f.field_key}`]}
+                                    rescore={r ? { score: r.score, rationale: r.rationale } : null}
+                                    rescoreStale={r ? isRescoreStale(r, currentText) : false}
                                   />
-                                ))}
+                                  {secError && (
+                                    <p className="px-5 pb-3 -mt-2 text-xs text-red-600">{secError}</p>
+                                  )}
+                                  </div>
+                                  )
+                                })}
                               </div>
                             </div>
                           )
