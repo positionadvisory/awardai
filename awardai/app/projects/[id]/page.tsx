@@ -4781,8 +4781,24 @@ export default function ProjectPage() {
   // by the autoScannedFieldIds ref (not state) so re-renders triggered by
   // scanning one section, or by an unrelated toggle write updating `entries`,
   // never re-trigger a scan for a field already covered this session.
+  //
+  // S148 fix: this used to gate on the raw project?.entry_type column, which
+  // under-detects AOY the same way wbActive did (entry_type is only ever set
+  // by the separate "Verify Facts" step). This effect is declared BEFORE the
+  // component's early-return guards and before projectIsAoy is const'd
+  // further down the render (~L5188), so it cannot reference projectIsAoy
+  // directly — a render that returns early before that line would leave this
+  // closure's projectIsAoy binding in the temporal dead zone, throwing if
+  // React ever invoked it. Recomputing the same OR-of-three-signals check
+  // locally from hook state (project, directions) avoids that hazard, same
+  // as the AOY-landing-redirect effect above (~L4319).
   useEffect(() => {
-    if (!workbenchPreview || project?.entry_type !== 'aoy') return
+    if (!workbenchPreview || !project) return
+    const isAoyForScan =
+      (project.target_shows ?? []).some(isAoyShow) ||
+      project.entry_type === 'aoy' ||
+      directions.some(d => isAoyShow(d.best_show))
+    if (!isAoyForScan) return
     const candidates = entries.filter(e =>
       e.field_key !== 'entry' &&
       (e.data_needed?.length ?? 0) === 0 &&
@@ -4795,7 +4811,7 @@ export default function ProjectPage() {
     // entries is intentionally not deep-compared: the ref guard above makes
     // extra effect firings a cheap no-op rather than a correctness issue.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workbenchPreview, project?.entry_type, entries])
+  }, [workbenchPreview, project, directions, entries])
 
   const refineField = async (field: EntryDraft, dirId: number) => {
     const msg = refineMessage[field.id]?.trim()
@@ -7959,7 +7975,11 @@ export default function ProjectPage() {
                         {/* AOY page-budget meter (Session 74) — AOY entries only.
                             Words used across the exec summary + weighted sections
                             (the endorsement gate is excluded) vs the 10-page cap. */}
-                        {project?.entry_type === 'aoy' && fields.some(f => f.section_weight != null) && (() => {
+                        {/* S148: gate keys off projectIsAoy, not the raw entry_type
+                            column — entry_type is only set by the separate "Verify
+                            Facts" step, so a fresh AOY project without that step run
+                            was falling through to the campaign UI (Ben's P4 test). */}
+                        {projectIsAoy && fields.some(f => f.section_weight != null) && (() => {
                           const AOY_WORDS_PER_PAGE = 500
                           const AOY_MAX_PAGES = 10
                           const budgetFields = fields.filter(f => f.field_key !== 'endorsement')
@@ -8003,7 +8023,8 @@ export default function ProjectPage() {
                             The legacy A/B/C chips + inline-edit trigger are suppressed
                             below (wbActive) so there is exactly one write surface per
                             section text, not two with different revision fidelity. */}
-                        {workbenchPreview && project?.entry_type === 'aoy' && (() => {
+                        {/* S148: projectIsAoy, not raw entry_type — see note above. */}
+                        {workbenchPreview && projectIsAoy && (() => {
                           const wbFields = fields.filter(f => f.field_key !== 'entry')
                           if (wbFields.length === 0) return null
                           // AOY stores per-section jury scores keyed by field_key in
@@ -8187,7 +8208,15 @@ export default function ProjectPage() {
                             // trigger in that case so there is one write surface, not
                             // two with different revision fidelity (the legacy inline
                             // edit writes custom_text only, no revisions entry).
-                            const wbActive = workbenchPreview && project?.entry_type === 'aoy'
+                            // S148: the primary Workbench gate. Was keyed off the raw
+                            // entry_type column, which only flips to 'aoy' after the
+                            // separate "Verify Facts" step runs — so every fresh AOY
+                            // project (nothing had run Verify Facts) rendered the
+                            // legacy campaign UI instead of Workbench. projectIsAoy is
+                            // the richer, already-pervasive signal (target_shows +
+                            // entry_type + direction.best_show) used everywhere else
+                            // in this render; this was the one gate that had drifted.
+                            const wbActive = workbenchPreview && projectIsAoy
 
                             if (isUploadedDoc) {
                               return (
