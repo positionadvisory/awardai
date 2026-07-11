@@ -59,6 +59,8 @@ import { isAoyShow, AOY_SHOW_NAME, aoyResolveStored, aoyTrackById, buildAoyBestC
 // read-only behind ?workbench=1 this phase; the write-path cutover is P2 Chunk 4.
 import SectionWorkbench, { type SectionRevision } from '@/components/SectionWorkbench'
 import EvalSummaryBar from '@/components/EvalSummaryBar'
+// Workbench P4 (S147): the chatSlot mount point — Discuss/Apply on one thread.
+import SectionChat, { type ChatTurn } from '@/components/SectionChat'
 import { mapAoyEvaluation, type StoredEvalSection } from '@/lib/aoy-eval-map'
 import { isRescoreStale, computeIndicativeTotal, type SectionRescore } from '@/lib/section-rescore'
 import { parseDataRequests, mergeScannedItems, normalizeRequestText, type DataNeededItem } from '@/lib/data-needed'
@@ -901,6 +903,10 @@ type ChatMessage = {
   role: 'user' | 'assistant'
   content: string
   version_created?: string
+  // Workbench P4 (S147) — tag on ASSISTANT turns only. Mirrors edit-entry.ts's
+  // ChatMessage type; keep both in sync (same parity-copy class as
+  // SectionRevision above). Untagged = pre-P4 history = always an apply turn.
+  mode?: 'discuss' | 'apply'
 }
 
 // AOY category-fit recommender result (recommend-aoy-category, S76). Weights are
@@ -1412,6 +1418,11 @@ export default function ProjectPage() {
   const [refineErrors, setRefineErrors] = useState<Record<number, string>>({})
   // S137 P1 — expand/collapse for assistant turns in the per-section refine thread
   const [expandedChatTurns, setExpandedChatTurns] = useState<Record<string, boolean>>({})
+  // Workbench P4 (S147) — SectionWorkbench chatSlot state. Discuss and Apply
+  // share one busy flag per field (brief: "while either is in flight, both
+  // buttons disable"); busyMode is which one, purely for button copy.
+  const [chatBusyField, setChatBusyField] = useState<{ id: number; mode: 'discuss' | 'apply' } | null>(null)
+  const [chatErrors, setChatErrors] = useState<Record<number, string>>({})
 
   // Workbench P2 Chunk 1 (S138) — read-only preview of the new section-workbench
   // surface, gated by ?workbench=1. Read via window.location.search in an effect,
@@ -4828,6 +4839,61 @@ export default function ProjectPage() {
     }
   }
 
+  // Workbench P4 (S147) — SectionWorkbench chatSlot: Discuss (writes nothing,
+  // conversational) and Apply (the existing refine, now routed through the
+  // same edit-entry call with mode:'apply'). One thread per section: both
+  // modes read/write field.chat_history, never version_a/b/c/custom_text for
+  // discuss. The busy/error state here is separate from refineField's (that
+  // function still serves the legacy non-workbench per-field chat below,
+  // gated !wbActive so the two write surfaces never render for the same
+  // field at once).
+  const sendSectionChat = async (
+    field: EntryDraft,
+    dirId: number,
+    message: string,
+    mode: 'discuss' | 'apply'
+  ) => {
+    if (!project) return
+    setChatBusyField({ id: field.id, mode })
+    setChatErrors(prev => { const next = { ...prev }; delete next[field.id]; return next })
+    try {
+      const accessToken = await getToken()
+      if (!accessToken) return
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/edit-entry`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          },
+          body: JSON.stringify({
+            project_id: project.id,
+            direction_id: dirId,
+            entry_draft_id: field.id,
+            message,
+            mode,
+          }),
+        }
+      )
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        setChatErrors(prev => ({ ...prev, [field.id]: formatError(appErrorFromResponse(data, res.status, 'EDIT')) }))
+        return
+      }
+      if (mode === 'apply' && data.updated_draft) {
+        setEntries(prev => prev.map(e => e.id === field.id ? data.updated_draft : e))
+      } else if (mode === 'discuss' && Array.isArray(data.chat_history)) {
+        setEntries(prev => prev.map(e => e.id === field.id ? { ...e, chat_history: data.chat_history } : e))
+      }
+    } catch (err) {
+      setChatErrors(prev => ({ ...prev, [field.id]: err instanceof Error ? err.message : 'Network error.' }))
+    } finally {
+      setChatBusyField(null)
+    }
+  }
+
   const handleScriptFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -8052,6 +8118,15 @@ export default function ProjectPage() {
                                     rechecking={!!recheckingSection[`${dirId}:${f.field_key}`]}
                                     rescore={r ? { score: r.score, rationale: r.rationale } : null}
                                     rescoreStale={r ? isRescoreStale(r, currentText) : false}
+                                    chatSlot={
+                                      <SectionChat
+                                        thread={(f.chat_history ?? []) as ChatTurn[]}
+                                        onSend={(msg, mode) => sendSectionChat(f, dirId, msg, mode)}
+                                        busy={chatBusyField?.id === f.id}
+                                        busyMode={chatBusyField?.id === f.id ? chatBusyField.mode : null}
+                                        error={chatErrors[f.id]}
+                                      />
+                                    }
                                   />
                                   {secError && (
                                     <p className="px-5 pb-3 -mt-2 text-xs text-red-600">{secError}</p>
@@ -8263,6 +8338,12 @@ export default function ProjectPage() {
                                   </div>
                                 )}
 
+                                {/* Workbench P4 (S147): this whole legacy chat surface (thread +
+                                    refine textarea) is superseded by the SectionChat mounted in the
+                                    SectionWorkbench card's chatSlot above, for wbActive sections.
+                                    Suppressing it here keeps ONE write surface per section, same
+                                    reasoning as the chips/inline-edit suppression above (S143). */}
+                                {!wbActive && (<>
                                 {chatThread.length > 0 && (
                                   <div className={`mb-3 space-y-2 ${chatThread.length > 8 ? 'max-h-64 overflow-y-auto pr-1' : ''}`}>
                                     {chatThread.map((msg, i) => {
@@ -8324,6 +8405,7 @@ export default function ProjectPage() {
                                     ) : 'Refine →'}
                                   </button>
                                 </div>
+                                </>)}
                               </div>
                             )
                           })}
