@@ -80,7 +80,7 @@ import { parseDataRequests, mergeScannedItems, normalizeRequestText, type DataNe
 // functions carry byte-identical copies). Resolution = longest show-level prefix of
 // best_show (mirrors the config edge fns) then the category-exact row.
 import { resolveEntryFormCategoryKey, pickEntryForm, isV2Spec, type EntryFormSpec, type EntryFieldValues } from '@/lib/entry-form'
-import ConfigEntryCanvas from '@/components/ConfigEntryCanvas'
+import ConfigEntryCanvas, { type ConfigSectionRevision } from '@/components/ConfigEntryCanvas'
 import AoyEntryPicker from '@/components/AoyEntryPicker'
 import AgencyFactsValidator from '@/components/AgencyFactsValidator'
 import PillarFactsValidator from '@/components/PillarFactsValidator'
@@ -1038,7 +1038,7 @@ type EntryDraft = {
   custom_text: string | null
   field_values?: EntryFieldValues | null   // Entry Form v2 — structured sub-field values (v2.1)
   data_needed?: DataNeededItem[] | null    // Workbench P2 Chunk 3 — per-section data-needed checklist; Chunk 4 folded this into the get_project_entry_drafts RPC directly (the Chunk 3 supplemental select is retired)
-  revisions?: SectionRevision[] | null      // Workbench P2 Chunk 4 — linear version history, AOY only: { ts, source, text, instruction? }. Returned by get_project_entry_drafts.
+  revisions?: Array<SectionRevision | ConfigSectionRevision> | null      // Workbench P2 Chunk 4 — linear version history. AOY rows hold SectionRevision { ts, source, text, instruction? }; config/typed rows (S151) hold ConfigSectionRevision (adds field_values). A row is only ever one kind. Returned by get_project_entry_drafts.
   chat_history: ChatMessage[] | null
   award_show: string | null
   category: string | null
@@ -4617,15 +4617,55 @@ export default function ProjectPage() {
     composedText: string
   ): Promise<string | void> => {
     const custom = composedText.trim() || null
+    // S151: snapshot this save into linear history. Typed-canvas revision keeps
+    // field_values so Restore brings the inputs back, not just the composed text.
+    const existingRow = entries.find(e => e.id === rowId)
+    const prevRevisions = (existingRow?.revisions ?? []) as ConfigSectionRevision[]
+    const nextRevisions: ConfigSectionRevision[] = [
+      ...prevRevisions,
+      { ts: new Date().toISOString(), source: 'manual', text: composedText.trim(), field_values: fieldValues },
+    ]
     const { data, error } = await supabase
       .from('entry_drafts')
-      .update({ field_values: fieldValues, custom_text: custom, updated_at: new Date().toISOString() })
+      .update({ field_values: fieldValues, custom_text: custom, revisions: nextRevisions, updated_at: new Date().toISOString() })
       .eq('id', rowId)
       .select('id')
     if (error || !data || data.length === 0) {
       return 'Could not save this section. Please try again.'
     }
-    setEntries(prev => prev.map(e => e.id === rowId ? { ...e, field_values: fieldValues, custom_text: custom } : e))
+    setEntries(prev => prev.map(e => e.id === rowId ? { ...e, field_values: fieldValues, custom_text: custom, revisions: nextRevisions } : e))
+  }
+
+  // S151: restore a typed-canvas revision. Writes its field_values + composed
+  // text back and appends a 'restore' entry (never deletes history). Returns the
+  // restored values so ConfigEntryCanvas re-seeds its own boxes for that section
+  // (its row-signature re-seed would not fire, field_values presence unchanged).
+  const restoreConfigRevision = async (
+    rowId: number,
+    revisionIndex: number
+  ): Promise<{ fieldValues: EntryFieldValues; composedText: string } | null> => {
+    const row = entries.find(e => e.id === rowId)
+    const revs = (row?.revisions ?? []) as ConfigSectionRevision[]
+    const rev = revs[revisionIndex]
+    if (!rev) return null
+    const restoredValues: EntryFieldValues = rev.field_values ?? {}
+    const restoredText: string = rev.text ?? ''
+    const custom = restoredText.trim() || null
+    const nextRevisions: ConfigSectionRevision[] = [
+      ...revs,
+      { ts: new Date().toISOString(), source: 'restore', text: restoredText, field_values: restoredValues },
+    ]
+    const { data, error } = await supabase
+      .from('entry_drafts')
+      .update({ field_values: restoredValues, custom_text: custom, revisions: nextRevisions, updated_at: new Date().toISOString() })
+      .eq('id', rowId)
+      .select('id')
+    if (error || !data || data.length === 0) {
+      console.error('config revision restore failed or matched zero rows', error)
+      return null
+    }
+    setEntries(prev => prev.map(e => e.id === rowId ? { ...e, field_values: restoredValues, custom_text: custom, revisions: nextRevisions } : e))
+    return { fieldValues: restoredValues, composedText: restoredText }
   }
 
   // Workbench P2 Chunk 4 (S143) — linear-history write path, AOY-only.
@@ -8202,11 +8242,42 @@ export default function ProjectPage() {
                             const ef = entryForms[dirId]
                             const cfgMode = configModeFor(dirId, d?.best_show)
                             if (ef && cfgMode && isV2Spec(ef)) {
+                              // S151 Workbench-for-SMARTIES: remap the existing config
+                              // jury output (evalBoth.judge.output.sections) into a
+                              // per-section score/rationale map, keyed by BOTH the
+                              // section key and field_key (qualitative config keys by
+                              // field_key, weighted by slug key). Read-only, no scorer
+                              // touch. Absent when no judge eval exists yet -> the canvas
+                              // simply renders no Jury read.
+                              const cfgJuryOut = (evalBoth.judge?.output ?? null) as
+                                | { sections?: Array<{ key?: string; field_key?: string; score?: number; rationale?: string }> }
+                                | null
+                              const juryBySection: Record<string, { score: number | null; rationale: string | null }> = {}
+                              if (Array.isArray(cfgJuryOut?.sections)) {
+                                for (const s of cfgJuryOut!.sections!) {
+                                  const entry = {
+                                    score: typeof s.score === 'number' ? s.score : null,
+                                    rationale: typeof s.rationale === 'string' ? s.rationale : null,
+                                  }
+                                  if (s.field_key) juryBySection[s.field_key] = entry
+                                  if (s.key) juryBySection[s.key] = entry
+                                }
+                              }
                               return (
                                 <ConfigEntryCanvas
                                   spec={ef}
                                   scoringMode={cfgMode}
                                   onSaveSection={saveSectionFields}
+                                  dirId={dirId}
+                                  juryBySection={juryBySection}
+                                  chatBusyRowId={chatBusyField?.id ?? null}
+                                  chatErrors={chatErrors}
+                                  onRestoreRevision={restoreConfigRevision}
+                                  onSendChat={(rowId, message) => {
+                                    const fld = fields.find(f => f.id === rowId)
+                                    if (!fld) return Promise.resolve()
+                                    return sendSectionChat(fld, dirId, message, 'discuss')
+                                  }}
                                   rows={fields.filter(f => f.field_key !== 'entry').map(f => ({
                                     id: f.id,
                                     field_key: f.field_key,
@@ -8215,6 +8286,8 @@ export default function ProjectPage() {
                                     version_a: f.version_a,
                                     custom_text: f.custom_text,
                                     field_values: f.field_values ?? null,
+                                    chat_history: (f.chat_history ?? []) as ChatTurn[],
+                                    revisions: (f.revisions ?? null) as ConfigSectionRevision[] | null,
                                   }))}
                                 />
                               )

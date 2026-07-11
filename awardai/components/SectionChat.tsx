@@ -42,9 +42,15 @@ type Props = {
   busyMode?: 'discuss' | 'apply' | null
   error?: string | null
   placeholder?: string
+  // Wave 1 SMARTIES (S151): the config/typed canvas gets Discuss only. Apply
+  // (refine) is deferred there because a refine written to the composed section
+  // text would desync from the typed field_values that are the source of truth.
+  // When true, the Apply button is hidden and every send is a discuss turn.
+  // Absent/false keeps the full two-button AOY behaviour byte-unchanged.
+  discussOnly?: boolean
 }
 
-export default function SectionChat({ thread, onSend, busy, busyMode, error, placeholder }: Props) {
+export default function SectionChat({ thread, onSend, busy, busyMode, error, placeholder, discussOnly }: Props) {
   const [message, setMessage] = useState('')
   const [expandedTurns, setExpandedTurns] = useState<Record<number, boolean>>({})
   // Re-entrancy guard (S110 audit item, called out explicitly in the P4
@@ -175,14 +181,16 @@ export default function SectionChat({ thread, onSend, busy, busyMode, error, pla
         >
           {busy && busyMode === 'discuss' ? 'Discussing…' : 'Discuss'}
         </button>
-        <button
-          type="button"
-          onClick={() => void fire('apply')}
-          disabled={busy || !message.trim()}
-          className="rounded bg-green-800 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {busy && busyMode === 'apply' ? 'Applying…' : 'Apply changes'}
-        </button>
+        {!discussOnly && (
+          <button
+            type="button"
+            onClick={() => void fire('apply')}
+            disabled={busy || !message.trim()}
+            className="rounded bg-green-800 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {busy && busyMode === 'apply' ? 'Applying…' : 'Apply changes'}
+          </button>
+        )}
         <span className="text-xs text-gray-400">⌘/Ctrl+Enter = Discuss</span>
       </div>
     </div>
