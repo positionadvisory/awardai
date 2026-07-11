@@ -30,6 +30,11 @@ type Props = {
   onReRunEval?: () => void
   reRunLabel?: string
   reRunning?: boolean
+  // P3 (S146) directional re-score surface. All DIRECTIONAL: none of these touch the
+  // official overallScore/section scores above.
+  indicativeTotal?: number | null            // weighted total with fresh rescores merged in
+  rescoredCount?: number                      // # sections carrying a directional rescore
+  deltaByKey?: Record<string, number>         // per-section (rescore - official), signed
 }
 
 // green 7+, amber 5-6, red <5 (brief). Tailwind classes shared with the rest of
@@ -50,6 +55,7 @@ function firstSentence(text?: string | null): string {
 export default function EvalSummaryBar({
   overallScore, verdict, sections, strengths, unattributedGaps,
   onJumpToSection, onReRunEval, reRunLabel = 'Re-run Jury Eval', reRunning,
+  indicativeTotal, rescoredCount, deltaByKey,
 }: Props) {
   const [expanded, setExpanded] = useState(false)
   const hasDetail = !!verdict || (strengths?.length ?? 0) > 0 || (unattributedGaps?.length ?? 0) > 0
@@ -64,6 +70,14 @@ export default function EvalSummaryBar({
           </span>
           <span className="text-xs text-gray-400">/ 10</span>
         </div>
+
+        {indicativeTotal != null && (
+          <div className="flex items-baseline gap-1.5" title="Weighted total with your directional re-checks merged in. Re-run the full jury eval for an official score.">
+            <span className="text-xs font-medium uppercase tracking-wide text-amber-600">Indicative</span>
+            <span className="text-lg font-semibold tabular-nums text-amber-700">{indicativeTotal.toFixed(1)}</span>
+            <span className="text-xs text-gray-400">directional</span>
+          </div>
+        )}
 
         <p className="min-w-0 flex-1 truncate text-sm text-gray-600" title={verdict ?? undefined}>
           {firstSentence(verdict)}
@@ -104,9 +118,20 @@ export default function EvalSummaryBar({
             >
               <span className="max-w-[10rem] truncate font-medium">{s.label}</span>
               <span className="tabular-nums">{s.score != null ? s.score : '—'}</span>
+              {deltaByKey && typeof deltaByKey[s.key] === 'number' && deltaByKey[s.key] !== 0 && (
+                <span className="tabular-nums opacity-70" title="Directional change from your re-check">
+                  {deltaByKey[s.key] > 0 ? `▲${deltaByKey[s.key]}` : `▼${Math.abs(deltaByKey[s.key])}`}
+                </span>
+              )}
             </button>
           ))}
         </div>
+      )}
+
+      {(rescoredCount ?? 0) >= 3 && (
+        <p className="mt-2 w-full text-xs text-amber-600">
+          Several sections have changed. Run the full jury eval for an official score.
+        </p>
       )}
 
       {expanded && hasDetail && (

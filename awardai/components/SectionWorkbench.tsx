@@ -51,6 +51,14 @@ type Props = {
   chatSlot?: React.ReactNode
   // DOM id so a summary-bar chip can scroll this card into view.
   anchorId?: string
+  // P3 (S146) — section-level DIRECTIONAL re-score. `rescore` is the fresh directional
+  // result; it NEVER replaces `score` (the official jury score of record). Absent =>
+  // the re-check affordance is hidden (the parent only wires onRecheck when an
+  // evaluation exists). rescoreStale means the section text changed since the re-check.
+  onRecheck?: (sectionKey: string) => void
+  rechecking?: boolean
+  rescore?: { score: number; rationale: string } | null
+  rescoreStale?: boolean
 }
 
 function countWords(s: string): number {
@@ -79,6 +87,7 @@ export default function SectionWorkbench({
   sectionKey, label, weight, text, wordLimit, score, rationale, gaps,
   dataItems, revisions, onSaveText, onRestore,
   onToggleData, onAddData, onScanData, scanningData, onTrackGap, chatSlot, anchorId,
+  onRecheck, rechecking, rescore, rescoreStale,
 }: Props) {
   const [editing, setEditing] = useState(false)
   const [buffer, setBuffer] = useState('')
@@ -106,6 +115,14 @@ export default function SectionWorkbench({
               {score}/10
             </span>
           )}
+          {rescore && (
+            <span
+              title={rescoreStale ? 'Section edited since this re-check' : 'Directional re-check, not the official score'}
+              className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${scoreClasses(rescore.score)} ${rescoreStale ? 'opacity-50' : ''}`}
+            >
+              → {rescore.score} directional
+            </span>
+          )}
         </div>
         <div className="flex flex-shrink-0 items-center gap-3">
           <span className={`text-xs tabular-nums ${overLimit ? 'text-red-600' : 'text-gray-400'}`}>
@@ -113,6 +130,17 @@ export default function SectionWorkbench({
           </span>
           {canEdit && !editing && (
             <button type="button" onClick={startEdit} className="text-xs text-green-700 hover:text-green-600 transition-colors">✎ Edit</button>
+          )}
+          {onRecheck && !editing && (
+            <button
+              type="button"
+              onClick={() => onRecheck(sectionKey)}
+              disabled={rechecking}
+              title="Re-score just this section (directional, does not change the official jury score)"
+              className="text-xs text-green-700 hover:text-green-600 disabled:opacity-40 transition-colors"
+            >
+              {rechecking ? 'Re-checking…' : '↻ Re-check'}
+            </button>
           )}
         </div>
       </div>
@@ -142,6 +170,22 @@ export default function SectionWorkbench({
         <div className="mt-3 rounded-lg border-l-2 border-gray-200 bg-gray-50 px-3 py-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Jury read</p>
           <p className="mt-1 text-sm leading-relaxed text-gray-600">{rationale}</p>
+        </div>
+      )}
+
+      {/* Directional re-check (P3, S146). Never replaces the Jury read above; shown
+          alongside it and always labelled directional. */}
+      {rescore && (
+        <div className={`mt-2 rounded-lg border-l-2 px-3 py-2 ${rescoreStale ? 'border-gray-200 bg-gray-50' : 'border-green-300 bg-green-50'}`}>
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+            Directional re-check{score != null ? ` · ${score} → ${rescore.score}` : ` · ${rescore.score}/10`}
+          </p>
+          <p className="mt-1 text-sm leading-relaxed text-gray-600">{rescore.rationale}</p>
+          <p className="mt-1 text-xs text-gray-400">
+            {rescoreStale
+              ? 'You edited this section after this re-check. Re-check again for a current read.'
+              : 'Directional only. Re-run the full jury eval for an official score.'}
+          </p>
         </div>
       )}
 
