@@ -4113,7 +4113,18 @@ export default function ProjectPage() {
     // an AOY project defaults to the AOY show; otherwise the first target show.
     // Detection only fills the show when there is NO project default and never
     // silently overrides it (an uploaded entry often names other shows it won).
-    const isAoyProject = project?.entry_type === 'aoy' || (directions ?? []).some(d => isAoyShow(d?.best_show ?? ''))
+    // S149 audit fix: this was a two-signal check (entry_type + direction.best_show)
+    // that dropped the target_shows signal, so it under-detected AOY the same way
+    // the S148 gates did. A project that only names an AOY show in target_shows
+    // (no direction yet, Verify Facts not run) read as campaign and defaulted the
+    // Quick Eval show wrong. Now the full three-signal projectIsAoy check,
+    // recomputed locally from hook state: this handler is declared above
+    // projectIsAoy's const (~L5206), so referencing it directly would risk the
+    // same TDZ hazard the S148 effects avoid. Local recompute is the safe pattern.
+    const isAoyProject =
+      (project?.target_shows ?? []).some(isAoyShow) ||
+      project?.entry_type === 'aoy' ||
+      (directions ?? []).some(d => isAoyShow(d?.best_show ?? ''))
     const projectShow = isAoyProject ? AOY_SHOW_NAME : (project?.target_shows?.[0] || '')
     setQuickEvalMaterialIdx(materialIdx)
     setQuickEvalShow(projectShow)
@@ -5264,6 +5275,12 @@ export default function ProjectPage() {
   // does not stay perpetually undone on a project with no Agency direction.
   // Non-blocking either way (spec's own rule, unchanged): this only marks the
   // step, it never gates Jury Read.
+  // S149 audit: the `entry_type === 'aoy'` here is DELIBERATELY the raw column,
+  // NOT projectIsAoy. This marks the "Verify Facts" spine step done; both
+  // agency_facts and entry_type='aoy' are written together by /api/agency-facts
+  // (the Verify Facts route), so the column correctly means "did that step run."
+  // Widening this to the three-signal check would show the step done on every
+  // AOY project before the user ever validated facts. Leave as-is.
   const spineFactsDone =
     !!project.agency_facts || project.entry_type === 'aoy' ||
     (showPeopleFacts && pillarFactsSaved.has('people')) ||
