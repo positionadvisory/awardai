@@ -44,6 +44,22 @@ import {
   type EntryDerivedRow,
   type EntryTableRow,
 } from '@/lib/entry-form'
+import SectionChat, { type ChatTurn } from '@/components/SectionChat'
+
+// Workbench-for-SMARTIES wave 1 (S151). A revision entry for the TYPED canvas.
+// Unlike the AOY SectionRevision (free text only), this ALSO snapshots
+// field_values, because field_values are this canvas's source of truth: Restore
+// must bring back the typed inputs, not just the composed text (option iii,
+// build plan 2026-07-11). Stored in the same untyped entry_drafts.revisions
+// jsonb; a config row is never also an AOY row, so the two shapes never collide.
+// This does NOT touch the AOY SectionRevision parity type (SectionWorkbench.tsx
+// / edit-entry.ts) — it is a separate, config-only shape.
+export type ConfigSectionRevision = {
+  ts: string
+  source: 'manual' | 'restore'
+  text: string
+  field_values: EntryFieldValues
+}
 
 // Minimal shape of an entry_drafts row this canvas needs (matches the page's
 // EntryDraft). One row per spec section; field_key === section.key.
@@ -55,7 +71,15 @@ export interface ConfigCanvasRow {
   version_a: string | null
   custom_text: string | null
   field_values?: EntryFieldValues | null
+  // Wave 1 (S151): chat thread + linear history for this section, per row.
+  chat_history?: ChatTurn[] | null
+  revisions?: ConfigSectionRevision[] | null
 }
+
+// Wave 1 (S151): the mapped per-section jury read (score + rationale), keyed by
+// section key. Sourced client-side from the existing evaluation.output.sections
+// (S98 config jury), so this is a remap, not new plumbing, and touches no scorer.
+export type SectionJuryRead = { score: number | null; rationale: string | null }
 
 interface ConfigEntryCanvasProps {
   spec: EntryFormSpec
@@ -68,6 +92,27 @@ interface ConfigEntryCanvasProps {
     fieldValues: EntryFieldValues,
     composedText: string
   ) => Promise<string | void>
+  // ── Wave 1 (S151) Workbench features. All optional: absent => the canvas
+  // renders exactly as before (used by any config show without an evaluation
+  // or before the page wires these). ──
+  /** The direction id, for chat calls. */
+  dirId?: number
+  /** Per-section jury read, keyed by section.key. */
+  juryBySection?: Record<string, SectionJuryRead>
+  /** Discuss-only chat for one section (writes chat_history only). */
+  onSendChat?: (rowId: number, message: string) => Promise<void>
+  /** Row id whose chat call is currently in flight. */
+  chatBusyRowId?: number | null
+  /** Per-row chat error text. */
+  chatErrors?: Record<number, string>
+  /** Restore a revision. The parent does the DB write and returns the restored
+   * field_values + composed text so this component re-seeds its own edit boxes
+   * for that section (the row-signature re-seed alone would not, since
+   * field_values presence is unchanged). Returns null on failure. */
+  onRestoreRevision?: (
+    rowId: number,
+    revisionIndex: number
+  ) => Promise<{ fieldValues: EntryFieldValues; composedText: string } | null>
 }
 
 // Stable id for a new list item (see the §10 decision). Short + collision-safe
@@ -102,7 +147,27 @@ function initSectionValues(section: EntryFormSection, row?: ConfigCanvasRow): En
   return base
 }
 
-export default function ConfigEntryCanvas({ spec, rows, scoringMode, onSaveSection }: ConfigEntryCanvasProps) {
+// Wave 1 (S151): score pill classes, mirrored from SectionWorkbench so the
+// jury-read chip reads identically across AOY and the typed canvas.
+function juryScoreClasses(score?: number | null): string {
+  if (score == null) return 'bg-gray-100 text-gray-500 ring-gray-200'
+  if (score >= 7) return 'bg-green-100 text-green-800 ring-green-200'
+  if (score >= 5) return 'bg-amber-100 text-amber-800 ring-amber-200'
+  return 'bg-red-100 text-red-700 ring-red-200'
+}
+const REVISION_SOURCE_ICON: Record<ConfigSectionRevision['source'], string> = {
+  manual: '✍', restore: '↩',
+}
+function revShortTs(ts: string): string {
+  const d = new Date(ts)
+  if (isNaN(d.getTime())) return ''
+  return d.toLocaleDateString('en-US', { day: 'numeric', month: 'short' })
+}
+
+export default function ConfigEntryCanvas({
+  spec, rows, scoringMode, onSaveSection,
+  dirId, juryBySection, onSendChat, chatBusyRowId, chatErrors, onRestoreRevision,
+}: ConfigEntryCanvasProps) {
   const sections = useMemo(
     () => (spec.sections ?? []).slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
     [spec]
@@ -123,6 +188,10 @@ export default function ConfigEntryCanvas({ spec, rows, scoringMode, onSaveSecti
   const [savingKey, setSavingKey] = useState<string | null>(null)
   const [savedKey, setSavedKey] = useState<string | null>(null)
   const [errorKey, setErrorKey] = useState<{ key: string; msg: string } | null>(null)
+  // Wave 1 (S151): which sections have their History list expanded, and which
+  // section is mid-restore.
+  const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({})
+  const [restoringKey, setRestoringKey] = useState<string | null>(null)
 
   // Re-seed the working values when the underlying rows change identity — a new
   // draft generation (new row ids) or field_values arriving from a load. Without
@@ -200,6 +269,24 @@ export default function ConfigEntryCanvas({ spec, rows, scoringMode, onSaveSecti
     }
   }
 
+  // Wave 1 (S151): Restore a revision. The parent writes field_values +
+  // custom_text back and appends a 'restore' revision; here we re-seed this
+  // section's edit boxes from the returned field_values (the row-signature
+  // re-seed would not fire, since field_values presence is unchanged).
+  const restoreSection = async (section: EntryFormSection, revisionIndex: number) => {
+    if (!onRestoreRevision) return
+    const row = rowBySection[section.key]
+    if (!row) return
+    setRestoringKey(section.key)
+    setErrorKey(null)
+    const result = await onRestoreRevision(row.id, revisionIndex)
+    setRestoringKey(null)
+    if (result) {
+      setDraft((prev) => ({ ...prev, [section.key]: cloneValues(result.fieldValues) }))
+      setSavedKey(null)
+    }
+  }
+
   return (
     <div className="divide-y divide-gray-100">
       {sections.map((section) => {
@@ -218,6 +305,12 @@ export default function ConfigEntryCanvas({ spec, rows, scoringMode, onSaveSecti
           row && !row.field_values && (row.custom_text?.trim() || row.version_a?.trim())
             ? (row.custom_text?.trim() || row.version_a?.trim() || '')
             : ''
+        // Wave 1 (S151) per-section Workbench data.
+        const jury = juryBySection?.[section.key]
+        const revisions = (row?.revisions ?? []) as ConfigSectionRevision[]
+        const thread = (row?.chat_history ?? []) as ChatTurn[]
+        const historyIsOpen = historyOpen[section.key] ?? false
+        const isRestoring = restoringKey === section.key
 
         return (
           <div key={section.key} className="px-5 py-5">
@@ -252,6 +345,23 @@ export default function ConfigEntryCanvas({ spec, rows, scoringMode, onSaveSecti
                 <p className="text-xs font-medium text-amber-700 mb-1">This draft predates the structured form.</p>
                 <p className="text-xs text-gray-500 leading-relaxed line-clamp-3">{legacyProse}</p>
                 <p className="text-xs text-amber-700 mt-1">Fill the fields below, or regenerate the draft to structure it.</p>
+              </div>
+            )}
+
+            {/* Jury read (S151) — the section's current jury score + rationale,
+                remapped from the existing config evaluation. Read-only; never a
+                write surface. Hidden until an evaluation exists for the section. */}
+            {jury && jury.score != null && (
+              <div className="mb-4 rounded-lg border-l-2 border-gray-200 bg-gray-50 px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Jury read</p>
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${juryScoreClasses(jury.score)}`}>
+                    {jury.score}/10
+                  </span>
+                </div>
+                {jury.rationale && (
+                  <p className="mt-1 text-sm leading-relaxed text-gray-600">{jury.rationale}</p>
+                )}
               </div>
             )}
 
@@ -319,6 +429,61 @@ export default function ConfigEntryCanvas({ spec, rows, scoringMode, onSaveSecti
               {!row && <span className="text-xs text-gray-400">Generate a draft to enable saving.</span>}
               {secErr && <span className="text-xs text-red-600">{secErr}</span>}
             </div>
+
+            {/* Linear history (S151). Each Save snapshots field_values + composed
+                text; Restore brings both back. Never deletes history: a restore
+                appends its own entry, so the timeline shows what happened. */}
+            {onRestoreRevision && revisions.length > 0 && (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={() => setHistoryOpen((v) => ({ ...v, [section.key]: !historyIsOpen }))}
+                  className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  {historyIsOpen ? 'Hide history ↑' : `History (${revisions.length}) ↓`}
+                </button>
+                {historyIsOpen && (
+                  <ul className="mt-1.5 grid grid-cols-1 gap-1.5">
+                    {revisions.map((r, i) => (
+                      <li key={i} className="flex items-start gap-2 text-xs text-gray-500">
+                        <span className="flex-shrink-0" aria-hidden>{REVISION_SOURCE_ICON[r.source] ?? '•'}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="font-medium text-gray-600">{r.source}</span>
+                          {revShortTs(r.ts) ? <span className="ml-1.5 text-gray-400">{revShortTs(r.ts)}</span> : null}
+                        </span>
+                        {i !== revisions.length - 1 && (
+                          <button
+                            type="button"
+                            onClick={() => { void restoreSection(section, i) }}
+                            disabled={isRestoring}
+                            className="flex-shrink-0 text-green-700 hover:text-green-600 disabled:opacity-40 transition-colors"
+                          >
+                            {isRestoring ? 'Restoring…' : 'Restore'}
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            {/* Discuss chat (S151). Discuss only on the typed canvas: a juror
+                conversation about this section. Apply/refine is deferred here
+                (build plan) because a refine would desync from field_values. */}
+            {onSendChat && dirId != null && row && (
+              <div className="mt-3">
+                <SectionChat
+                  discussOnly
+                  thread={thread}
+                  onSend={(msg) => onSendChat(row.id, msg)}
+                  busy={chatBusyRowId === row.id}
+                  busyMode={chatBusyRowId === row.id ? 'discuss' : null}
+                  error={chatErrors?.[row.id] ?? null}
+                  placeholder="Ask a senior juror about this section…"
+                />
+              </div>
+            )}
           </div>
         )
       })}
