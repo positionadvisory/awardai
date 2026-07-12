@@ -129,7 +129,7 @@ export default function SectionWorkbench({
             {words.toLocaleString()}{wordLimit ? ` / ${wordLimit}` : ''} words
           </span>
           {canEdit && !editing && (
-            <button type="button" onClick={startEdit} className="text-xs text-green-700 hover:text-green-600 transition-colors">✎ Edit</button>
+            <button type="button" onClick={startEdit} className="rounded-lg border border-green-200 px-3 py-1.5 text-xs font-medium text-green-700 hover:border-green-400 hover:text-green-600 transition-colors">✎ Edit</button>
           )}
           {onRecheck && !editing && (
             <button
@@ -137,7 +137,7 @@ export default function SectionWorkbench({
               onClick={() => onRecheck(sectionKey)}
               disabled={rechecking}
               title="Re-score just this section (directional, does not change the official jury score)"
-              className="text-xs text-green-700 hover:text-green-600 disabled:opacity-40 transition-colors"
+              className="rounded-lg border border-green-200 px-3 py-1.5 text-xs font-medium text-green-700 hover:border-green-400 hover:text-green-600 disabled:opacity-40 transition-colors"
             >
               {rechecking ? 'Re-checking…' : '↻ Re-check'}
             </button>

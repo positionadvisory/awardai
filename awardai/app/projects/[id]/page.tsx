@@ -1209,7 +1209,6 @@ function buildAnalysisText(
     `Project:  ${campaignName}`,
     ...(show ? [`Show:     ${show}`] : []),
     ...(category ? [`Category: ${category}`] : []),
-    `Model:    Claude Opus 4.6`,
     '',
     'OVERALL ASSESSMENT',
     '================================',
@@ -1452,6 +1451,11 @@ export default function ProjectPage() {
   // S153 side-by-side eval/edit layout: ON by default; ?sxs=0 forces the old
   // single stack (edit surface below the eval blocks), mirroring ?workbench=0.
   const [sideBySidePreview, setSideBySidePreview] = useState(true)
+  // S154 item 1: the eval rail defaults expanded on desktop (beside the edit
+  // surface) but collapsed on mobile (stacked below it, preserving S152 land-on-edit).
+  const [evalDefaultExpanded, setEvalDefaultExpanded] = useState(false)
+  // S154 item 3: the fix-this chip panel is collapsed by default per direction.
+  const [fixChipsOpen, setFixChipsOpen] = useState<Record<number, boolean>>({})
   // P3 (S146) — directional section re-scores held for the session, keyed by
   // directionId -> section_key. Merged over any section_rescores loaded from the
   // evaluation row (local wins, being the freshest). recheckingSection / rescoreError
@@ -1465,6 +1469,7 @@ export default function ProjectPage() {
     setWorkbenchPreview(new URLSearchParams(window.location.search).get('workbench') !== '0')
     // On by default; only an explicit ?sxs=0 opts back to the old single stack.
     setSideBySidePreview(new URLSearchParams(window.location.search).get('sxs') !== '0')
+    setEvalDefaultExpanded(window.matchMedia('(min-width: 1024px)').matches)
   }, [])
 
   // Workbench P2 Chunk 3 (S138 continued) — data-needed checklist write surface.
@@ -3097,7 +3102,6 @@ export default function ProjectPage() {
       `Show:      ${d.best_show || '—'}`,
       `Category:  ${d.best_category || '—'}`,
       `Evaluated: ${new Date(evaluation.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`,
-      `Model:     Claude Opus 4.6`,
       '',
       `OVERALL SCORE: ${evaluation.overall_score.toFixed(1)} / 10`,
       '================================',
@@ -7308,7 +7312,7 @@ export default function ProjectPage() {
                                 below, so the full breakdown is opt-in, not stacked above it. */}
                             <button
                               type="button"
-                              onClick={() => setEvalPanelExpanded(prev => ({ ...prev, [dirId]: !(prev[dirId] ?? false) }))}
+                              onClick={() => setEvalPanelExpanded(prev => ({ ...prev, [dirId]: !(prev[dirId] ?? evalDefaultExpanded) }))}
                               className="w-full flex items-center justify-between gap-3 px-5 py-3 text-left hover:bg-gray-100 transition-colors"
                             >
                               <div className="flex items-center gap-2 flex-wrap">
@@ -7317,9 +7321,9 @@ export default function ProjectPage() {
                                   <span className="text-sm font-bold tabular-nums text-gray-900">{summaryScore.toFixed(1)}<span className="font-normal text-gray-400">/10</span></span>
                                 )}
                               </div>
-                              <span className="flex-shrink-0 text-xs text-gray-400">{(evalPanelExpanded[dirId] ?? false) ? 'Hide breakdown ↑' : 'Full breakdown ↓'}</span>
+                              <span className="flex-shrink-0 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600">{(evalPanelExpanded[dirId] ?? evalDefaultExpanded) ? 'Hide breakdown ↑' : 'Full breakdown ↓'}</span>
                             </button>
-                            <div className={(evalPanelExpanded[dirId] ?? false) ? 'border-t border-gray-200' : 'hidden'}>
+                            <div className={(evalPanelExpanded[dirId] ?? evalDefaultExpanded) ? 'border-t border-gray-200' : 'hidden'}>
 
                             {/* Eval view tab strip — Session 57: shown once ANY eval exists.
                                 Tabs render per existing mode, plus the always-present
@@ -7473,8 +7477,8 @@ export default function ProjectPage() {
                                 )}
                                 <p className="text-xs text-gray-400 mt-0.5">
                                   {isCoach
-                                    ? 'Estimated gap between this draft and your campaign\'s full potential · Claude Opus 4.6'
-                                    : 'Scored on entry as written · Claude Opus 4.6'}
+                                    ? 'Estimated gap between this draft and your campaign\'s full potential'
+                                    : 'Scored on entry as written'}
                                 </p>
                               </div>
                               <p className="text-xs text-gray-400">
@@ -7917,7 +7921,15 @@ export default function ProjectPage() {
                               const selected = draftFocusItems[dirId] || []
                               return (
                                 <div className="mt-5 pt-4 border-t border-gray-200">
-                                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Focus the next draft on…</p>
+                                  <button
+                                    type="button"
+                                    onClick={() => setFixChipsOpen(prev => ({ ...prev, [dirId]: !(prev[dirId] ?? false) }))}
+                                    className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 hover:text-gray-700 transition-colors"
+                                  >
+                                    Focus the next draft on…
+                                    <span className="text-gray-400">{(fixChipsOpen[dirId] ?? false) ? '▲' : '▼'}</span>
+                                  </button>
+                                  {(fixChipsOpen[dirId] ?? false) && (<>
                                   <div className="flex flex-wrap gap-2">
                                     {chipItems.map((item, i) => {
                                       const active = selected.includes(item)
@@ -7940,6 +7952,7 @@ export default function ProjectPage() {
                                   {selected.length > 0 && (
                                     <p className="text-xs text-green-700 mt-2">{selected.length} issue{selected.length > 1 ? 's' : ''} selected — the draft will prioritise these above all others.</p>
                                   )}
+                                  </>)}
                                 </div>
                               )
                             })()}
@@ -8227,7 +8240,7 @@ export default function ProjectPage() {
                               <span className="min-w-0">
                                 <span className="block text-xs text-gray-400 uppercase tracking-wider font-medium mb-0.5">Direction</span>
                                 <span className="block font-medium text-gray-900">{dirName}</span>
-                                {dirShow && (
+                                {dirShow && !(dirName.includes(dirShow) && (!dirCategory || dirName.includes(dirCategory))) && (
                                   <span className="block text-green-700 text-xs mt-0.5">
                                     {dirShow}{dirCategory ? <> · <span className="text-gray-400">{dirCategory}</span></> : null}
                                   </span>
@@ -8258,9 +8271,8 @@ export default function ProjectPage() {
                           {isExpanded && (
                           <div className="flex flex-col items-start sm:items-end gap-2 w-full sm:w-auto sm:flex-shrink-0">
 
-                            {/* Row 1 — Evaluate + Download */}
+                            {/* Row 1 — Jury Eval + AOY Coach + Re-Draft */}
                             <div className="flex items-center gap-2 flex-wrap justify-start sm:justify-end">
-                              {/* Jury Evaluation */}
                               <button
                                 onClick={() => evaluateEntry(dirId, 'judge', evalBoth.judge?.id)}
                                 disabled={evaluating || generatingDraft}
@@ -8273,9 +8285,6 @@ export default function ProjectPage() {
                                   <>⚖ {hasJudge ? 'Re-run Jury Eval' : 'Jury Evaluation'}</>
                                 )}
                               </button>
-                              {/* Coach Review. AOY directions route to the advisory AOY
-                                  Coach (generate-aoy-coach, S77); the campaign coach is
-                                  unchanged. */}
                               <button
                                 onClick={() => evaluateEntry(dirId, 'coach', evalBoth.coach?.id)}
                                 disabled={evaluating || generatingDraft || coaching}
@@ -8292,31 +8301,44 @@ export default function ProjectPage() {
                                   <>✦ {hasCoach ? 'Re-run Coach Review' : 'Coach Review'}</>
                                 )}
                               </button>
-                              {/* ↓ Draft */}
+                              <button
+                                onClick={() => generateDraft(dirId)}
+                                disabled={generatingDraft || evaluating}
+                                title="Generate a fresh draft for this direction"
+                                className="text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-300 hover:border-gray-400 disabled:opacity-40 px-4 py-2 rounded transition-colors flex items-center gap-2"
+                              >
+                                {isGeneratingThis ? (
+                                  <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Re-Drafting…</>
+                                ) : '↻ Re-Draft'}
+                              </button>
+                            </div>
+
+                            {/* Row 2 — Share Draft + Share Eval (downloads) */}
+                            {((d && getCurrentDraftFields(dirId).length > 0) || (evaluation && d)) && (
+                            <div className="flex items-center gap-2 flex-wrap justify-start sm:justify-end">
                               {d && getCurrentDraftFields(dirId).length > 0 && (
                                 <button
                                   onClick={() => downloadDraft(d)}
-                                  className="text-xs text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-3 py-2 rounded-lg transition-colors"
-                                  title="Download current draft as text file"
+                                  className="text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-4 py-2 rounded transition-colors"
+                                  title="Download the current draft as a text file"
                                 >
-                                  ↓ Draft
+                                  ↓ Share Draft
                                 </button>
                               )}
-                              {/* ↓ Evaluation */}
                               {evaluation && d && (
                                 <button
                                   onClick={() => downloadEvaluation(d, evaluation)}
-                                  className="text-xs text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-3 py-2 rounded-lg transition-colors"
-                                  title="Download evaluation report as text file"
+                                  className="text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-4 py-2 rounded transition-colors"
+                                  title="Download the evaluation report as a text file"
                                 >
-                                  ↓ Evaluation
+                                  ↓ Share Eval
                                 </button>
                               )}
                             </div>
+                            )}
 
-                            {/* Row 2 — Smart Directions + Regenerate */}
+                            {/* Row 3 — Alt Categories / Alt Shows (post-eval) or Suggest Directions (pre-eval) */}
                             <div className="flex items-center gap-2 flex-wrap justify-start sm:justify-end">
-                              {/* Alt Categories / Other Shows (post-eval) or Suggest Directions (pre-eval) */}
                               {(hasJudge || hasCoach) ? (
                                 <>
                                   <button
@@ -8326,7 +8348,7 @@ export default function ProjectPage() {
                                     }}
                                     disabled={evaluating || generatingDraft || !!smartDirectionsLoading[dirId]}
                                     title="Suggest alternative categories in the same show, informed by this evaluation"
-                                    className="text-xs text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-40"
+                                    className="text-xs font-medium text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-4 py-2 rounded transition-colors flex items-center gap-1.5 disabled:opacity-40"
                                   >
                                     {smartDirectionsLoading[dirId] === 'alternatives' ? (
                                       <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Finding…</>
@@ -8339,33 +8361,23 @@ export default function ProjectPage() {
                                     }}
                                     disabled={evaluating || generatingDraft || !!smartDirectionsLoading[dirId]}
                                     title="Suggest other shows where this entry's strengths would land best"
-                                    className="text-xs text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-40"
+                                    className="text-xs font-medium text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-4 py-2 rounded transition-colors flex items-center gap-1.5 disabled:opacity-40"
                                   >
                                     {smartDirectionsLoading[dirId] === 'other_shows' ? (
                                       <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Finding…</>
-                                    ) : '✦ Other Shows'}
+                                    ) : '✦ Alt Shows'}
                                   </button>
                                 </>
                               ) : (
                                 <button
                                   onClick={() => setTab('directions')}
-                                  className="text-xs text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5"
+                                  className="text-xs font-medium text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-4 py-2 rounded transition-colors flex items-center gap-1.5"
                                   title="Explore AI-recommended show and category directions"
                                 >
                                   <span>Suggest Directions</span>
                                   <span>→</span>
                                 </button>
                               )}
-                              {/* Regenerate draft */}
-                              <button
-                                onClick={() => generateDraft(dirId)}
-                                disabled={generatingDraft || evaluating}
-                                className="text-xs text-gray-400 hover:text-gray-700 disabled:opacity-40 transition-colors flex items-center gap-1"
-                              >
-                                {isGeneratingThis ? (
-                                  <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Regenerating…</>
-                                ) : 'Regenerate draft'}
-                              </button>
                             </div>
 
                           </div>
@@ -9206,7 +9218,7 @@ export default function ProjectPage() {
                         {scriptMode === 'review' ? 'Optimised Script' : 'Generated Script'}
                       </h3>
                       <p className="text-xs text-gray-400 mt-0.5">
-                        {scriptMode === 'generate' ? 'Claude Sonnet 4.6' : 'Claude Opus 4.6'} · 2-minute case study film
+                        2-minute case study film
                         {(scriptShow || effectiveCategoryLabel) && (
                           <span className="text-green-700"> · {[scriptShow, effectiveCategoryLabel && effectiveCategoryLabel !== 'Suggest Best Fits' ? effectiveCategoryLabel : null].filter(Boolean).join(' — ')}</span>
                         )}
