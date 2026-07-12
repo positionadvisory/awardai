@@ -54,7 +54,7 @@ function firstSentence(text?: string | null): string {
 
 export default function EvalSummaryBar({
   overallScore, verdict, sections, strengths, unattributedGaps,
-  onJumpToSection, onReRunEval, reRunLabel = 'Re-run Jury Eval', reRunning,
+  onJumpToSection,
   indicativeTotal, rescoredCount, deltaByKey,
 }: Props) {
   const [expanded, setExpanded] = useState(false)
@@ -85,17 +85,6 @@ export default function EvalSummaryBar({
         </div>
 
         <div className="flex flex-shrink-0 items-center gap-2">
-          {onReRunEval && (
-            <button
-              type="button"
-              onClick={onReRunEval}
-              disabled={reRunning}
-              className="rounded bg-green-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-40 transition-colors"
-            >
-              {reRunning ? 'Running…' : reRunLabel}
-            </button>
-          )}
-
           {hasDetail && (
             <button
               type="button"
@@ -108,7 +97,7 @@ export default function EvalSummaryBar({
         </div>
       </div>
 
-      {verdict && (
+      {verdict && !expanded && (
         <p className="mt-2 w-full truncate text-sm text-gray-600" title={verdict}>
           {firstSentence(verdict)}
         </p>
