@@ -92,7 +92,7 @@ export default function SectionWorkbench({
   const [editing, setEditing] = useState(false)
   const [buffer, setBuffer] = useState('')
   const [historyOpen, setHistoryOpen] = useState(false)
-  const [collapsed, setCollapsed] = useState(false)  // S154 item 1: per-section collapse
+  const [collapsed, setCollapsed] = useState(true)  // S154 item 1: per-section collapse (default collapsed)
 
   const canEdit = !!onSaveText
   const words = countWords(editing ? buffer : text)

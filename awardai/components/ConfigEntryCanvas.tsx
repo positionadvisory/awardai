@@ -314,7 +314,7 @@ export default function ConfigEntryCanvas({
         const thread = (row?.chat_history ?? []) as ChatTurn[]
         const historyIsOpen = historyOpen[section.key] ?? false
         const isRestoring = restoringKey === section.key
-        const isCollapsed = collapsedSections[section.key] ?? false
+        const isCollapsed = collapsedSections[section.key] ?? true
 
         return (
           <div key={section.key} className="px-5 py-5">
