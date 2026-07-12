@@ -1406,6 +1406,8 @@ export default function ProjectPage() {
 
   // Evaluation chat — keyed by directionId
   const [evalChatOpen, setEvalChatOpen] = useState<Record<number, boolean>>({})
+  // Eval panel collapse/expand per direction (S152). Absent => collapsed.
+  const [evalPanelExpanded, setEvalPanelExpanded] = useState<Record<number, boolean>>({})
   const [evalChatInput, setEvalChatInput] = useState<Record<number, string>>({})
   const [evalChatting, setEvalChatting] = useState<Record<number, boolean>>({})
   const [evalChatHistory, setEvalChatHistory] = useState<Record<number, ChatMessage[]>>({})
@@ -7171,6 +7173,23 @@ export default function ProjectPage() {
                         {/* Evaluation panel */}
                         {(hasJudge || hasCoach) && (
                           <div className="border-b border-gray-200 bg-gray-50">
+                            {/* Collapsed summary strip (S152). Default collapsed: the
+                                per-section jury reads now render inline in the edit surface
+                                below, so the full breakdown is opt-in, not stacked above it. */}
+                            <button
+                              type="button"
+                              onClick={() => setEvalPanelExpanded(prev => ({ ...prev, [dirId]: !(prev[dirId] ?? false) }))}
+                              className="w-full flex items-center justify-between gap-3 px-5 py-3 text-left hover:bg-gray-100 transition-colors"
+                            >
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">{hasJudge ? 'Jury evaluation' : 'Coach review'}</span>
+                                {summaryScore != null && (
+                                  <span className="text-sm font-bold tabular-nums text-gray-900">{summaryScore.toFixed(1)}<span className="font-normal text-gray-400">/10</span></span>
+                                )}
+                              </div>
+                              <span className="flex-shrink-0 text-xs text-gray-400">{(evalPanelExpanded[dirId] ?? false) ? 'Hide breakdown ↑' : 'Full breakdown ↓'}</span>
+                            </button>
+                            <div className={(evalPanelExpanded[dirId] ?? false) ? 'border-t border-gray-200' : 'hidden'}>
 
                             {/* Eval view tab strip — Session 57: shown once ANY eval exists.
                                 Tabs render per existing mode, plus the always-present
@@ -7817,6 +7836,7 @@ export default function ProjectPage() {
                             </div>
                           </div>
                           ) : null}
+                            </div>{/* /collapsible eval breakdown (S152) */}
                           </div>
                         )}
 
