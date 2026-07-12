@@ -192,6 +192,9 @@ export default function ConfigEntryCanvas({
   // section is mid-restore.
   const [historyOpen, setHistoryOpen] = useState<Record<string, boolean>>({})
   const [restoringKey, setRestoringKey] = useState<string | null>(null)
+  // S154 item 1: per-section collapse. Default expanded; a user collapses a
+  // finished section to cut scroll while working the rest.
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({})
 
   // Re-seed the working values when the underlying rows change identity — a new
   // draft generation (new row ids) or field_values arriving from a load. Without
@@ -311,13 +314,20 @@ export default function ConfigEntryCanvas({
         const thread = (row?.chat_history ?? []) as ChatTurn[]
         const historyIsOpen = historyOpen[section.key] ?? false
         const isRestoring = restoringKey === section.key
+        const isCollapsed = collapsedSections[section.key] ?? true
 
         return (
           <div key={section.key} className="px-5 py-5">
-            {/* Section header */}
-            <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
+            {/* Section header (S154 item 1: click to collapse/expand). Collapsed
+                view keeps the title, word usage, and current jury score. */}
+            <button
+              type="button"
+              onClick={() => setCollapsedSections((v) => ({ ...v, [section.key]: !isCollapsed }))}
+              className="w-full flex items-start justify-between gap-3 mb-2 flex-wrap text-left group"
+            >
               <div className="flex items-center gap-2 flex-wrap">
-                <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">{section.label}</p>
+                <span className="text-gray-400 group-hover:text-gray-700 transition-colors">{isCollapsed ? '▸' : '▾'}</span>
+                <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide">{section.label}</span>
                 {scoringMode === 'weighted' && typeof section.weight === 'number' && (
                   <span className="text-xs px-2 py-0.5 rounded-full bg-green-50 border border-green-200 text-green-700 font-medium tabular-nums">
                     {section.weight}% of score
@@ -329,12 +339,21 @@ export default function ConfigEntryCanvas({
                   </span>
                 )}
               </div>
-              {ceiling && (
-                <span className={`text-xs tabular-nums ${overCeiling ? 'text-red-600' : 'text-gray-400'}`}>
-                  {usedWords} / {ceiling}w total
-                </span>
-              )}
-            </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {jury && jury.score != null && (
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${juryScoreClasses(jury.score)}`}>
+                    {jury.score}/10
+                  </span>
+                )}
+                {ceiling && (
+                  <span className={`text-xs tabular-nums ${overCeiling ? 'text-red-600' : 'text-gray-400'}`}>
+                    {usedWords} / {ceiling}w total
+                  </span>
+                )}
+              </div>
+            </button>
+
+            {!isCollapsed && (<>
 
             {(section.instructions || section.guidance) && (
               <p className="text-xs text-gray-400 leading-relaxed mb-4">{section.instructions || section.guidance}</p>
@@ -484,6 +503,7 @@ export default function ConfigEntryCanvas({
                 />
               </div>
             )}
+          </>)}
           </div>
         )
       })}
@@ -550,7 +570,7 @@ function FieldEditor({ field, values, objectives, onFieldChange, onSourceChange,
           <textarea
             value={val}
             onChange={(e) => onFieldChange(e.target.value)}
-            rows={Math.max(3, (val.match(/\n/g) || []).length + 3)}
+            rows={Math.max(Math.min(20, Math.ceil((field.word_limit ?? 60) / 11) + 1), (val.match(/\n/g) || []).length + 3)}
             className={`w-full bg-gray-50 border rounded-lg px-3 py-2 text-sm text-gray-900 leading-relaxed resize-none focus:outline-none focus:border-green-600 ${over ? 'border-red-300' : 'border-gray-300'}`}
           />
         )}

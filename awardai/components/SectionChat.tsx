@@ -52,6 +52,7 @@ type Props = {
 
 export default function SectionChat({ thread, onSend, busy, busyMode, error, placeholder, discussOnly }: Props) {
   const [message, setMessage] = useState('')
+  const [open, setOpen] = useState(false)  // S154 item 3: collapse the chat to cut scroll
   const [expandedTurns, setExpandedTurns] = useState<Record<number, boolean>>({})
   // Re-entrancy guard (S110 audit item, called out explicitly in the P4
   // brief): the `disabled` prop only takes effect on the NEXT render, so a
@@ -89,6 +90,15 @@ export default function SectionChat({ thread, onSend, busy, busyMode, error, pla
 
   return (
     <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className="flex w-full items-center justify-between text-left"
+      >
+        <span className="text-xs font-medium text-gray-600">💬 Discuss{thread.length > 0 ? ` (${thread.length})` : ''}</span>
+        <span className="text-xs text-gray-400">{open ? 'Hide ↑' : 'Show ↓'}</span>
+      </button>
+      {open && (<div className="mt-3">
       {thread.length > 0 && (
         <div className={`mb-3 space-y-2 ${thread.length > 8 ? 'max-h-72 overflow-y-auto pr-1' : ''}`}>
           {thread.map((msg, i) => {
@@ -193,6 +203,7 @@ export default function SectionChat({ thread, onSend, busy, busyMode, error, pla
         )}
         <span className="text-xs text-gray-400">⌘/Ctrl+Enter = Discuss</span>
       </div>
+      </div>)}
     </div>
   )
 }

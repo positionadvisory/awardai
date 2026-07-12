@@ -54,7 +54,7 @@ function firstSentence(text?: string | null): string {
 
 export default function EvalSummaryBar({
   overallScore, verdict, sections, strengths, unattributedGaps,
-  onJumpToSection, onReRunEval, reRunLabel = 'Re-run Jury Eval', reRunning,
+  onJumpToSection,
   indicativeTotal, rescoredCount, deltaByKey,
 }: Props) {
   const [expanded, setExpanded] = useState(false)
@@ -62,48 +62,46 @@ export default function EvalSummaryBar({
 
   return (
     <div className="sticky top-0 z-20 -mx-5 mb-1 border-b border-gray-200 bg-white/95 px-5 py-3 backdrop-blur">
-      <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-2">
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Overall</span>
-          <span className="text-lg font-semibold tabular-nums text-gray-900">
-            {overallScore != null ? overallScore.toFixed(1) : '—'}
-          </span>
-          <span className="text-xs text-gray-400">/ 10</span>
+      <div className="flex w-full items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Overall</span>
+            <span className="text-lg font-semibold tabular-nums text-gray-900">
+              {overallScore != null ? overallScore.toFixed(1) : '—'}
+            </span>
+            <span className="text-xs text-gray-400">/ 10</span>
+          </div>
+
+          {indicativeTotal != null && (
+            <>
+              <span className="h-4 w-px bg-gray-200" aria-hidden />
+              <div className="flex items-baseline gap-1.5" title="Weighted total with your directional re-checks merged in. Re-run the full jury eval for an official score.">
+                <span className="text-xs font-medium uppercase tracking-wide text-amber-600">Indicative</span>
+                <span className="text-lg font-semibold tabular-nums text-amber-700">{indicativeTotal.toFixed(1)}</span>
+                <span className="text-xs text-gray-400">directional</span>
+              </div>
+            </>
+          )}
         </div>
 
-        {indicativeTotal != null && (
-          <div className="flex items-baseline gap-1.5" title="Weighted total with your directional re-checks merged in. Re-run the full jury eval for an official score.">
-            <span className="text-xs font-medium uppercase tracking-wide text-amber-600">Indicative</span>
-            <span className="text-lg font-semibold tabular-nums text-amber-700">{indicativeTotal.toFixed(1)}</span>
-            <span className="text-xs text-gray-400">directional</span>
-          </div>
-        )}
+        <div className="flex flex-shrink-0 items-center gap-2">
+          {hasDetail && (
+            <button
+              type="button"
+              onClick={() => setExpanded(v => !v)}
+              className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-gray-400 hover:text-gray-900 transition-colors"
+            >
+              {expanded ? 'Hide detail ↑' : 'Detail ↓'}
+            </button>
+          )}
+        </div>
+      </div>
 
-        <p className="min-w-0 flex-1 truncate text-sm text-gray-600" title={verdict ?? undefined}>
+      {verdict && !expanded && (
+        <p className="mt-2 w-full truncate text-sm text-gray-600" title={verdict}>
           {firstSentence(verdict)}
         </p>
-
-        {onReRunEval && (
-          <button
-            type="button"
-            onClick={onReRunEval}
-            disabled={reRunning}
-            className="flex-shrink-0 rounded bg-green-800 px-3 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-40 transition-colors"
-          >
-            {reRunning ? 'Running…' : reRunLabel}
-          </button>
-        )}
-
-        {hasDetail && (
-          <button
-            type="button"
-            onClick={() => setExpanded(v => !v)}
-            className="flex-shrink-0 text-xs text-green-700 hover:text-green-600 transition-colors"
-          >
-            {expanded ? 'Hide detail ↑' : 'Detail ↓'}
-          </button>
-        )}
-      </div>
+      )}
 
       {sections.length > 0 && (
         <div className="mt-2 flex w-full flex-wrap gap-1.5">

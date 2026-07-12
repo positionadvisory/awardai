@@ -1209,7 +1209,6 @@ function buildAnalysisText(
     `Project:  ${campaignName}`,
     ...(show ? [`Show:     ${show}`] : []),
     ...(category ? [`Category: ${category}`] : []),
-    `Model:    Claude Opus 4.6`,
     '',
     'OVERALL ASSESSMENT',
     '================================',
@@ -1449,6 +1448,14 @@ export default function ProjectPage() {
   // window.location.search in an effect, never useSearchParams (that needs a
   // Suspense boundary or the Vercel build fails).
   const [workbenchPreview, setWorkbenchPreview] = useState(true)
+  // S153 side-by-side eval/edit layout: ON by default; ?sxs=0 forces the old
+  // single stack (edit surface below the eval blocks), mirroring ?workbench=0.
+  const [sideBySidePreview, setSideBySidePreview] = useState(true)
+  // S154 item 1: the eval rail defaults expanded on desktop (beside the edit
+  // surface) but collapsed on mobile (stacked below it, preserving S152 land-on-edit).
+  const [evalDefaultExpanded, setEvalDefaultExpanded] = useState(false)
+  // S154 item 3: the fix-this chip panel is collapsed by default per direction.
+  const [fixChipsOpen, setFixChipsOpen] = useState<Record<number, boolean>>({})
   // P3 (S146) — directional section re-scores held for the session, keyed by
   // directionId -> section_key. Merged over any section_rescores loaded from the
   // evaluation row (local wins, being the freshest). recheckingSection / rescoreError
@@ -1460,6 +1467,9 @@ export default function ProjectPage() {
     if (typeof window === 'undefined') return
     // On by default; only an explicit ?workbench=0 opts back to the legacy canvas.
     setWorkbenchPreview(new URLSearchParams(window.location.search).get('workbench') !== '0')
+    // On by default; only an explicit ?sxs=0 opts back to the old single stack.
+    setSideBySidePreview(new URLSearchParams(window.location.search).get('sxs') !== '0')
+    setEvalDefaultExpanded(window.matchMedia('(min-width: 1024px)').matches)
   }, [])
 
   // Workbench P2 Chunk 3 (S138 continued) — data-needed checklist write surface.
@@ -3092,7 +3102,6 @@ export default function ProjectPage() {
       `Show:      ${d.best_show || '—'}`,
       `Category:  ${d.best_category || '—'}`,
       `Evaluated: ${new Date(evaluation.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`,
-      `Model:     Claude Opus 4.6`,
       '',
       `OVERALL SCORE: ${evaluation.overall_score.toFixed(1)} / 10`,
       '================================',
@@ -6699,1377 +6708,10 @@ export default function ProjectPage() {
                     const summaryScore = (evalBoth.judge ?? evalBoth.coach)?.overall_score ?? null
                     const dirFit = d?.win_likelihood ?? null
 
-                    return (
-                      <div key={dirId} id={`aoy-dir-${dirId}`} className={`bg-white border rounded-xl overflow-hidden transition-shadow ${justScoredDirId === dirId ? 'border-green-500 ring-2 ring-green-500' : 'border-gray-200'}`}>
-
-                        {/* Direction header — Session 57: stacks on mobile. The old
-                            single-row flex (right block flex-shrink-0) crushed the
-                            title to one word per line on phones. */}
-                        <div className={`px-5 py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 ${isExpanded ? 'border-b border-gray-200' : ''}`}>
-                          {/* Left: clickable toggle (chevron + label + name + show/
-                              category + score/fit badges). Collapsing keeps the whole
-                              card to this compact header (S91). */}
-                          <div className="min-w-0 pt-0.5 flex-1">
-                            <button
-                              onClick={() => setEntryCardExpanded(prev => ({ ...prev, [dirId]: !isExpanded }))}
-                              className="flex items-start gap-2 text-left w-full group"
-                              title={isExpanded ? 'Collapse this entry' : 'Expand this entry'}
-                            >
-                              <span className="text-gray-400 group-hover:text-gray-700 flex-shrink-0 transition-colors text-3xl leading-none w-6 text-center">{isExpanded ? '▾' : '▸'}</span>
-                              <span className="min-w-0">
-                                <span className="block text-xs text-gray-400 uppercase tracking-wider font-medium mb-0.5">Direction</span>
-                                <span className="block font-medium text-gray-900">{dirName}</span>
-                                {dirShow && (
-                                  <span className="block text-green-700 text-xs mt-0.5">
-                                    {dirShow}{dirCategory ? <> · <span className="text-gray-400">{dirCategory}</span></> : null}
-                                  </span>
-                                )}
-                                <span className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                  {summaryScore != null && (
-                                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${scoreBg(summaryScore)} ${scoreColor(summaryScore)}`}>{summaryScore}/10</span>
-                                  )}
-                                  {typeof dirFit === 'number' && (
-                                    <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-500 border border-gray-200">{dirFit}% fit</span>
-                                  )}
-                                  {!isExpanded && needsReEval && (
-                                    <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-50 text-amber-700 border border-amber-200">Draft updated</span>
-                                  )}
-                                </span>
-                              </span>
-                            </button>
-                            <button
-                              onClick={() => setTab('directions')}
-                              className="text-xs text-gray-400 hover:text-gray-600 mt-1.5 ml-6 transition-colors"
-                            >
-                              ← View in Directions
-                            </button>
-                          </div>
-
-                          {/* Right: action buttons — only when expanded; a collapsed
-                              card stays compact (S91). */}
-                          {isExpanded && (
-                          <div className="flex flex-col items-start sm:items-end gap-2 w-full sm:w-auto sm:flex-shrink-0">
-
-                            {/* Row 1 — Evaluate + Download */}
-                            <div className="flex items-center gap-2 flex-wrap justify-start sm:justify-end">
-                              {/* Jury Evaluation */}
-                              <button
-                                onClick={() => evaluateEntry(dirId, 'judge', evalBoth.judge?.id)}
-                                disabled={evaluating || generatingDraft}
-                                title="Evaluate the entry as written — mirrors what a jury member sees"
-                                className="bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded transition-colors flex items-center gap-2"
-                              >
-                                {isEvaluatingThis && evaluatingMode[dirId] === 'judge' ? (
-                                  <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Evaluating…</>
-                                ) : (
-                                  <>⚖ {hasJudge ? 'Re-run Jury Eval' : 'Jury Evaluation'}</>
-                                )}
-                              </button>
-                              {/* Coach Review. AOY directions route to the advisory AOY
-                                  Coach (generate-aoy-coach, S77); the campaign coach is
-                                  unchanged. */}
-                              <button
-                                onClick={() => evaluateEntry(dirId, 'coach', evalBoth.coach?.id)}
-                                disabled={evaluating || generatingDraft || coaching}
-                                title="Review the entry and surface what is missing and how to strengthen it"
-                                className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded transition-colors flex items-center gap-2"
-                              >
-                                {((isEvaluatingThis && evaluatingMode[dirId] === 'coach') || (coaching && coachingForDirectionId === dirId)) ? (
-                                  <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Coaching…</>
-                                ) : isAoyShow(d?.best_show ?? '') ? (
-                                  <>✦ {aoyCoaching[dirId] ? 'Re-run AOY Coach' : 'AOY Coach'}</>
-                                ) : configModeFor(dirId, d?.best_show) ? (
-                                  <>✦ {configCoaching[dirId] ? 'Re-run Coach' : 'Coach Review'}</>
-                                ) : (
-                                  <>✦ {hasCoach ? 'Re-run Coach Review' : 'Coach Review'}</>
-                                )}
-                              </button>
-                              {/* ↓ Draft */}
-                              {d && getCurrentDraftFields(dirId).length > 0 && (
-                                <button
-                                  onClick={() => downloadDraft(d)}
-                                  className="text-xs text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-3 py-2 rounded-lg transition-colors"
-                                  title="Download current draft as text file"
-                                >
-                                  ↓ Draft
-                                </button>
-                              )}
-                              {/* ↓ Evaluation */}
-                              {evaluation && d && (
-                                <button
-                                  onClick={() => downloadEvaluation(d, evaluation)}
-                                  className="text-xs text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-3 py-2 rounded-lg transition-colors"
-                                  title="Download evaluation report as text file"
-                                >
-                                  ↓ Evaluation
-                                </button>
-                              )}
-                            </div>
-
-                            {/* Row 2 — Smart Directions + Regenerate */}
-                            <div className="flex items-center gap-2 flex-wrap justify-start sm:justify-end">
-                              {/* Alt Categories / Other Shows (post-eval) or Suggest Directions (pre-eval) */}
-                              {(hasJudge || hasCoach) ? (
-                                <>
-                                  <button
-                                    onClick={() => {
-                                      const evalForSmart = evalBoth.judge ?? evalBoth.coach
-                                      if (evalForSmart) generateSmartDirections(dirId, evalForSmart.id, 'alternatives')
-                                    }}
-                                    disabled={evaluating || generatingDraft || !!smartDirectionsLoading[dirId]}
-                                    title="Suggest alternative categories in the same show, informed by this evaluation"
-                                    className="text-xs text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-40"
-                                  >
-                                    {smartDirectionsLoading[dirId] === 'alternatives' ? (
-                                      <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Finding…</>
-                                    ) : '✦ Alt Categories'}
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      const evalForSmart = evalBoth.judge ?? evalBoth.coach
-                                      if (evalForSmart) generateSmartDirections(dirId, evalForSmart.id, 'other_shows')
-                                    }}
-                                    disabled={evaluating || generatingDraft || !!smartDirectionsLoading[dirId]}
-                                    title="Suggest other shows where this entry's strengths would land best"
-                                    className="text-xs text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-40"
-                                  >
-                                    {smartDirectionsLoading[dirId] === 'other_shows' ? (
-                                      <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Finding…</>
-                                    ) : '✦ Other Shows'}
-                                  </button>
-                                </>
-                              ) : (
-                                <button
-                                  onClick={() => setTab('directions')}
-                                  className="text-xs text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5"
-                                  title="Explore AI-recommended show and category directions"
-                                >
-                                  <span>Suggest Directions</span>
-                                  <span>→</span>
-                                </button>
-                              )}
-                              {/* Regenerate draft */}
-                              <button
-                                onClick={() => generateDraft(dirId)}
-                                disabled={generatingDraft || evaluating}
-                                className="text-xs text-gray-400 hover:text-gray-700 disabled:opacity-40 transition-colors flex items-center gap-1"
-                              >
-                                {isGeneratingThis ? (
-                                  <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Regenerating…</>
-                                ) : 'Regenerate draft'}
-                              </button>
-                            </div>
-
-                          </div>
-                          )}
-                        </div>
-
-                        {isExpanded && (<>
-                        {/* ── Jury intelligence panel — "What wins at this show" ──────────── */}
-                        {/* Shown only when a show_profiles row exists for this direction's show.
-                            Collapsed by default. Uses the same show_profiles query pattern as the
-                            evaluate-entry and generate-draft edge functions. */}
-                        {showProfiles[dirId] && (
-                          <div className="border-b border-gray-100">
-                            <button
-                              onClick={() => setShowProfileOpen(prev => ({ ...prev, [dirId]: !prev[dirId] }))}
-                              className="w-full px-5 py-2.5 flex items-center justify-between text-left hover:bg-gray-50 transition-colors group"
-                            >
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-gray-400 group-hover:text-gray-600 transition-colors">🎯</span>
-                                <span className="text-xs font-medium text-gray-400 group-hover:text-gray-600 transition-colors">
-                                  What wins at {dirShow || showProfiles[dirId]!.show_name}
-                                </span>
-                                {dirCategory && showProfiles[dirId]!.show_name && (
-                                  <span className="text-xs text-gray-300">· {dirCategory}</span>
-                                )}
-                              </div>
-                              <span className="text-gray-300 text-xs group-hover:text-gray-400 transition-colors">
-                                {showProfileOpen[dirId] ? '▲' : '▼'}
-                              </span>
-                            </button>
-
-                            {showProfileOpen[dirId] && (
-                              <div className="px-5 pb-5 pt-3 bg-gray-50 space-y-4">
-                                {showProfiles[dirId]!.judging_philosophy && (
-                                  <div>
-                                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Judging philosophy</p>
-                                    <p className="text-sm text-gray-700 leading-relaxed">{showProfiles[dirId]!.judging_philosophy}</p>
-                                  </div>
-                                )}
-                                {showProfiles[dirId]!.scoring_emphasis && (
-                                  <div>
-                                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">What they score on</p>
-                                    <p className="text-sm text-gray-700 leading-relaxed">{showProfiles[dirId]!.scoring_emphasis}</p>
-                                  </div>
-                                )}
-                                {showProfiles[dirId]!.common_mistakes && (
-                                  <div>
-                                    <p className="text-xs font-semibold text-amber-500 uppercase tracking-wider mb-1.5">Common mistakes</p>
-                                    <p className="text-sm text-gray-700 leading-relaxed">{showProfiles[dirId]!.common_mistakes}</p>
-                                  </div>
-                                )}
-                                {showProfiles[dirId]!.language_guidance && (
-                                  <div>
-                                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Language & tone</p>
-                                    <p className="text-sm text-gray-700 leading-relaxed">{showProfiles[dirId]!.language_guidance}</p>
-                                  </div>
-                                )}
-                                {showProfiles[dirId]!.jury_composition_notes && (
-                                  <p className="text-xs text-gray-400 pt-3 border-t border-gray-200 leading-relaxed">
-                                    {showProfiles[dirId]!.jury_composition_notes}
-                                  </p>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* ── Jury Profile Intelligence panel — "Who judges this show" ──────── */}
-                        {/* Phase 1: static 2021-2026 dataset. Shows composition, president signal,
-                            and historical win patterns. No individual names exposed. */}
-                        {dirShow && juryShowCells[dirShow] && juryShowCells[dirShow].length > 0 && (
-                          <JuryProfilePanel
-                            showName={dirShow}
-                            category={dirCategory ?? ''}
-                            cells={juryShowCells[dirShow]}
-                            regionalUplift={regionalUplift}
-                            isOpen={!!juryPanelOpen[dirId]}
-                            onToggle={() => setJuryPanelOpen(prev => ({ ...prev, [dirId]: !prev[dirId] }))}
-                          />
-                        )}
-
-                        {isGeneratingThis && (
-                          <div className="px-5 pt-3 pb-1">
-                            <GeneratingBar isGenerating={isGeneratingThis} estimatedDuration={60000} />
-                          </div>
-                        )}
-
-                        {isEvaluatingThis && (
-                          <div className="px-5 pt-3 pb-1">
-                            <GeneratingBar
-                              isGenerating={isEvaluatingThis}
-                              estimatedDuration={50000}
-                              statements={evaluatingMode[dirId] === 'coach' ? COACH_REVIEW_STATEMENTS : JURY_EVAL_STATEMENTS}
-                            />
-                          </div>
-                        )}
-
-                        {/* Smart directions error */}
-                        {smartDirectionsError[dirId] && (
-                          <div className="px-5 py-2 bg-red-50 border-b border-red-100 flex items-center justify-between gap-2">
-                            <p className="text-xs text-red-600">{smartDirectionsError[dirId]}</p>
-                            <button onClick={() => setSmartDirectionsError(prev => { const n = { ...prev }; delete n[dirId]; return n })} className="text-red-400 hover:text-red-600 text-xs">✕</button>
-                          </div>
-                        )}
-
-                        {/* Needs re-evaluation notice — shown when draft has been improved since last eval */}
-                        {needsReEval && !isEvaluatingThis && (
-                          <div className="px-5 py-3 bg-amber-50 border-b border-amber-200 flex items-center justify-between gap-4">
-                            <div className="flex items-center gap-2">
-                              <span className="text-amber-600 text-sm">⚡</span>
-                              <p className="text-sm text-amber-800">
-                                Draft updated — re-evaluate to see the impact on scores
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              <button
-                                onClick={() => evaluateEntry(dirId, 'judge', evalBoth.judge?.id)}
-                                disabled={evaluating || generatingDraft}
-                                className="text-xs font-medium text-amber-800 hover:text-amber-900 border border-amber-300 hover:border-amber-500 bg-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40"
-                              >
-                                ⚖ {hasJudge ? 'Re-run Jury Eval' : 'Jury Evaluation'}
-                              </button>
-                              <button
-                                onClick={() => evaluateEntry(dirId, 'coach', evalBoth.coach?.id)}
-                                disabled={evaluating || generatingDraft || coaching}
-                                className="text-xs font-medium text-amber-800 hover:text-amber-900 border border-amber-300 hover:border-amber-500 bg-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40"
-                              >
-                                {((isEvaluatingThis && evaluatingMode[dirId] === 'coach') || (coaching && coachingForDirectionId === dirId)) ? (
-                                  <><svg className="animate-spin h-3 w-3 inline mr-1" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Coaching…</>
-                                ) : isAoyShow(d?.best_show ?? '') ? (
-                                  <>✦ {aoyCoaching[dirId] ? 'Re-run AOY Coach' : 'AOY Coach'}</>
-                                ) : configModeFor(dirId, d?.best_show) ? (
-                                  <>✦ {configCoaching[dirId] ? 'Re-run Coach' : 'Coach Review'}</>
-                                ) : (
-                                  <>✦ {hasCoach ? 'Re-run Coach Review' : 'Coach Review'}</>
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* AOY Coach — advisory per-section guidance (generate-aoy-coach,
-                            S77). AOY directions only; not an evaluations row, so it
-                            renders separately from the Jury panel. */}
-                        {isAoyShow(d?.best_show ?? '') && coachingError && coachingForDirectionId === dirId && (
-                          <div className="px-5 py-3 border-b border-gray-200"><ErrorBanner error={coachingError} /></div>
-                        )}
-                        {isAoyShow(d?.best_show ?? '') && aoyCoaching[dirId] && (() => {
-                          const c = aoyCoaching[dirId]
-                          // Chunk 5 staleness flag: the persisted/live coaching is
-                          // keyed to the draft_generation it was run against. If the
-                          // draft has since been regenerated (maxGen is this scope's
-                          // current-generation count, same variable the judge/coach
-                          // needsReEval check above already uses), say so plainly
-                          // instead of silently showing advice for an older draft.
-                          const coachStale = maxGen > c.draft_generation
-                          return (
-                            <div className="border-b border-gray-200 bg-green-50/40 px-5 py-4">
-                              <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                <span className="text-sm font-semibold text-gray-800">✦ AOY Coach</span>
-                                <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full capitalize">{c.pillar} pillar</span>
-                                <span className="text-xs text-gray-400">advisory, not a score</span>
-                              </div>
-                              {coachStale && (
-                                <p className="text-xs text-amber-700 mb-2">Draft changed since this coaching. Re-run AOY Coach for advice on the current version.</p>
-                              )}
-                              {c.overall && <p className="text-sm text-gray-700">{c.overall}</p>}
-                              {c.priorities.length > 0 && (
-                                <div className="mt-2">
-                                  <p className="text-xs font-medium text-gray-600 mb-1">Highest-leverage fixes</p>
-                                  <ul className="list-disc list-inside space-y-0.5">{c.priorities.map((p, i) => <li key={i} className="text-xs text-gray-600">{p}</li>)}</ul>
-                                </div>
-                              )}
-                              {(() => {
-                                const maxWeight = c.sections.reduce((m, x) => Math.max(m, x.weight || 0), 1)
-                                return (
-                              <div className="mt-3 space-y-2">
-                                {c.sections.map(sec => (
-                                  <div key={sec.key} className={`border rounded-lg px-3 py-2.5 ${sec.is_placeholder ? 'border-amber-200 bg-amber-50/40' : 'border-gray-200 bg-white'}`}>
-                                    <div className="flex items-baseline justify-between gap-2">
-                                      <p className="text-xs font-medium text-gray-800 min-w-0 flex-1">{sec.label}</p>
-                                      <span className="text-xs text-gray-400 tabular-nums flex-shrink-0">{sec.weight}% of score{sec.is_placeholder ? ' · not written' : ''}</span>
-                                    </div>
-                                    <div className="mt-1.5"><MeterBar fraction={(sec.weight || 0) / maxWeight} color={sec.is_placeholder ? '#d97706' : '#15803d'} /></div>
-                                    {sec.missing.length > 0 && <p className="text-xs text-amber-700 mt-1.5">Missing: {sec.missing.join('; ')}</p>}
-                                    {sec.suggestions.length > 0 && (
-                                      <ul className="list-disc list-inside mt-1 space-y-0.5">{sec.suggestions.map((x, i) => <li key={i} className="text-xs text-gray-600 leading-relaxed">{x}</li>)}</ul>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                                )
-                              })()}
-                              {/* Feedback export (S93): clean plain text bundling this
-                                  coach review + the latest jury eval, to copy into an
-                                  email/message or download. */}
-                              {d && (() => {
-                                const fbInput = {
-                                  kind: 'AOY' as const,
-                                  category: d.best_category ?? null,
-                                  overall: c.overall,
-                                  priorities: c.priorities,
-                                  sections: c.sections.map(s => ({ label: s.label, weight: s.weight, missing: s.missing, suggestions: s.suggestions })),
-                                }
-                                const copyKey = `aoy-fb-${dirId}`
-                                return (
-                                  <div className="mt-3 flex items-center gap-2 flex-wrap">
-                                    <button
-                                      onClick={() => copyTextWithConfirm(copyKey, buildFeedbackText(d, evalBoth.judge, fbInput), setFeedbackCopied)}
-                                      className="text-xs font-medium text-green-700 hover:text-green-900 border border-green-200 hover:border-green-400 px-3 py-1.5 rounded-lg transition-colors"
-                                    >
-                                      {feedbackCopied[copyKey] ? '✓ Copied' : 'Copy feedback'}
-                                    </button>
-                                    <button
-                                      onClick={() => downloadCoachFeedback(d, evalBoth.judge, fbInput)}
-                                      className="text-xs text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors"
-                                    >
-                                      ↓ Feedback .txt
-                                    </button>
-                                  </div>
-                                )
-                              })()}
-                            </div>
-                          )
-                        })()}
-
-                        {/* Config Coach — advisory per-section guidance
-                            (generate-entry-coach-config, S98 Chunk 5). Non-AOY config
-                            directions (weighted or qualitative, e.g. SMARTIES); not an
-                            evaluations row, so it renders separately from the Jury
-                            panel. Replaces the dedicated SMARTIES coach panel (S93).
-                            Reuses the shared coaching error state. */}
-                        {configModeFor(dirId, d?.best_show) && coachingError && coachingForDirectionId === dirId && (
-                          <div className="px-5 py-3 border-b border-gray-200"><ErrorBanner error={coachingError} /></div>
-                        )}
-                        {configCoaching[dirId] && (() => {
-                          const c = configCoaching[dirId]
-                          return (
-                            <div className="border-b border-gray-200 bg-green-50/40 px-5 py-4">
-                              <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                <span className="text-lg font-semibold text-gray-800">✦ Coach</span>
-                                {c.category_key && <span className="text-sm font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">{c.category_key}</span>}
-                                <span className="text-sm text-gray-400">advisory, not a score</span>
-                              </div>
-                              {/* framing_degraded (S98 Chunk 4): Coach ran without the
-                                  show's full jury framing. Surface it so a generic pass
-                                  is visible rather than mistaken for show-calibrated advice. */}
-                              {c.framing_degraded && (
-                                <p className="text-sm text-amber-700 mb-2">Coaching without full show framing. Advice is general; seed this show&apos;s jury framing for show-specific guidance.</p>
-                              )}
-                              {c.overall && <p className="text-base text-gray-700 leading-relaxed">{c.overall}</p>}
-                              {c.priorities.length > 0 && (
-                                <div className="mt-2">
-                                  <p className="text-sm font-medium text-gray-600 mb-1">Highest-leverage fixes</p>
-                                  <ul className="list-disc list-inside space-y-1">{c.priorities.map((p, i) => <li key={i} className="text-base text-gray-600 leading-relaxed">{p}</li>)}</ul>
-                                </div>
-                              )}
-                              <div className="mt-3 space-y-2">
-                                {c.sections.map(sec => (
-                                  <div key={sec.key} className={`border rounded-lg px-3 py-2.5 ${sec.is_placeholder ? 'border-amber-200 bg-amber-50/40' : 'border-gray-200 bg-white'}`}>
-                                    <div className="flex items-baseline justify-between gap-2">
-                                      <p className="text-base font-medium text-gray-800 min-w-0 flex-1">{sec.label}{typeof sec.weight === 'number' ? <span className="text-gray-400 font-normal"> {sec.weight}% of score</span> : null}</p>
-                                      {sec.is_placeholder && <span className="text-sm text-gray-400 flex-shrink-0">not written</span>}
-                                    </div>
-                                    {sec.missing.length > 0 && <p className="text-base text-amber-700 mt-1.5 leading-relaxed">Missing: {sec.missing.join('; ')}</p>}
-                                    {sec.suggestions.length > 0 && (
-                                      <ul className="list-disc list-inside mt-1 space-y-1">{sec.suggestions.map((x, i) => <li key={i} className="text-base text-gray-600 leading-relaxed">{x}</li>)}</ul>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                              {/* Feedback export: clean plain text bundling this coach
-                                  review + the latest jury eval. Weighted -> AOY-shaped
-                                  (carries weights), qualitative -> SMARTIES-shaped. */}
-                              {d && (() => {
-                                const fbInput = c.scoring_mode === 'weighted'
-                                  ? {
-                                      kind: 'AOY' as const,
-                                      category: c.category_key,
-                                      overall: c.overall,
-                                      priorities: c.priorities,
-                                      sections: c.sections.map(s => ({ label: s.label, weight: s.weight ?? 0, missing: s.missing, suggestions: s.suggestions })),
-                                    }
-                                  : {
-                                      kind: 'SMARTIES' as const,
-                                      category: c.category_key,
-                                      overall: c.overall,
-                                      priorities: c.priorities,
-                                      sections: c.sections.map(s => ({ label: s.label, missing: s.missing, suggestions: s.suggestions })),
-                                    }
-                                const copyKey = `config-fb-${dirId}`
-                                return (
-                                  <div className="mt-3 flex items-center gap-2 flex-wrap">
-                                    <button
-                                      onClick={() => copyTextWithConfirm(copyKey, buildFeedbackText(d, evalBoth.judge, fbInput), setFeedbackCopied)}
-                                      className="text-sm font-medium text-green-700 hover:text-green-900 border border-green-200 hover:border-green-400 px-3 py-1.5 rounded-lg transition-colors"
-                                    >
-                                      {feedbackCopied[copyKey] ? '✓ Copied' : 'Copy feedback'}
-                                    </button>
-                                    <button
-                                      onClick={() => downloadCoachFeedback(d, evalBoth.judge, fbInput)}
-                                      className="text-sm text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors"
-                                    >
-                                      ↓ Feedback .txt
-                                    </button>
-                                  </div>
-                                )
-                              })()}
-                            </div>
-                          )
-                        })()}
-
-                        {/* Evaluation panel */}
-                        {(hasJudge || hasCoach) && (
-                          <div className="border-b border-gray-200 bg-gray-50">
-                            {/* Collapsed summary strip (S152). Default collapsed: the
-                                per-section jury reads now render inline in the edit surface
-                                below, so the full breakdown is opt-in, not stacked above it. */}
-                            <button
-                              type="button"
-                              onClick={() => setEvalPanelExpanded(prev => ({ ...prev, [dirId]: !(prev[dirId] ?? false) }))}
-                              className="w-full flex items-center justify-between gap-3 px-5 py-3 text-left hover:bg-gray-100 transition-colors"
-                            >
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">{hasJudge ? 'Jury evaluation' : 'Coach review'}</span>
-                                {summaryScore != null && (
-                                  <span className="text-sm font-bold tabular-nums text-gray-900">{summaryScore.toFixed(1)}<span className="font-normal text-gray-400">/10</span></span>
-                                )}
-                              </div>
-                              <span className="flex-shrink-0 text-xs text-gray-400">{(evalPanelExpanded[dirId] ?? false) ? 'Hide breakdown ↑' : 'Full breakdown ↓'}</span>
-                            </button>
-                            <div className={(evalPanelExpanded[dirId] ?? false) ? 'border-t border-gray-200' : 'hidden'}>
-
-                            {/* Eval view tab strip — Session 57: shown once ANY eval exists.
-                                Tabs render per existing mode, plus the always-present
-                                Recommended Next Steps tab (the Build 2 card's new home).
-                                Larger targets than the Session 55 strip per Ben's review. */}
-                            <div className="px-5 pt-4 flex items-center gap-1 border-b border-gray-200 flex-wrap">
-                              {hasJudge && (
-                                <button
-                                  onClick={() => setEvalDisplayMode(prev => ({ ...prev, [dirId]: 'judge' }))}
-                                  className={`text-sm font-medium px-4 py-2 rounded-t-lg border-b-2 transition-colors -mb-px ${activeView === 'judge' ? 'border-gray-800 text-gray-900 bg-white' : 'border-transparent text-gray-400 hover:text-gray-700'}`}
-                                  style={{ minHeight: '44px' }}
-                                >
-                                  ⚖ Jury Evaluation
-                                </button>
-                              )}
-                              {hasCoach && (
-                                <button
-                                  onClick={() => setEvalDisplayMode(prev => ({ ...prev, [dirId]: 'coach' }))}
-                                  className={`text-sm font-medium px-4 py-2 rounded-t-lg border-b-2 transition-colors -mb-px ${activeView === 'coach' ? 'border-green-700 text-green-800 bg-white' : 'border-transparent text-gray-400 hover:text-gray-700'}`}
-                                  style={{ minHeight: '44px' }}
-                                >
-                                  ✦ Coach Review
-                                </button>
-                              )}
-                              <button
-                                onClick={() => setEvalDisplayMode(prev => ({ ...prev, [dirId]: 'nextsteps' }))}
-                                className={`text-sm font-semibold px-4 py-2 rounded-t-lg border-b-2 transition-colors -mb-px ${activeView === 'nextsteps' ? 'border-green-700 text-green-800 bg-green-50' : 'border-transparent text-green-700 hover:text-green-600 hover:bg-green-50'}`}
-                                style={{ minHeight: '44px' }}
-                              >
-                                ✦ Recommended Next Steps
-                              </button>
-                            </div>
-
-                          {activeView === 'nextsteps' ? (
-                          <div className="px-5 py-5">
-                            {(() => {
-                              // Session 57: the Build 2 Next Step card, relocated from the
-                              // bottom of the judge output into this tab and made state-aware.
-                              // Still PRODUCT OUTPUT — ignores the guidance toggle.
-                              const judgeEval = evalBoth.judge ?? null
-                              const judgeOut = (judgeEval?.output ?? null) as JudgeOutput | null
-                              const realDirs = directions.filter(dd => dd.angle !== 'Uploaded entry — direct evaluation')
-                              const evalDirFit = directions.find(dd => dd.id === dirId)?.win_likelihood ?? null
-                              const strongerDirections: NextStepDirectionRef[] = realDirs
-                                .filter(dd => dd.id !== dirId && typeof dd.win_likelihood === 'number')
-                                .filter(dd => evalDirFit === null || (dd.win_likelihood as number) > evalDirFit)
-                                .sort((a, b) => (b.win_likelihood ?? 0) - (a.win_likelihood ?? 0))
-                                .slice(0, 2)
-                                .map(dd => ({ id: dd.id, name: dd.name, show: dd.best_show, category: dd.best_category, fit: dd.win_likelihood }))
-                              // Run counts for this direction: active slot + history rows
-                              // (evaluation_mode null on legacy rows counts as judge)
-                              const judgeRunCount = (evalBoth.judge ? 1 : 0) + dirHistory.filter(h => h.evaluation_mode !== 'coach').length
-                              const coachRunCount = (evalBoth.coach ? 1 : 0) + dirHistory.filter(h => h.evaluation_mode === 'coach').length
-                              const opportunities = judgeEval && judgeOut && Array.isArray(judgeOut.next_opportunities)
-                                ? judgeOut.next_opportunities.map((opp): NextStepOpportunity => ({
-                                    ...opp,
-                                    existingDirectionId:
-                                      realDirs.find(dd =>
-                                        sameShow(dd.best_show, opp.show) &&
-                                        (dd.best_category ?? '').trim().toLowerCase() === opp.category.trim().toLowerCase()
-                                      )?.id ??
-                                      realDirs.find(dd => sameShow(dd.best_show, opp.show))?.id ?? null,
-                                  }))
-                                : null
-                              return (
-                                <NextStepCard
-                                  opportunities={opportunities}
-                                  evaluatedShow={dirShow ?? ''}
-                                  overallScore={judgeEval ? judgeEval.overall_score : null}
-                                  judgeRunCount={judgeRunCount}
-                                  coachRunCount={coachRunCount}
-                                  hasJudge={hasJudge}
-                                  hasCoach={hasCoach}
-                                  hasScript={!!((scriptText && scriptText.trim()) || project?.script_text)}
-                                  hasDirections={realDirs.length > 0}
-                                  strongerDirections={strongerDirections}
-                                  altCategoriesLoading={smartDirectionsLoading[dirId] === 'alternatives'}
-                                  actionsDisabled={evaluating || generatingDraft}
-                                  onShown={(count) => {
-                                    if (nextstepShownRef.current.has(dirId)) return
-                                    nextstepShownRef.current.add(dirId)
-                                    track('nextstep_shown', { project_id: Number(projectId), direction_id: dirId, opportunity_count: count, view: 'tab' })
-                                  }}
-                                  onAction={(action: NextStepAction) => {
-                                    track('nextstep_clicked', {
-                                      project_id: Number(projectId),
-                                      direction_id: dirId,
-                                      cta: action.type,
-                                      ...(action.type === 'view_direction'
-                                        ? { target_direction_id: action.directionId, source: action.source, show: action.show ?? null, category: action.category ?? null }
-                                        : {}),
-                                    })
-                                    if (action.type === 'run_coach') { evaluateEntry(dirId, 'coach', evalBoth.coach?.id); return }
-                                    if (action.type === 'run_jury') { evaluateEntry(dirId, 'judge', evalBoth.judge?.id); return }
-                                    if (action.type === 'video_script') { setTab('script'); return }
-                                    if (action.type === 'press_kit') { setTab('presskit'); return }
-                                    if (action.type === 'alt_categories') {
-                                      const evalForSmart = evalBoth.judge ?? evalBoth.coach
-                                      if (evalForSmart) generateSmartDirections(dirId, evalForSmart.id, 'alternatives')
-                                      return
-                                    }
-                                    // Directions-bound CTAs land on the list sorted by fit (Ben, Session 57)
-                                    if (action.type === 'view_directions' || action.type === 'view_direction') setDirSortKey('category_fit')
-                                    setTab('directions')
-                                    if (action.type === 'view_direction') {
-                                      spotlightDirection(action.directionId)
-                                    } else if (action.type === 'generate_directions') {
-                                      generateDirections()
-                                    }
-                                  }}
-                                />
-                              )
-                            })()}
-                          </div>
-                          ) : evaluation ? (
-                          <div className="px-5 py-5">
-                            {(() => {
-                              const isCoach = evaluation.evaluation_mode === 'coach'
-                              const untapped = parseFloat((10 - evaluation.overall_score).toFixed(1))
-                              const displayScore = isCoach ? untapped : evaluation.overall_score
-                              return (
-                            <div className="flex items-start justify-between mb-4">
-                              <div>
-                                <div className="flex items-baseline gap-2 flex-wrap">
-                                  <span
-                                    className={`font-bold tabular-nums ${isCoach ? coachScoreColor(displayScore) : scoreColor(displayScore)}`}
-                                    style={{ fontFamily: '"Instrument Serif", "Times New Roman", serif', fontSize: '2.8rem', lineHeight: 1, letterSpacing: '-0.02em' }}
-                                  >
-                                    {displayScore.toFixed(1)}
-                                  </span>
-                                  <span className="text-gray-400" style={{ fontFamily: '"Instrument Serif", "Times New Roman", serif', fontSize: '1.25rem' }}>/10</span>
-                                  {/* Overall delta badge — shown as raw score change regardless of mode */}
-                                  {deltas?.['overall'] !== undefined && deltas['overall'] !== 0 && (
-                                    <span className={`text-sm font-bold tabular-nums px-2 py-0.5 rounded-full ${deltas['overall'] > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
-                                      {deltas['overall'] > 0 ? `↑ +${deltas['overall']}` : `↓ ${deltas['overall']}`}
-                                    </span>
-                                  )}
-                                  {deltas?.['overall'] === 0 && (
-                                    <span className="text-sm text-gray-400 px-2 py-0.5 rounded-full bg-gray-100">— No change</span>
-                                  )}
-                                  {/* Mode badge */}
-                                  {isCoach ? (
-                                    <span className="text-xs font-medium bg-green-100 text-green-800 border border-green-200 px-2 py-0.5 rounded-full">✦ Coach Review</span>
-                                  ) : (
-                                    <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">⚖ Jury Evaluation</span>
-                                  )}
-                                </div>
-                                {/* Coach: label the inverted score, then explain what it measures */}
-                                {isCoach && (
-                                  <p className="text-xs font-semibold text-gray-500 mt-1">untapped potential <span className="font-normal text-gray-400">— lower is better</span></p>
-                                )}
-                                <p className="text-xs text-gray-400 mt-0.5">
-                                  {isCoach
-                                    ? 'Estimated gap between this draft and your campaign\'s full potential · Claude Opus 4.6'
-                                    : 'Scored on entry as written · Claude Opus 4.6'}
-                                </p>
-                              </div>
-                              <p className="text-xs text-gray-400">
-                                {new Date(evaluation.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                              </p>
-                            </div>
-                              )
-                            })()}
-
-                            {/* Coach mode: explain that dimension scores still read higher = more covered */}
-                            {evaluation.evaluation_mode === 'coach' && (
-                              <p className="text-xs text-gray-400 italic mb-3">
-                                Dimension scores show how fully each aspect of your campaign&apos;s available material is represented in this draft. Higher = stronger coverage; lower = more to unlock in that area.
-                              </p>
-                            )}
-
-                            {/* AOY weight-aware jury (S75): per-section scores x section_weight.
-                                Replaces the fixed 6-dimension campaign grid for AOY entries. */}
-                            {(() => {
-                              const aoyOut = evaluation.output as unknown as {
-                                aoy?: boolean; pillar?: string; category_key?: string; weight_warning?: string | null;
-                                sections?: { key: string; label: string; weight: number; score: number; weighted_contribution: number; rationale: string; is_placeholder: boolean }[]
-                              } | null
-                              if (!aoyOut?.aoy) return null
-                              const secs = Array.isArray(aoyOut.sections) ? aoyOut.sections : []
-                              return (
-                                <div className="mb-5">
-                                  <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                    <span className="text-xs font-semibold text-gray-600">Weighted rubric: {aoyOut.category_key}</span>
-                                    {aoyOut.pillar && <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full capitalize">{aoyOut.pillar} pillar</span>}
-                                  </div>
-                                  {aoyOut.weight_warning && <p className="text-xs text-amber-600 mb-2">{aoyOut.weight_warning}</p>}
-                                  {(() => {
-                                    const maxWeight = secs.reduce((m, x) => Math.max(m, x.weight || 0), 1)
-                                    return (
-                                  <div className="space-y-2">
-                                    {secs.map(s => {
-                                      const sDelta = deltas?.[s.key]
-                                      return (
-                                        <div key={s.key} className={`border rounded-lg px-3 py-2.5 ${scoreBg(s.score)}`}>
-                                          <div className="flex items-baseline justify-between gap-2">
-                                            <p className="text-xs text-gray-700 font-medium min-w-0 flex-1">{s.label} <span className="text-gray-400 font-normal">{s.weight}% of score</span></p>
-                                            <div className="flex items-baseline gap-1.5 flex-shrink-0">
-                                              <p className={`text-lg font-bold tabular-nums ${scoreColor(s.score)}`}>{s.score}<span className="text-xs text-gray-400">/10</span></p>
-                                              {sDelta !== undefined && sDelta !== 0 && (
-                                                <span className={`text-xs font-semibold tabular-nums ${sDelta > 0 ? 'text-green-600' : 'text-red-500'}`}>{sDelta > 0 ? `↑+${sDelta}` : `↓${sDelta}`}</span>
-                                              )}
-                                            </div>
-                                          </div>
-                                          <div className="mt-1.5"><MeterBar fraction={(s.weight || 0) / maxWeight} /></div>
-                                          <p className="text-xs text-gray-400 mt-1 tabular-nums">Adds {s.weighted_contribution} to the weighted total{s.is_placeholder ? ' · section not written' : ''}</p>
-                                          {s.rationale && <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">{s.rationale}</p>}
-                                        </div>
-                                      )
-                                    })}
-                                  </div>
-                                    )
-                                  })()}
-                                </div>
-                              )
-                            })()}
-
-                            {/* SMARTIES qualitative jury (S92): per-section scores
-                                plus a holistic overall. SMARTIES publishes no section
-                                weighting, so there is no weighted total. Replaces the
-                                fixed campaign grid for SMARTIES entries. */}
-                            {(() => {
-                              const smOut = evaluation.output as unknown as {
-                                smarties?: boolean; category?: string | null;
-                                sections?: { field_key: string; label: string; score: number; rationale: string; is_placeholder: boolean }[]
-                              } | null
-                              if (!smOut?.smarties) return null
-                              const secs = Array.isArray(smOut.sections) ? smOut.sections : []
-                              return (
-                                <div className="mb-5">
-                                  <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                    <span className="text-xs font-semibold text-gray-600">SMARTIES case study{smOut.category ? `: ${smOut.category}` : ''}</span>
-                                    <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">holistic score, no published section weighting</span>
-                                  </div>
-                                  <div className="space-y-2">
-                                    {secs.map(s => {
-                                      const sDelta = deltas?.[s.field_key]
-                                      return (
-                                        <div key={s.field_key} className={`border rounded-lg px-3 py-2.5 ${scoreBg(s.score)}`}>
-                                          <div className="flex items-baseline justify-between gap-2">
-                                            <p className="text-xs text-gray-700 font-medium min-w-0 flex-1">{s.label}</p>
-                                            <div className="flex items-baseline gap-1.5 flex-shrink-0">
-                                              <p className={`text-lg font-bold tabular-nums ${scoreColor(s.score)}`}>{s.score}<span className="text-xs text-gray-400">/10</span></p>
-                                              {sDelta !== undefined && sDelta !== 0 && (
-                                                <span className={`text-xs font-semibold tabular-nums ${sDelta > 0 ? 'text-green-600' : 'text-red-500'}`}>{sDelta > 0 ? `↑+${sDelta}` : `↓${sDelta}`}</span>
-                                              )}
-                                            </div>
-                                          </div>
-                                          {s.is_placeholder && <p className="text-xs text-gray-400 mt-1">Section not written</p>}
-                                          {s.rationale && <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">{s.rationale}</p>}
-                                        </div>
-                                      )
-                                    })}
-                                  </div>
-                                </div>
-                              )
-                            })()}
-
-                            {/* Config jury (S98 Chunk 5): per-section breakdown from
-                                evaluate-entry-config, branching ONCE on scoring_mode.
-                                Weighted mirrors the AOY weighted panel (score x weight,
-                                weighted contribution, MeterBar); qualitative mirrors the
-                                SMARTIES panel (per-section 0-10, holistic overall shown
-                                in the header). This is the from-spec render that replaces
-                                per-show SMARTIES JSX. */}
-                            {(() => {
-                              const cfgOut = evaluation.output as unknown as {
-                                config?: boolean; scoring_mode?: 'weighted' | 'qualitative'
-                                category_key?: string | null; category?: string | null; weight_warning?: string | null
-                                sections?: { key?: string; field_key?: string; label: string; weight?: number; score: number; weighted_contribution?: number; rationale: string; is_placeholder: boolean }[]
-                              } | null
-                              if (!cfgOut?.config) return null
-                              const secs = Array.isArray(cfgOut.sections) ? cfgOut.sections : []
-                              const isWeighted = cfgOut.scoring_mode === 'weighted'
-                              const cat = cfgOut.category_key ?? cfgOut.category ?? null
-                              const maxWeight = isWeighted ? secs.reduce((m, x) => Math.max(m, x.weight || 0), 1) : 1
-                              return (
-                                <div className="mb-5">
-                                  <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                    <span className="text-xs font-semibold text-gray-600">{isWeighted ? 'Weighted rubric' : 'Case study'}{cat ? `: ${cat}` : ''}</span>
-                                    <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">{isWeighted ? 'config jury' : 'holistic score, no published section weighting'}</span>
-                                  </div>
-                                  {isWeighted && cfgOut.weight_warning && <p className="text-xs text-amber-600 mb-2">{cfgOut.weight_warning}</p>}
-                                  <div className="space-y-2">
-                                    {secs.map((s, i) => {
-                                      const sKey = s.key ?? s.field_key ?? String(i)
-                                      const sDelta = deltas?.[sKey]
-                                      return (
-                                        <div key={sKey} className={`border rounded-lg px-3 py-2.5 ${scoreBg(s.score)}`}>
-                                          <div className="flex items-baseline justify-between gap-2">
-                                            <p className="text-xs text-gray-700 font-medium min-w-0 flex-1">{s.label}{isWeighted && typeof s.weight === 'number' ? <span className="text-gray-400 font-normal"> {s.weight}% of score</span> : null}</p>
-                                            <div className="flex items-baseline gap-1.5 flex-shrink-0">
-                                              <p className={`text-lg font-bold tabular-nums ${scoreColor(s.score)}`}>{s.score}<span className="text-xs text-gray-400">/10</span></p>
-                                              {sDelta !== undefined && sDelta !== 0 && (
-                                                <span className={`text-xs font-semibold tabular-nums ${sDelta > 0 ? 'text-green-600' : 'text-red-500'}`}>{sDelta > 0 ? `↑+${sDelta}` : `↓${sDelta}`}</span>
-                                              )}
-                                            </div>
-                                          </div>
-                                          {isWeighted && <div className="mt-1.5"><MeterBar fraction={(s.weight || 0) / maxWeight} /></div>}
-                                          {isWeighted && typeof s.weighted_contribution === 'number' && <p className="text-xs text-gray-400 mt-1 tabular-nums">Adds {s.weighted_contribution} to the weighted total{s.is_placeholder ? ' · section not written' : ''}</p>}
-                                          {!isWeighted && s.is_placeholder && <p className="text-xs text-gray-400 mt-1">Section not written</p>}
-                                          {s.rationale && <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">{s.rationale}</p>}
-                                        </div>
-                                      )
-                                    })}
-                                  </div>
-                                </div>
-                              )
-                            })()}
-
-                            {/* AOY market-context modifier (S85, Phase 3, Option B):
-                                a bounded, source-cited adjustment shown ALONGSIDE the
-                                calibrated raw score. The raw score never changes; every
-                                nonzero delta names the sourced market fact behind it. */}
-                            {(() => {
-                              const isAoyJudge = !!(evaluation.output as unknown as { aoy?: boolean } | null)?.aoy && evaluation.evaluation_mode === 'judge'
-                              if (!isAoyJudge) return null
-                              const adj = aoyMarketAdj[dirId]
-                              const showAdj = !!adj && adj.evaluation_id === evaluation.id
-                              const busy = marketAdjusting === dirId
-                              const err = marketAdjustError[dirId]
-                              const mc = showAdj ? adj.market_context : null
-                              return (
-                                <div className="mb-5 border border-gray-200 rounded-lg px-3 py-3 bg-gray-50">
-                                  <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
-                                    <span className="text-xs font-semibold text-gray-600">Market context</span>
-                                    {!showAdj && (
-                                      <button
-                                        onClick={() => applyAoyMarket(dirId, evaluation.id)}
-                                        disabled={busy}
-                                        className="text-xs font-medium bg-green-800 hover:bg-green-700 text-white px-2.5 py-1 rounded-full disabled:opacity-50"
-                                      >
-                                        {busy ? 'Adjusting...' : 'Apply market context'}
-                                      </button>
-                                    )}
-                                  </div>
-                                  <p className="text-xs text-gray-400 mb-2">A bounded, sourced adjustment (max ±{adj?.cap ?? 0.5} per section) on top of the calibrated score. The raw score is never altered.</p>
-                                  {err && <p className="text-xs text-red-600 mb-2">{err}</p>}
-                                  {showAdj && adj.no_baseline && (
-                                    <p className="text-xs text-gray-500">No verified market baseline on file for this market and cycle. The raw score stands.</p>
-                                  )}
-                                  {showAdj && !adj.no_baseline && (
-                                    <>
-                                      <div className="flex items-baseline gap-3 flex-wrap mb-2">
-                                        <span className="text-xs text-gray-500">Raw <span className="font-bold tabular-nums text-gray-700">{adj.raw_overall.toFixed(1)}</span><span className="text-gray-400">/10</span></span>
-                                        <span className="text-xs text-gray-500">Market-adjusted{' '}
-                                          <span className={`font-bold tabular-nums ${adj.overall_delta > 0 ? 'text-green-700' : adj.overall_delta < 0 ? 'text-red-600' : 'text-gray-700'}`}>{adj.adjusted_overall.toFixed(1)}</span><span className="text-gray-400">/10</span>
-                                          {adj.overall_delta !== 0 && <span className={`ml-1 font-semibold ${adj.overall_delta > 0 ? 'text-green-600' : 'text-red-500'}`}>{adj.overall_delta > 0 ? `+${adj.overall_delta}` : adj.overall_delta}</span>}
-                                        </span>
-                                        {mc && (
-                                          <span className="text-xs font-medium bg-white text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">
-                                            {mc.market}{mc.fallback_to_all ? ' (all-market)' : ` (${mc.discipline})`} · {mc.window_start} to {mc.window_end}
-                                          </span>
-                                        )}
-                                      </div>
-                                      {adj.note && <p className="text-xs text-gray-500 mb-2 leading-relaxed">{adj.note}</p>}
-                                      <div className="space-y-1">
-                                        {adj.sections.filter(s => s.delta !== 0).map(s => (
-                                          <div key={s.key} className="text-xs text-gray-600 leading-relaxed">
-                                            <span className="font-medium">{s.label}</span>{' '}
-                                            <span className={`font-semibold tabular-nums ${s.delta > 0 ? 'text-green-600' : 'text-red-500'}`}>{s.delta > 0 ? `+${s.delta}` : s.delta}</span>{' '}
-                                            <span className="text-gray-400 tabular-nums">({s.raw_score} to {s.adjusted_score})</span>
-                                            {s.rationale && <span className="text-gray-500"> · {s.rationale}</span>}
-                                          </div>
-                                        ))}
-                                        {adj.sections.every(s => s.delta === 0) && (
-                                          <p className="text-xs text-gray-400">No section moved: the market did not materially change how this entry reads.</p>
-                                        )}
-                                      </div>
-                                      {mc && mc.figures.length > 0 && (
-                                        <div className="mt-2 pt-2 border-t border-gray-200">
-                                          <p className="text-xs text-gray-400 mb-1">Sourced market figures</p>
-                                          <ul className="space-y-0.5">
-                                            {mc.figures.map((f, i) => (
-                                              <li key={i} className="text-xs text-gray-500">
-                                                {f.figure}: {f.value}{f.scope ? ` [${f.scope}]` : ''}
-                                                {f.url && <> · <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-green-700 underline">source</a></>}
-                                              </li>
-                                            ))}
-                                          </ul>
-                                        </div>
-                                      )}
-                                    </>
-                                  )}
-                                </div>
-                              )
-                            })()}
-
-                            {!((evaluation.output as unknown as { aoy?: boolean } | null)?.aoy) && !((evaluation.output as unknown as { smarties?: boolean } | null)?.smarties) && !((evaluation.output as unknown as { config?: boolean } | null)?.config) && (
-                            <div className="grid grid-cols-3 gap-2 mb-5">
-                              {SCORE_DIMENSIONS.map(dim => {
-                                const score = evaluation.scores[dim.key] ?? 0
-                                const delta = deltas?.[dim.key]
-                                return (
-                                  <div key={dim.key} className={`border rounded-lg px-3 py-2.5 ${scoreBg(score)}`}>
-                                    <p className="text-xs text-gray-500 mb-1">{dim.label}</p>
-                                    <div className="flex items-baseline gap-1.5">
-                                      <p className={`text-xl font-bold tabular-nums ${scoreColor(score)}`}>{score}</p>
-                                      {delta !== undefined && delta !== 0 && (
-                                        <span className={`text-xs font-semibold tabular-nums ${delta > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                                          {delta > 0 ? `↑+${delta}` : `↓${delta}`}
-                                        </span>
-                                      )}
-                                      {delta === 0 && (
-                                        <span className="text-xs text-gray-400">—</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                )
-                              })}
-                              {/* Brief Alignment — coach mode only */}
-                              {evaluation.scores.brief_alignment !== undefined && (() => {
-                                const baScore = evaluation.scores.brief_alignment
-                                const baDelta = deltas?.['brief_alignment']
-                                return (
-                                  <div className={`border-2 border-dashed rounded-lg px-3 py-2.5 ${scoreBg(baScore)}`}>
-                                    <p className="text-xs text-gray-500 mb-1">Brief Alignment</p>
-                                    <div className="flex items-baseline gap-1.5">
-                                      <p className={`text-xl font-bold tabular-nums ${scoreColor(baScore)}`}>{baScore}</p>
-                                      {baDelta !== undefined && baDelta !== 0 && (
-                                        <span className={`text-xs font-semibold tabular-nums ${baDelta > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                                          {baDelta > 0 ? `↑+${baDelta}` : `↓${baDelta}`}
-                                        </span>
-                                      )}
-                                      {baDelta === 0 && (
-                                        <span className="text-xs text-gray-400">—</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                )
-                              })()}
-                            </div>
-                            )}
-
-                            {/* ── v3 output: mode-specific display ─────────────────────── */}
-                            {evaluation.output ? (
-                              <>
-                                {evaluation.evaluation_mode === 'judge' ? (
-                                  /* ── Judge mode: talks_up / kills_it / recommendations ── */
-                                  (() => {
-                                    const o = evaluation.output as JudgeOutput
-                                    return (
-                                      <>
-                                        {/* What Jurors Will Talk Up */}
-                                        {o.talks_up && o.talks_up.length > 0 && (
-                                          <div className="mb-5">
-                                            <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-3">What Jurors Will Talk Up</p>
-                                            <div className="space-y-2.5">
-                                              {o.talks_up.map((s, i) => (
-                                                <div key={i} className="bg-green-50 border-l-4 border-green-500 rounded-r-lg px-4 py-3">
-                                                  <p className="text-sm text-gray-800 leading-relaxed italic">&ldquo;{s}&rdquo;</p>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          </div>
-                                        )}
-
-                                        {/* Where Jurors Will Kill Your Entry */}
-                                        {o.kills_it && o.kills_it.length > 0 && (
-                                          <div className="mb-5">
-                                            <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-3">Where Jurors Will Kill Your Entry</p>
-                                            <div className="space-y-2.5">
-                                              {o.kills_it.map((g, i) => (
-                                                <div key={i} className="bg-red-50 border-l-4 border-red-400 rounded-r-lg px-4 py-3">
-                                                  <p className="text-sm text-gray-800 leading-relaxed italic">&ldquo;{g}&rdquo;</p>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          </div>
-                                        )}
-
-                                        {/* Recommendations */}
-                                        {o.recommendations && (
-                                          <div className="mb-5">
-                                            <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">Recommendations to Help Your Chances</p>
-                                            <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{o.recommendations}</p>
-                                          </div>
-                                        )}
-
-                                        {/* Campaign name note */}
-                                        {o.campaign_name_note && (
-                                          <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
-                                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">On the Campaign Name</p>
-                                            <p className="text-sm text-gray-700 leading-relaxed">{o.campaign_name_note}</p>
-                                          </div>
-                                        )}
-
-                                        {/* Session 57: the Next Step card moved from here into the
-                                            "✦ Recommended Next Steps" tab on the eval view strip
-                                            (activeView === 'nextsteps'). Do not reintroduce it inline. */}
-                                      </>
-                                    )
-                                  })()
-                                ) : (
-                                  /* ── Coach mode: focus_point / priority_fixes / cuts ── */
-                                  (() => {
-                                    const o = evaluation.output as CoachOutput
-                                    return (
-                                      <>
-                                        {/* Strongest Asset */}
-                                        {o.focus_point && (
-                                          <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-5">
-                                            <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-2">✦ Your Entry&apos;s Strongest Asset</p>
-                                            <p className="text-sm text-gray-800 leading-relaxed">{o.focus_point}</p>
-                                          </div>
-                                        )}
-
-                                        {/* Priority Fixes */}
-                                        {o.priority_fixes && o.priority_fixes.length > 0 && (
-                                          <div className="mb-5">
-                                            <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">Priority Fixes — Biggest Impact First</p>
-                                            <div className="space-y-3">
-                                              {o.priority_fixes.map((pf, i) => (
-                                                <div key={i} className="border border-gray-200 rounded-xl p-4">
-                                                  <p className="text-sm font-semibold text-gray-900 mb-1.5">{i + 1}. {pf.fix}</p>
-                                                  <p className="text-xs text-gray-600 mb-1"><span className="font-medium">Why: </span>{pf.why}</p>
-                                                  <p className="text-xs text-green-700"><span className="font-medium">How: </span>{pf.action}</p>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          </div>
-                                        )}
-
-                                        {/* What to Cut */}
-                                        {o.cuts && o.cuts.length > 0 && (
-                                          <div>
-                                            <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-3">What to Cut</p>
-                                            <ul className="space-y-2.5">
-                                              {o.cuts.map((c, i) => (
-                                                <li key={i} className="text-sm text-gray-700 leading-relaxed flex gap-2">
-                                                  <span className="text-red-500 flex-shrink-0 mt-0.5">✗</span>
-                                                  <span>{c}</span>
-                                                </li>
-                                              ))}
-                                            </ul>
-                                          </div>
-                                        )}
-                                      </>
-                                    )
-                                  })()
-                                )}
-                              </>
-                            ) : (
-                              /* ── Legacy display (v1/v2 evaluations — strengths/gaps/recommendations) ── */
-                              <>
-                                <div className="grid grid-cols-2 gap-5 mb-5">
-                                  <div>
-                                    <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-3">Strengths</p>
-                                    <ul className="space-y-2.5">
-                                      {evaluation.strengths.map((s, i) => (
-                                        <li key={i} className="text-sm text-gray-700 leading-relaxed flex gap-2">
-                                          <span className="text-green-700 flex-shrink-0 mt-0.5">✓</span>
-                                          <span>{s}</span>
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                  <div>
-                                    <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-3">Gaps</p>
-                                    <ul className="space-y-2.5">
-                                      {evaluation.gaps.map((g, i) => (
-                                        <li key={i} className="text-sm text-gray-700 leading-relaxed flex gap-2">
-                                          <span className="text-red-600 flex-shrink-0 mt-0.5">✗</span>
-                                          <span>{g}</span>
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                </div>
-                                <div>
-                                  <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">Recommendations</p>
-                                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{evaluation.recommendations}</p>
-                                </div>
-                              </>
-                            )}
-
-                            {/* Notable changes — shown when a changes_analysis is present (comparison re-evaluation) */}
-                            {evaluation.changes_analysis && (
-                              <div className="mt-5 pt-4 border-t border-gray-200">
-                                <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-2">Notable Changes</p>
-                                <p className="text-sm text-gray-700 leading-relaxed">{evaluation.changes_analysis}</p>
-                              </div>
-                            )}
-
-                            {/* Fix-this chips — user selects which issues to prioritise */}
-                            {(() => {
-                              const o = evaluation.output as EvaluationOutput | null
-                              const judgeOutput = evaluation.evaluation_mode === 'judge' ? o as JudgeOutput | null : null
-                              const coachOutput = evaluation.evaluation_mode === 'coach' ? o as CoachOutput | null : null
-                              const chipItems: string[] =
-                                judgeOutput?.kills_it?.length ? judgeOutput.kills_it :
-                                coachOutput?.priority_fixes?.length ? coachOutput.priority_fixes.map(pf => pf.fix) :
-                                evaluation.gaps?.length ? evaluation.gaps : []
-                              if (chipItems.length === 0) return null
-                              const selected = draftFocusItems[dirId] || []
-                              return (
-                                <div className="mt-5 pt-4 border-t border-gray-200">
-                                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Focus the next draft on…</p>
-                                  <div className="flex flex-wrap gap-2">
-                                    {chipItems.map((item, i) => {
-                                      const active = selected.includes(item)
-                                      return (
-                                        <button
-                                          key={i}
-                                          type="button"
-                                          onClick={() => toggleFocusItem(dirId, item)}
-                                          className={`text-xs px-3 py-1.5 rounded-full border transition-colors text-left ${
-                                            active
-                                              ? 'bg-green-800 text-white border-green-800'
-                                              : 'bg-white text-gray-600 border-gray-300 hover:border-green-600 hover:text-green-700'
-                                          }`}
-                                        >
-                                          {active ? '✓ ' : ''}{item.length > 60 ? item.slice(0, 57) + '…' : item}
-                                        </button>
-                                      )
-                                    })}
-                                  </div>
-                                  {selected.length > 0 && (
-                                    <p className="text-xs text-green-700 mt-2">{selected.length} issue{selected.length > 1 ? 's' : ''} selected — the draft will prioritise these above all others.</p>
-                                  )}
-                                </div>
-                              )
-                            })()}
-
-                            {/* Generate Improved Draft — prominent CTA anchored to this evaluation */}
-                            <div className="mt-5 pt-4 border-t border-gray-200">
-                              <button
-                                onClick={() => generateDraft(dirId, evaluation.id)}
-                                disabled={generatingDraft || evaluating}
-                                className="w-full bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-5 py-3 rounded transition-colors flex items-center justify-center gap-2"
-                              >
-                                {isGeneratingThis ? (
-                                  <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Writing improved draft…</>
-                                ) : (
-                                  <>✦ Generate Improved Draft from this {evaluation.evaluation_mode === 'coach' ? 'Coach Review' : 'Jury Evaluation'}</>
-                                )}
-                              </button>
-                              <p className="text-xs text-gray-400 text-center mt-2">
-                                The new draft will directly address every gap and recommendation above. Previous drafts are kept for comparison.
-                              </p>
-                              {generateDraftError && generateDraftErrorDirId === dirId && (
-                                <div className="mt-3"><ErrorBanner error={generateDraftError} /></div>
-                              )}
-                            </div>
-                          </div>
-                          ) : null}
-                            </div>{/* /collapsible eval breakdown (S152) */}
-                          </div>
-                        )}
-
-                        {/* Previous Evaluations History */}
-                        {dirHistory.length > 0 && (
-                          <div className="px-5 py-3 border-b border-gray-100 bg-white">
-                            <button
-                              onClick={() => setEvalHistoryOpen(prev => ({ ...prev, [dirId]: !prev[dirId] }))}
-                              className="flex items-center gap-2 text-xs text-gray-400 hover:text-gray-700 transition-colors"
-                            >
-                              <span className="text-gray-300">↕</span>
-                              <span>{evalHistoryOpen[dirId] ? 'Hide' : 'See'} previous evaluations</span>
-                              <span className="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{dirHistory.length}</span>
-                            </button>
-                            {evalHistoryOpen[dirId] && (
-                              <div className="mt-3 space-y-3">
-                                {dirHistory.map((hist, hIdx) => {
-                                  const hMode = hist.evaluation_mode === 'coach' ? 'coach' : 'judge'
-                                  const hDate = new Date(hist.created_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: '2-digit' })
-                                  const hJudgeOutput = hMode === 'judge' && hist.output ? hist.output as JudgeOutput : null
-                                  const hCoachOutput = hMode === 'coach' && hist.output ? hist.output as CoachOutput : null
-                                  return (
-                                    <div key={hIdx} className="border border-gray-100 rounded-lg p-3 bg-gray-50">
-                                      <div className="flex items-center gap-2 mb-2">
-                                        <span className="text-xs font-medium text-gray-500">
-                                          {hMode === 'coach' ? '✦ Coach Review' : '⚖ Jury Evaluation'}
-                                        </span>
-                                        <span className="text-xs text-gray-300">·</span>
-                                        <span className="text-xs text-gray-400">{hDate}</span>
-                                        <span className="text-xs text-gray-300">·</span>
-                                        <span className={`text-xs font-bold tabular-nums ${scoreColor(hist.overall_score)}`}>
-                                          {hist.overall_score.toFixed(1)}/10
-                                        </span>
-                                      </div>
-                                      {hJudgeOutput && (
-                                        <div className="space-y-1.5">
-                                          {hJudgeOutput.talks_up?.slice(0, 2).map((t, i) => (
-                                            <p key={i} className="text-xs text-gray-600 italic border-l-2 border-green-300 pl-2">"{t}"</p>
-                                          ))}
-                                          {hJudgeOutput.kills_it?.slice(0, 2).map((k, i) => (
-                                            <p key={i} className="text-xs text-gray-600 italic border-l-2 border-red-300 pl-2">"{k}"</p>
-                                          ))}
-                                        </div>
-                                      )}
-                                      {hCoachOutput && (
-                                        <div className="space-y-1.5">
-                                          {hCoachOutput.focus_point && (
-                                            <p className="text-xs text-gray-600 border-l-2 border-green-300 pl-2">{hCoachOutput.focus_point}</p>
-                                          )}
-                                          {hCoachOutput.priority_fixes?.slice(0, 2).map((fix, i) => (
-                                            <p key={i} className="text-xs text-gray-500 pl-2">→ {fix.fix}</p>
-                                          ))}
-                                        </div>
-                                      )}
-                                      {!hist.output && hist.strengths && (
-                                        <p className="text-xs text-gray-500 line-clamp-2">{hist.strengths}</p>
-                                      )}
-                                    </div>
-                                  )
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* ── ROI Estimation ─────────────────────────────────────────
-                             Shows after jury eval, updates when coach review also exists.
-                             Jury-only:   quality = juryScore × 10
-                             Combined:    quality = (juryScore + untappedPotential) × 10
-                             Both capped at 100 before passing to computeRoiIndex. */}
-                        {(hasJudge || hasCoach) && dirShow && (() => {
-                          const juryScore  = evalBoth.judge?.overall_score
-                          const coachScore = evalBoth.coach?.overall_score
-                          const untapped   = coachScore !== undefined
-                            ? parseFloat((10 - coachScore).toFixed(1))
-                            : undefined
-                          // Jury-only quality: score × 10, capped at 100
-                          const juryQuality = juryScore !== undefined
-                            ? Math.min(100, juryScore * 10)
-                            : undefined
-                          // Combined quality: (juryScore + untapped) × 10, capped at 100
-                          const combinedQuality = juryScore !== undefined && untapped !== undefined
-                            ? Math.min(100, (juryScore + untapped) * 10)
-                            : undefined
-                          const baseRoi     = computeRoiIndex(dirShow)
-                          const juryRoi     = juryQuality !== undefined  ? computeRoiIndex(dirShow, juryQuality)     : undefined
-                          const combinedRoi = combinedQuality !== undefined ? computeRoiIndex(dirShow, combinedQuality) : undefined
-                          if (!baseRoi) return null
-                          const roiColor = (v: number) => v >= 70 ? 'text-green-700' : v >= 40 ? 'text-amber-700' : 'text-gray-500'
-                          const roiBg    = (v: number) => v >= 70 ? 'bg-green-50 border-green-200' : v >= 40 ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-200'
-                          return (
-                            <div className="px-5 py-4 border-b border-gray-200 bg-white">
-                              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">ROI Estimation</p>
-                              <div className="flex flex-wrap gap-2">
-                                {/* Base — no quality adjustment */}
-                                <div className={`flex-1 min-w-[100px] border rounded-lg px-3 py-2.5 ${roiBg(baseRoi)}`}>
-                                  <p className={`text-xl font-bold tabular-nums ${roiColor(baseRoi)}`}>
-                                    {baseRoi}<span className="text-xs font-normal text-gray-400">/100</span>
-                                  </p>
-                                  <p className="text-xs text-gray-400 mt-0.5">Base</p>
-                                </div>
-                                {/* Jury-adjusted */}
-                                {juryRoi !== undefined && (
-                                  <div className={`flex-1 min-w-[100px] border rounded-lg px-3 py-2.5 ${roiBg(juryRoi)}`}>
-                                    <p className={`text-xl font-bold tabular-nums ${roiColor(juryRoi)}`}>
-                                      {juryRoi}<span className="text-xs font-normal text-gray-400">/100</span>
-                                    </p>
-                                    <p className="text-xs text-gray-400 mt-0.5">Jury score adjusted</p>
-                                  </div>
-                                )}
-                                {/* Combined potential — jury + coach untapped */}
-                                {combinedRoi !== undefined && (
-                                  <div className={`flex-1 min-w-[100px] border-2 rounded-lg px-3 py-2.5 ${roiBg(combinedRoi)}`}>
-                                    <p className={`text-xl font-bold tabular-nums ${roiColor(combinedRoi)}`}>
-                                      {combinedRoi}<span className="text-xs font-normal text-gray-400">/100</span>
-                                    </p>
-                                    <p className="text-xs text-gray-400 mt-0.5">Maximum potential</p>
-                                    <p className="text-xs text-gray-400">({juryScore?.toFixed(1)} + {untapped?.toFixed(1)} untapped)</p>
-                                  </div>
-                                )}
-                              </div>
-                              <p className="text-xs text-gray-400 mt-2.5 leading-relaxed">
-                                Prestige × Base Medal Chance Rate % ÷ entry fee, quality-adjusted. Index normalized to 100.
-                              </p>
-                            </div>
-                          )
-                        })()}
-
-                        {/* Evaluation Chat — gated on hasJudge || hasCoach, not on the active-mode evaluation,
-                             so the section stays mounted when the user switches between judge/coach tabs */}
-                        {(hasJudge || hasCoach) && (
-                          <div className="px-5 py-4 border-b border-gray-200 bg-white">
-                            <button
-                              onClick={() => setEvalChatOpen(prev => ({ ...prev, [dirId]: !prev[dirId] }))}
-                              className="flex items-center gap-2 text-sm font-medium text-green-700 hover:text-green-600 transition-colors"
-                            >
-                              <span>✦ Ask about this evaluation</span>
-                              <span className="text-gray-400 text-xs">{evalChatOpen[dirId] ? '↑' : '↓'}</span>
-                              {(evalChatHistory[dirId] || []).length > 0 && !evalChatOpen[dirId] && (
-                                <span className="bg-green-100 text-green-800 text-xs px-1.5 py-0.5 rounded-full leading-none ml-1">
-                                  {Math.floor((evalChatHistory[dirId] || []).length / 2)} message{Math.floor((evalChatHistory[dirId] || []).length / 2) !== 1 ? 's' : ''}
-                                </span>
-                              )}
-                            </button>
-
-                            {evalChatOpen[dirId] && (
-                              <div className="mt-4">
-                                {/* Message thread */}
-                                {(evalChatHistory[dirId] || []).length === 0 ? (
-                                  <div className="mb-4">
-                                    <p className="text-xs text-gray-400 mb-3">Ask me anything about your scores, what to improve, or how this compares to what wins here.</p>
-                                    {/* Prompt starters */}
-                                    <div className="flex flex-wrap gap-2">
-                                      {[
-                                        'Why did I score low on Insight?',
-                                        'What would a winning entry do differently?',
-                                        'How can I improve my Results section?',
-                                        'What is the jury at this show looking for?',
-                                      ].map(prompt => (
-                                        <button
-                                          key={prompt}
-                                          onClick={() => {
-                                            setEvalChatInput(prev => ({ ...prev, [dirId]: prompt }))
-                                          }}
-                                          className="text-xs text-green-700 border border-green-200 hover:bg-green-50 px-3 py-1.5 rounded-lg transition-colors"
-                                        >
-                                          {prompt}
-                                        </button>
-                                      ))}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="space-y-3 mb-4 max-h-96 overflow-y-auto pr-1">
-                                    {(evalChatHistory[dirId] || []).map((msg, i) => (
-                                      <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                        <div className={`max-w-[85%] rounded-xl px-3.5 py-2.5 text-sm leading-relaxed ${
-                                          msg.role === 'user'
-                                            ? 'bg-green-800 text-white'
-                                            : 'bg-gray-50 border border-gray-200 text-gray-700'
-                                        }`}>
-                                          {/* Render line breaks and preserve paragraph spacing */}
-                                          <span className="whitespace-pre-wrap">{msg.content}</span>
-                                        </div>
-                                      </div>
-                                    ))}
-                                    {evalChatting[dirId] && (
-                                      <div className="flex justify-start">
-                                        <div className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 flex items-center gap-1.5">
-                                          <svg className="animate-spin h-3.5 w-3.5 text-green-700" viewBox="0 0 24 24" fill="none">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                                          </svg>
-                                          <span className="text-xs text-gray-400">Thinking…</span>
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-
-                                {/* Input row — disabled if active mode has no evaluation yet */}
-                                {!evaluation ? (
-                                  <p className="text-xs text-gray-400 italic">
-                                    Run a {activeMode === 'judge' ? 'Jury Evaluation' : 'Coach Review'} to start chatting about this entry.
-                                  </p>
-                                ) : (
-                                <div className="flex gap-2">
-                                  <input
-                                    value={evalChatInput[dirId] || ''}
-                                    onChange={e => setEvalChatInput(prev => ({ ...prev, [dirId]: e.target.value }))}
-                                    onKeyDown={e => {
-                                      if (e.key === 'Enter' && !e.shiftKey && !evalChatting[dirId]) {
-                                        e.preventDefault()
-                                        sendEvalChat(dirId)
-                                      }
-                                    }}
-                                    placeholder="Ask about your scores, what to improve, or what wins here…"
-                                    className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
-                                    disabled={evalChatting[dirId]}
-                                  />
-                                  <button
-                                    onClick={() => sendEvalChat(dirId)}
-                                    disabled={evalChatting[dirId] || !(evalChatInput[dirId] || '').trim()}
-                                    className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded transition-colors flex-shrink-0"
-                                  >
-                                    Send
-                                  </button>
-                                </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
+                    // S153: extract the movable blocks so one copy can render either the
+                    // desktop side-by-side layout or the old single stack (?sxs=0).
+                    const sxsEditSurface = (
+                      <>
                         {/* AOY page-budget meter (Session 74) — AOY entries only.
                             Words used across the exec summary + weighted sections
                             (the endorsement gate is excluded) vs the 10-page cap. */}
@@ -8658,6 +7300,1416 @@ export default function ProjectPage() {
                             )}
                           </div>
                         )}
+                      </>
+                    )
+                    const sxsEvalTop = (
+                      <>
+                        {/* Evaluation panel */}
+                        {(hasJudge || hasCoach) && (
+                          <div className="border-b border-gray-200 bg-gray-50">
+                            {/* Collapsed summary strip (S152). Default collapsed: the
+                                per-section jury reads now render inline in the edit surface
+                                below, so the full breakdown is opt-in, not stacked above it. */}
+                            <button
+                              type="button"
+                              onClick={() => setEvalPanelExpanded(prev => ({ ...prev, [dirId]: !(prev[dirId] ?? evalDefaultExpanded) }))}
+                              className="w-full flex items-center justify-between gap-3 px-5 py-3 text-left hover:bg-gray-100 transition-colors"
+                            >
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">{hasJudge ? 'Jury evaluation' : 'Coach review'}</span>
+                                {summaryScore != null && (
+                                  <span className="text-sm font-bold tabular-nums text-gray-900">{summaryScore.toFixed(1)}<span className="font-normal text-gray-400">/10</span></span>
+                                )}
+                              </div>
+                              <span className="flex-shrink-0 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600">{(evalPanelExpanded[dirId] ?? evalDefaultExpanded) ? 'Hide breakdown ↑' : 'Full breakdown ↓'}</span>
+                            </button>
+                            <div className={(evalPanelExpanded[dirId] ?? evalDefaultExpanded) ? 'border-t border-gray-200' : 'hidden'}>
+
+                            {/* Eval view tab strip — Session 57: shown once ANY eval exists.
+                                Tabs render per existing mode, plus the always-present
+                                Recommended Next Steps tab (the Build 2 card's new home).
+                                Larger targets than the Session 55 strip per Ben's review. */}
+                            <div className="px-5 pt-4 flex items-center gap-1 border-b border-gray-200 flex-wrap">
+                              {hasJudge && (
+                                <button
+                                  onClick={() => setEvalDisplayMode(prev => ({ ...prev, [dirId]: 'judge' }))}
+                                  className={`text-sm font-medium px-4 py-2 rounded-t-lg border-b-2 transition-colors -mb-px ${activeView === 'judge' ? 'border-gray-800 text-gray-900 bg-white' : 'border-transparent text-gray-400 hover:text-gray-700'}`}
+                                  style={{ minHeight: '44px' }}
+                                >
+                                  ⚖ Jury Evaluation
+                                </button>
+                              )}
+                              {hasCoach && (
+                                <button
+                                  onClick={() => setEvalDisplayMode(prev => ({ ...prev, [dirId]: 'coach' }))}
+                                  className={`text-sm font-medium px-4 py-2 rounded-t-lg border-b-2 transition-colors -mb-px ${activeView === 'coach' ? 'border-green-700 text-green-800 bg-white' : 'border-transparent text-gray-400 hover:text-gray-700'}`}
+                                  style={{ minHeight: '44px' }}
+                                >
+                                  ✦ Coach Review
+                                </button>
+                              )}
+                              <button
+                                onClick={() => setEvalDisplayMode(prev => ({ ...prev, [dirId]: 'nextsteps' }))}
+                                className={`text-sm font-semibold px-4 py-2 rounded-t-lg border-b-2 transition-colors -mb-px ${activeView === 'nextsteps' ? 'border-green-700 text-green-800 bg-green-50' : 'border-transparent text-green-700 hover:text-green-600 hover:bg-green-50'}`}
+                                style={{ minHeight: '44px' }}
+                              >
+                                ✦ Recommended Next Steps
+                              </button>
+                            </div>
+
+                          {activeView === 'nextsteps' ? (
+                          <div className="px-5 py-5">
+                            {(() => {
+                              // Session 57: the Build 2 Next Step card, relocated from the
+                              // bottom of the judge output into this tab and made state-aware.
+                              // Still PRODUCT OUTPUT — ignores the guidance toggle.
+                              const judgeEval = evalBoth.judge ?? null
+                              const judgeOut = (judgeEval?.output ?? null) as JudgeOutput | null
+                              const realDirs = directions.filter(dd => dd.angle !== 'Uploaded entry — direct evaluation')
+                              const evalDirFit = directions.find(dd => dd.id === dirId)?.win_likelihood ?? null
+                              const strongerDirections: NextStepDirectionRef[] = realDirs
+                                .filter(dd => dd.id !== dirId && typeof dd.win_likelihood === 'number')
+                                .filter(dd => evalDirFit === null || (dd.win_likelihood as number) > evalDirFit)
+                                .sort((a, b) => (b.win_likelihood ?? 0) - (a.win_likelihood ?? 0))
+                                .slice(0, 2)
+                                .map(dd => ({ id: dd.id, name: dd.name, show: dd.best_show, category: dd.best_category, fit: dd.win_likelihood }))
+                              // Run counts for this direction: active slot + history rows
+                              // (evaluation_mode null on legacy rows counts as judge)
+                              const judgeRunCount = (evalBoth.judge ? 1 : 0) + dirHistory.filter(h => h.evaluation_mode !== 'coach').length
+                              const coachRunCount = (evalBoth.coach ? 1 : 0) + dirHistory.filter(h => h.evaluation_mode === 'coach').length
+                              const opportunities = judgeEval && judgeOut && Array.isArray(judgeOut.next_opportunities)
+                                ? judgeOut.next_opportunities.map((opp): NextStepOpportunity => ({
+                                    ...opp,
+                                    existingDirectionId:
+                                      realDirs.find(dd =>
+                                        sameShow(dd.best_show, opp.show) &&
+                                        (dd.best_category ?? '').trim().toLowerCase() === opp.category.trim().toLowerCase()
+                                      )?.id ??
+                                      realDirs.find(dd => sameShow(dd.best_show, opp.show))?.id ?? null,
+                                  }))
+                                : null
+                              return (
+                                <NextStepCard
+                                  opportunities={opportunities}
+                                  evaluatedShow={dirShow ?? ''}
+                                  overallScore={judgeEval ? judgeEval.overall_score : null}
+                                  judgeRunCount={judgeRunCount}
+                                  coachRunCount={coachRunCount}
+                                  hasJudge={hasJudge}
+                                  hasCoach={hasCoach}
+                                  hasScript={!!((scriptText && scriptText.trim()) || project?.script_text)}
+                                  hasDirections={realDirs.length > 0}
+                                  strongerDirections={strongerDirections}
+                                  altCategoriesLoading={smartDirectionsLoading[dirId] === 'alternatives'}
+                                  actionsDisabled={evaluating || generatingDraft}
+                                  onShown={(count) => {
+                                    if (nextstepShownRef.current.has(dirId)) return
+                                    nextstepShownRef.current.add(dirId)
+                                    track('nextstep_shown', { project_id: Number(projectId), direction_id: dirId, opportunity_count: count, view: 'tab' })
+                                  }}
+                                  onAction={(action: NextStepAction) => {
+                                    track('nextstep_clicked', {
+                                      project_id: Number(projectId),
+                                      direction_id: dirId,
+                                      cta: action.type,
+                                      ...(action.type === 'view_direction'
+                                        ? { target_direction_id: action.directionId, source: action.source, show: action.show ?? null, category: action.category ?? null }
+                                        : {}),
+                                    })
+                                    if (action.type === 'run_coach') { evaluateEntry(dirId, 'coach', evalBoth.coach?.id); return }
+                                    if (action.type === 'run_jury') { evaluateEntry(dirId, 'judge', evalBoth.judge?.id); return }
+                                    if (action.type === 'video_script') { setTab('script'); return }
+                                    if (action.type === 'press_kit') { setTab('presskit'); return }
+                                    if (action.type === 'alt_categories') {
+                                      const evalForSmart = evalBoth.judge ?? evalBoth.coach
+                                      if (evalForSmart) generateSmartDirections(dirId, evalForSmart.id, 'alternatives')
+                                      return
+                                    }
+                                    // Directions-bound CTAs land on the list sorted by fit (Ben, Session 57)
+                                    if (action.type === 'view_directions' || action.type === 'view_direction') setDirSortKey('category_fit')
+                                    setTab('directions')
+                                    if (action.type === 'view_direction') {
+                                      spotlightDirection(action.directionId)
+                                    } else if (action.type === 'generate_directions') {
+                                      generateDirections()
+                                    }
+                                  }}
+                                />
+                              )
+                            })()}
+                          </div>
+                          ) : evaluation ? (
+                          <div className="px-5 py-5">
+                            {(() => {
+                              const isCoach = evaluation.evaluation_mode === 'coach'
+                              const untapped = parseFloat((10 - evaluation.overall_score).toFixed(1))
+                              const displayScore = isCoach ? untapped : evaluation.overall_score
+                              return (
+                            <div className="flex items-start justify-between mb-4">
+                              <div>
+                                <div className="flex items-baseline gap-2 flex-wrap">
+                                  <span
+                                    className={`font-bold tabular-nums ${isCoach ? coachScoreColor(displayScore) : scoreColor(displayScore)}`}
+                                    style={{ fontFamily: '"Instrument Serif", "Times New Roman", serif', fontSize: '2.8rem', lineHeight: 1, letterSpacing: '-0.02em' }}
+                                  >
+                                    {displayScore.toFixed(1)}
+                                  </span>
+                                  <span className="text-gray-400" style={{ fontFamily: '"Instrument Serif", "Times New Roman", serif', fontSize: '1.25rem' }}>/10</span>
+                                  {/* Overall delta badge — shown as raw score change regardless of mode */}
+                                  {deltas?.['overall'] !== undefined && deltas['overall'] !== 0 && (
+                                    <span className={`text-sm font-bold tabular-nums px-2 py-0.5 rounded-full ${deltas['overall'] > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                                      {deltas['overall'] > 0 ? `↑ +${deltas['overall']}` : `↓ ${deltas['overall']}`}
+                                    </span>
+                                  )}
+                                  {deltas?.['overall'] === 0 && (
+                                    <span className="text-sm text-gray-400 px-2 py-0.5 rounded-full bg-gray-100">— No change</span>
+                                  )}
+                                  {/* Mode badge */}
+                                  {isCoach ? (
+                                    <span className="text-xs font-medium bg-green-100 text-green-800 border border-green-200 px-2 py-0.5 rounded-full">✦ Coach Review</span>
+                                  ) : (
+                                    <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">⚖ Jury Evaluation</span>
+                                  )}
+                                </div>
+                                {/* Coach: label the inverted score, then explain what it measures */}
+                                {isCoach && (
+                                  <p className="text-xs font-semibold text-gray-500 mt-1">untapped potential <span className="font-normal text-gray-400">— lower is better</span></p>
+                                )}
+                                <p className="text-xs text-gray-400 mt-0.5">
+                                  {isCoach
+                                    ? 'Estimated gap between this draft and your campaign\'s full potential'
+                                    : 'Scored on entry as written'}
+                                </p>
+                              </div>
+                              <p className="text-xs text-gray-400">
+                                {new Date(evaluation.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              </p>
+                            </div>
+                              )
+                            })()}
+
+                            {/* Coach mode: explain that dimension scores still read higher = more covered */}
+                            {evaluation.evaluation_mode === 'coach' && (
+                              <p className="text-xs text-gray-400 italic mb-3">
+                                Dimension scores show how fully each aspect of your campaign&apos;s available material is represented in this draft. Higher = stronger coverage; lower = more to unlock in that area.
+                              </p>
+                            )}
+
+                            {/* AOY weight-aware jury (S75): per-section scores x section_weight.
+                                Replaces the fixed 6-dimension campaign grid for AOY entries. */}
+                            {(() => {
+                              const aoyOut = evaluation.output as unknown as {
+                                aoy?: boolean; pillar?: string; category_key?: string; weight_warning?: string | null;
+                                sections?: { key: string; label: string; weight: number; score: number; weighted_contribution: number; rationale: string; is_placeholder: boolean }[]
+                              } | null
+                              if (!aoyOut?.aoy) return null
+                              const secs = Array.isArray(aoyOut.sections) ? aoyOut.sections : []
+                              return (
+                                <div className="mb-5">
+                                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                    <span className="text-xs font-semibold text-gray-600">Weighted rubric: {aoyOut.category_key}</span>
+                                    {aoyOut.pillar && <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full capitalize">{aoyOut.pillar} pillar</span>}
+                                  </div>
+                                  {aoyOut.weight_warning && <p className="text-xs text-amber-600 mb-2">{aoyOut.weight_warning}</p>}
+                                  {(() => {
+                                    const maxWeight = secs.reduce((m, x) => Math.max(m, x.weight || 0), 1)
+                                    return (
+                                  <div className="space-y-2">
+                                    {secs.map(s => {
+                                      const sDelta = deltas?.[s.key]
+                                      return (
+                                        <div key={s.key} className={`border rounded-lg px-3 py-2.5 ${scoreBg(s.score)}`}>
+                                          <div className="flex items-baseline justify-between gap-2">
+                                            <p className="text-xs text-gray-700 font-medium min-w-0 flex-1">{s.label} <span className="text-gray-400 font-normal">{s.weight}% of score</span></p>
+                                            <div className="flex items-baseline gap-1.5 flex-shrink-0">
+                                              <p className={`text-lg font-bold tabular-nums ${scoreColor(s.score)}`}>{s.score}<span className="text-xs text-gray-400">/10</span></p>
+                                              {sDelta !== undefined && sDelta !== 0 && (
+                                                <span className={`text-xs font-semibold tabular-nums ${sDelta > 0 ? 'text-green-600' : 'text-red-500'}`}>{sDelta > 0 ? `↑+${sDelta}` : `↓${sDelta}`}</span>
+                                              )}
+                                            </div>
+                                          </div>
+                                          <div className="mt-1.5"><MeterBar fraction={(s.weight || 0) / maxWeight} /></div>
+                                          <p className="text-xs text-gray-400 mt-1 tabular-nums">Adds {s.weighted_contribution} to the weighted total{s.is_placeholder ? ' · section not written' : ''}</p>
+                                          {s.rationale && <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">{s.rationale}</p>}
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                    )
+                                  })()}
+                                </div>
+                              )
+                            })()}
+
+                            {/* SMARTIES qualitative jury (S92): per-section scores
+                                plus a holistic overall. SMARTIES publishes no section
+                                weighting, so there is no weighted total. Replaces the
+                                fixed campaign grid for SMARTIES entries. */}
+                            {(() => {
+                              const smOut = evaluation.output as unknown as {
+                                smarties?: boolean; category?: string | null;
+                                sections?: { field_key: string; label: string; score: number; rationale: string; is_placeholder: boolean }[]
+                              } | null
+                              if (!smOut?.smarties) return null
+                              const secs = Array.isArray(smOut.sections) ? smOut.sections : []
+                              return (
+                                <div className="mb-5">
+                                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                    <span className="text-xs font-semibold text-gray-600">SMARTIES case study{smOut.category ? `: ${smOut.category}` : ''}</span>
+                                    <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">holistic score, no published section weighting</span>
+                                  </div>
+                                  <div className="space-y-2">
+                                    {secs.map(s => {
+                                      const sDelta = deltas?.[s.field_key]
+                                      return (
+                                        <div key={s.field_key} className={`border rounded-lg px-3 py-2.5 ${scoreBg(s.score)}`}>
+                                          <div className="flex items-baseline justify-between gap-2">
+                                            <p className="text-xs text-gray-700 font-medium min-w-0 flex-1">{s.label}</p>
+                                            <div className="flex items-baseline gap-1.5 flex-shrink-0">
+                                              <p className={`text-lg font-bold tabular-nums ${scoreColor(s.score)}`}>{s.score}<span className="text-xs text-gray-400">/10</span></p>
+                                              {sDelta !== undefined && sDelta !== 0 && (
+                                                <span className={`text-xs font-semibold tabular-nums ${sDelta > 0 ? 'text-green-600' : 'text-red-500'}`}>{sDelta > 0 ? `↑+${sDelta}` : `↓${sDelta}`}</span>
+                                              )}
+                                            </div>
+                                          </div>
+                                          {s.is_placeholder && <p className="text-xs text-gray-400 mt-1">Section not written</p>}
+                                          {s.rationale && <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">{s.rationale}</p>}
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
+                              )
+                            })()}
+
+                            {/* Config jury (S98 Chunk 5): per-section breakdown from
+                                evaluate-entry-config, branching ONCE on scoring_mode.
+                                Weighted mirrors the AOY weighted panel (score x weight,
+                                weighted contribution, MeterBar); qualitative mirrors the
+                                SMARTIES panel (per-section 0-10, holistic overall shown
+                                in the header). This is the from-spec render that replaces
+                                per-show SMARTIES JSX. */}
+                            {(() => {
+                              const cfgOut = evaluation.output as unknown as {
+                                config?: boolean; scoring_mode?: 'weighted' | 'qualitative'
+                                category_key?: string | null; category?: string | null; weight_warning?: string | null
+                                sections?: { key?: string; field_key?: string; label: string; weight?: number; score: number; weighted_contribution?: number; rationale: string; is_placeholder: boolean }[]
+                              } | null
+                              if (!cfgOut?.config) return null
+                              const secs = Array.isArray(cfgOut.sections) ? cfgOut.sections : []
+                              const isWeighted = cfgOut.scoring_mode === 'weighted'
+                              const cat = cfgOut.category_key ?? cfgOut.category ?? null
+                              const maxWeight = isWeighted ? secs.reduce((m, x) => Math.max(m, x.weight || 0), 1) : 1
+                              return (
+                                <div className="mb-5">
+                                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                    <span className="text-xs font-semibold text-gray-600">{isWeighted ? 'Weighted rubric' : 'Case study'}{cat ? `: ${cat}` : ''}</span>
+                                    <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">{isWeighted ? 'config jury' : 'holistic score, no published section weighting'}</span>
+                                  </div>
+                                  {isWeighted && cfgOut.weight_warning && <p className="text-xs text-amber-600 mb-2">{cfgOut.weight_warning}</p>}
+                                  <div className="space-y-2">
+                                    {secs.map((s, i) => {
+                                      const sKey = s.key ?? s.field_key ?? String(i)
+                                      const sDelta = deltas?.[sKey]
+                                      return (
+                                        <div key={sKey} className={`border rounded-lg px-3 py-2.5 ${scoreBg(s.score)}`}>
+                                          <div className="flex items-baseline justify-between gap-2">
+                                            <p className="text-xs text-gray-700 font-medium min-w-0 flex-1">{s.label}{isWeighted && typeof s.weight === 'number' ? <span className="text-gray-400 font-normal"> {s.weight}% of score</span> : null}</p>
+                                            <div className="flex items-baseline gap-1.5 flex-shrink-0">
+                                              <p className={`text-lg font-bold tabular-nums ${scoreColor(s.score)}`}>{s.score}<span className="text-xs text-gray-400">/10</span></p>
+                                              {sDelta !== undefined && sDelta !== 0 && (
+                                                <span className={`text-xs font-semibold tabular-nums ${sDelta > 0 ? 'text-green-600' : 'text-red-500'}`}>{sDelta > 0 ? `↑+${sDelta}` : `↓${sDelta}`}</span>
+                                              )}
+                                            </div>
+                                          </div>
+                                          {isWeighted && <div className="mt-1.5"><MeterBar fraction={(s.weight || 0) / maxWeight} /></div>}
+                                          {isWeighted && typeof s.weighted_contribution === 'number' && <p className="text-xs text-gray-400 mt-1 tabular-nums">Adds {s.weighted_contribution} to the weighted total{s.is_placeholder ? ' · section not written' : ''}</p>}
+                                          {!isWeighted && s.is_placeholder && <p className="text-xs text-gray-400 mt-1">Section not written</p>}
+                                          {s.rationale && <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">{s.rationale}</p>}
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
+                              )
+                            })()}
+
+                            {/* AOY market-context modifier (S85, Phase 3, Option B):
+                                a bounded, source-cited adjustment shown ALONGSIDE the
+                                calibrated raw score. The raw score never changes; every
+                                nonzero delta names the sourced market fact behind it. */}
+                            {(() => {
+                              const isAoyJudge = !!(evaluation.output as unknown as { aoy?: boolean } | null)?.aoy && evaluation.evaluation_mode === 'judge'
+                              if (!isAoyJudge) return null
+                              const adj = aoyMarketAdj[dirId]
+                              const showAdj = !!adj && adj.evaluation_id === evaluation.id
+                              const busy = marketAdjusting === dirId
+                              const err = marketAdjustError[dirId]
+                              const mc = showAdj ? adj.market_context : null
+                              return (
+                                <div className="mb-5 border border-gray-200 rounded-lg px-3 py-3 bg-gray-50">
+                                  <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+                                    <span className="text-xs font-semibold text-gray-600">Market context</span>
+                                    {!showAdj && (
+                                      <button
+                                        onClick={() => applyAoyMarket(dirId, evaluation.id)}
+                                        disabled={busy}
+                                        className="text-xs font-medium bg-green-800 hover:bg-green-700 text-white px-2.5 py-1 rounded-full disabled:opacity-50"
+                                      >
+                                        {busy ? 'Adjusting...' : 'Apply market context'}
+                                      </button>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-gray-400 mb-2">A bounded, sourced adjustment (max ±{adj?.cap ?? 0.5} per section) on top of the calibrated score. The raw score is never altered.</p>
+                                  {err && <p className="text-xs text-red-600 mb-2">{err}</p>}
+                                  {showAdj && adj.no_baseline && (
+                                    <p className="text-xs text-gray-500">No verified market baseline on file for this market and cycle. The raw score stands.</p>
+                                  )}
+                                  {showAdj && !adj.no_baseline && (
+                                    <>
+                                      <div className="flex items-baseline gap-3 flex-wrap mb-2">
+                                        <span className="text-xs text-gray-500">Raw <span className="font-bold tabular-nums text-gray-700">{adj.raw_overall.toFixed(1)}</span><span className="text-gray-400">/10</span></span>
+                                        <span className="text-xs text-gray-500">Market-adjusted{' '}
+                                          <span className={`font-bold tabular-nums ${adj.overall_delta > 0 ? 'text-green-700' : adj.overall_delta < 0 ? 'text-red-600' : 'text-gray-700'}`}>{adj.adjusted_overall.toFixed(1)}</span><span className="text-gray-400">/10</span>
+                                          {adj.overall_delta !== 0 && <span className={`ml-1 font-semibold ${adj.overall_delta > 0 ? 'text-green-600' : 'text-red-500'}`}>{adj.overall_delta > 0 ? `+${adj.overall_delta}` : adj.overall_delta}</span>}
+                                        </span>
+                                        {mc && (
+                                          <span className="text-xs font-medium bg-white text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">
+                                            {mc.market}{mc.fallback_to_all ? ' (all-market)' : ` (${mc.discipline})`} · {mc.window_start} to {mc.window_end}
+                                          </span>
+                                        )}
+                                      </div>
+                                      {adj.note && <p className="text-xs text-gray-500 mb-2 leading-relaxed">{adj.note}</p>}
+                                      <div className="space-y-1">
+                                        {adj.sections.filter(s => s.delta !== 0).map(s => (
+                                          <div key={s.key} className="text-xs text-gray-600 leading-relaxed">
+                                            <span className="font-medium">{s.label}</span>{' '}
+                                            <span className={`font-semibold tabular-nums ${s.delta > 0 ? 'text-green-600' : 'text-red-500'}`}>{s.delta > 0 ? `+${s.delta}` : s.delta}</span>{' '}
+                                            <span className="text-gray-400 tabular-nums">({s.raw_score} to {s.adjusted_score})</span>
+                                            {s.rationale && <span className="text-gray-500"> · {s.rationale}</span>}
+                                          </div>
+                                        ))}
+                                        {adj.sections.every(s => s.delta === 0) && (
+                                          <p className="text-xs text-gray-400">No section moved: the market did not materially change how this entry reads.</p>
+                                        )}
+                                      </div>
+                                      {mc && mc.figures.length > 0 && (
+                                        <div className="mt-2 pt-2 border-t border-gray-200">
+                                          <p className="text-xs text-gray-400 mb-1">Sourced market figures</p>
+                                          <ul className="space-y-0.5">
+                                            {mc.figures.map((f, i) => (
+                                              <li key={i} className="text-xs text-gray-500">
+                                                {f.figure}: {f.value}{f.scope ? ` [${f.scope}]` : ''}
+                                                {f.url && <> · <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-green-700 underline">source</a></>}
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              )
+                            })()}
+
+                            {!((evaluation.output as unknown as { aoy?: boolean } | null)?.aoy) && !((evaluation.output as unknown as { smarties?: boolean } | null)?.smarties) && !((evaluation.output as unknown as { config?: boolean } | null)?.config) && (
+                            <div className="grid grid-cols-3 gap-2 mb-5">
+                              {SCORE_DIMENSIONS.map(dim => {
+                                const score = evaluation.scores[dim.key] ?? 0
+                                const delta = deltas?.[dim.key]
+                                return (
+                                  <div key={dim.key} className={`border rounded-lg px-3 py-2.5 ${scoreBg(score)}`}>
+                                    <p className="text-xs text-gray-500 mb-1">{dim.label}</p>
+                                    <div className="flex items-baseline gap-1.5">
+                                      <p className={`text-xl font-bold tabular-nums ${scoreColor(score)}`}>{score}</p>
+                                      {delta !== undefined && delta !== 0 && (
+                                        <span className={`text-xs font-semibold tabular-nums ${delta > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                          {delta > 0 ? `↑+${delta}` : `↓${delta}`}
+                                        </span>
+                                      )}
+                                      {delta === 0 && (
+                                        <span className="text-xs text-gray-400">—</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                              {/* Brief Alignment — coach mode only */}
+                              {evaluation.scores.brief_alignment !== undefined && (() => {
+                                const baScore = evaluation.scores.brief_alignment
+                                const baDelta = deltas?.['brief_alignment']
+                                return (
+                                  <div className={`border-2 border-dashed rounded-lg px-3 py-2.5 ${scoreBg(baScore)}`}>
+                                    <p className="text-xs text-gray-500 mb-1">Brief Alignment</p>
+                                    <div className="flex items-baseline gap-1.5">
+                                      <p className={`text-xl font-bold tabular-nums ${scoreColor(baScore)}`}>{baScore}</p>
+                                      {baDelta !== undefined && baDelta !== 0 && (
+                                        <span className={`text-xs font-semibold tabular-nums ${baDelta > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                          {baDelta > 0 ? `↑+${baDelta}` : `↓${baDelta}`}
+                                        </span>
+                                      )}
+                                      {baDelta === 0 && (
+                                        <span className="text-xs text-gray-400">—</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                )
+                              })()}
+                            </div>
+                            )}
+
+                            {/* ── v3 output: mode-specific display ─────────────────────── */}
+                            {evaluation.output ? (
+                              <>
+                                {evaluation.evaluation_mode === 'judge' ? (
+                                  /* ── Judge mode: talks_up / kills_it / recommendations ── */
+                                  (() => {
+                                    const o = evaluation.output as JudgeOutput
+                                    return (
+                                      <>
+                                        {/* What Jurors Will Talk Up */}
+                                        {o.talks_up && o.talks_up.length > 0 && (
+                                          <div className="mb-5">
+                                            <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-3">What Jurors Will Talk Up</p>
+                                            <div className="space-y-2.5">
+                                              {o.talks_up.map((s, i) => (
+                                                <div key={i} className="bg-green-50 border-l-4 border-green-500 rounded-r-lg px-4 py-3">
+                                                  <p className="text-sm text-gray-800 leading-relaxed italic">&ldquo;{s}&rdquo;</p>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+
+                                        {/* Where Jurors Will Kill Your Entry */}
+                                        {o.kills_it && o.kills_it.length > 0 && (
+                                          <div className="mb-5">
+                                            <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-3">Where Jurors Will Kill Your Entry</p>
+                                            <div className="space-y-2.5">
+                                              {o.kills_it.map((g, i) => (
+                                                <div key={i} className="bg-red-50 border-l-4 border-red-400 rounded-r-lg px-4 py-3">
+                                                  <p className="text-sm text-gray-800 leading-relaxed italic">&ldquo;{g}&rdquo;</p>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+
+                                        {/* Recommendations */}
+                                        {o.recommendations && (
+                                          <div className="mb-5">
+                                            <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">Recommendations to Help Your Chances</p>
+                                            <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{o.recommendations}</p>
+                                          </div>
+                                        )}
+
+                                        {/* Campaign name note */}
+                                        {o.campaign_name_note && (
+                                          <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
+                                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">On the Campaign Name</p>
+                                            <p className="text-sm text-gray-700 leading-relaxed">{o.campaign_name_note}</p>
+                                          </div>
+                                        )}
+
+                                        {/* Session 57: the Next Step card moved from here into the
+                                            "✦ Recommended Next Steps" tab on the eval view strip
+                                            (activeView === 'nextsteps'). Do not reintroduce it inline. */}
+                                      </>
+                                    )
+                                  })()
+                                ) : (
+                                  /* ── Coach mode: focus_point / priority_fixes / cuts ── */
+                                  (() => {
+                                    const o = evaluation.output as CoachOutput
+                                    return (
+                                      <>
+                                        {/* Strongest Asset */}
+                                        {o.focus_point && (
+                                          <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-5">
+                                            <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-2">✦ Your Entry&apos;s Strongest Asset</p>
+                                            <p className="text-sm text-gray-800 leading-relaxed">{o.focus_point}</p>
+                                          </div>
+                                        )}
+
+                                        {/* Priority Fixes */}
+                                        {o.priority_fixes && o.priority_fixes.length > 0 && (
+                                          <div className="mb-5">
+                                            <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">Priority Fixes — Biggest Impact First</p>
+                                            <div className="space-y-3">
+                                              {o.priority_fixes.map((pf, i) => (
+                                                <div key={i} className="border border-gray-200 rounded-xl p-4">
+                                                  <p className="text-sm font-semibold text-gray-900 mb-1.5">{i + 1}. {pf.fix}</p>
+                                                  <p className="text-xs text-gray-600 mb-1"><span className="font-medium">Why: </span>{pf.why}</p>
+                                                  <p className="text-xs text-green-700"><span className="font-medium">How: </span>{pf.action}</p>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+
+                                        {/* What to Cut */}
+                                        {o.cuts && o.cuts.length > 0 && (
+                                          <div>
+                                            <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-3">What to Cut</p>
+                                            <ul className="space-y-2.5">
+                                              {o.cuts.map((c, i) => (
+                                                <li key={i} className="text-sm text-gray-700 leading-relaxed flex gap-2">
+                                                  <span className="text-red-500 flex-shrink-0 mt-0.5">✗</span>
+                                                  <span>{c}</span>
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          </div>
+                                        )}
+                                      </>
+                                    )
+                                  })()
+                                )}
+                              </>
+                            ) : (
+                              /* ── Legacy display (v1/v2 evaluations — strengths/gaps/recommendations) ── */
+                              <>
+                                <div className="grid grid-cols-2 gap-5 mb-5">
+                                  <div>
+                                    <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-3">Strengths</p>
+                                    <ul className="space-y-2.5">
+                                      {evaluation.strengths.map((s, i) => (
+                                        <li key={i} className="text-sm text-gray-700 leading-relaxed flex gap-2">
+                                          <span className="text-green-700 flex-shrink-0 mt-0.5">✓</span>
+                                          <span>{s}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-3">Gaps</p>
+                                    <ul className="space-y-2.5">
+                                      {evaluation.gaps.map((g, i) => (
+                                        <li key={i} className="text-sm text-gray-700 leading-relaxed flex gap-2">
+                                          <span className="text-red-600 flex-shrink-0 mt-0.5">✗</span>
+                                          <span>{g}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                </div>
+                                <div>
+                                  <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">Recommendations</p>
+                                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{evaluation.recommendations}</p>
+                                </div>
+                              </>
+                            )}
+
+                            {/* Notable changes — shown when a changes_analysis is present (comparison re-evaluation) */}
+                            {evaluation.changes_analysis && (
+                              <div className="mt-5 pt-4 border-t border-gray-200">
+                                <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-2">Notable Changes</p>
+                                <p className="text-sm text-gray-700 leading-relaxed">{evaluation.changes_analysis}</p>
+                              </div>
+                            )}
+
+                            {/* Fix-this chips — user selects which issues to prioritise */}
+                            {(() => {
+                              const o = evaluation.output as EvaluationOutput | null
+                              const judgeOutput = evaluation.evaluation_mode === 'judge' ? o as JudgeOutput | null : null
+                              const coachOutput = evaluation.evaluation_mode === 'coach' ? o as CoachOutput | null : null
+                              const chipItems: string[] =
+                                judgeOutput?.kills_it?.length ? judgeOutput.kills_it :
+                                coachOutput?.priority_fixes?.length ? coachOutput.priority_fixes.map(pf => pf.fix) :
+                                evaluation.gaps?.length ? evaluation.gaps : []
+                              if (chipItems.length === 0) return null
+                              const selected = draftFocusItems[dirId] || []
+                              return (
+                                <div className="mt-5 pt-4 border-t border-gray-200">
+                                  <button
+                                    type="button"
+                                    onClick={() => setFixChipsOpen(prev => ({ ...prev, [dirId]: !(prev[dirId] ?? false) }))}
+                                    className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 hover:text-gray-700 transition-colors"
+                                  >
+                                    Focus the next draft on…
+                                    <span className="text-gray-400">{(fixChipsOpen[dirId] ?? false) ? '▲' : '▼'}</span>
+                                  </button>
+                                  {(fixChipsOpen[dirId] ?? false) && (<>
+                                  <div className="flex flex-wrap gap-2">
+                                    {chipItems.map((item, i) => {
+                                      const active = selected.includes(item)
+                                      return (
+                                        <button
+                                          key={i}
+                                          type="button"
+                                          onClick={() => toggleFocusItem(dirId, item)}
+                                          className={`text-xs px-3 py-1.5 rounded-full border transition-colors text-left ${
+                                            active
+                                              ? 'bg-green-800 text-white border-green-800'
+                                              : 'bg-white text-gray-600 border-gray-300 hover:border-green-600 hover:text-green-700'
+                                          }`}
+                                        >
+                                          {active ? '✓ ' : ''}{item.length > 60 ? item.slice(0, 57) + '…' : item}
+                                        </button>
+                                      )
+                                    })}
+                                  </div>
+                                  {selected.length > 0 && (
+                                    <p className="text-xs text-green-700 mt-2">{selected.length} issue{selected.length > 1 ? 's' : ''} selected — the draft will prioritise these above all others.</p>
+                                  )}
+                                  </>)}
+                                </div>
+                              )
+                            })()}
+
+                            {/* Generate Improved Draft — prominent CTA anchored to this evaluation */}
+                            <div className="mt-5 pt-4 border-t border-gray-200">
+                              <button
+                                onClick={() => generateDraft(dirId, evaluation.id)}
+                                disabled={generatingDraft || evaluating}
+                                className="w-full bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-5 py-3 rounded transition-colors flex items-center justify-center gap-2"
+                              >
+                                {isGeneratingThis ? (
+                                  <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Writing improved draft…</>
+                                ) : (
+                                  <>✦ Generate Improved Draft from this {evaluation.evaluation_mode === 'coach' ? 'Coach Review' : 'Jury Evaluation'}</>
+                                )}
+                              </button>
+                              <p className="text-xs text-gray-400 text-center mt-2">
+                                The new draft will directly address every gap and recommendation above. Previous drafts are kept for comparison.
+                              </p>
+                              {generateDraftError && generateDraftErrorDirId === dirId && (
+                                <div className="mt-3"><ErrorBanner error={generateDraftError} /></div>
+                              )}
+                            </div>
+                          </div>
+                          ) : null}
+                            </div>{/* /collapsible eval breakdown (S152) */}
+                          </div>
+                        )}
+
+                        {/* Previous Evaluations History */}
+                        {dirHistory.length > 0 && (
+                          <div className="px-5 py-3 border-b border-gray-100 bg-white">
+                            <button
+                              onClick={() => setEvalHistoryOpen(prev => ({ ...prev, [dirId]: !prev[dirId] }))}
+                              className="flex items-center gap-2 text-xs text-gray-400 hover:text-gray-700 transition-colors"
+                            >
+                              <span className="text-gray-300">↕</span>
+                              <span>{evalHistoryOpen[dirId] ? 'Hide' : 'See'} previous evaluations</span>
+                              <span className="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{dirHistory.length}</span>
+                            </button>
+                            {evalHistoryOpen[dirId] && (
+                              <div className="mt-3 space-y-3">
+                                {dirHistory.map((hist, hIdx) => {
+                                  const hMode = hist.evaluation_mode === 'coach' ? 'coach' : 'judge'
+                                  const hDate = new Date(hist.created_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: '2-digit' })
+                                  const hJudgeOutput = hMode === 'judge' && hist.output ? hist.output as JudgeOutput : null
+                                  const hCoachOutput = hMode === 'coach' && hist.output ? hist.output as CoachOutput : null
+                                  return (
+                                    <div key={hIdx} className="border border-gray-100 rounded-lg p-3 bg-gray-50">
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <span className="text-xs font-medium text-gray-500">
+                                          {hMode === 'coach' ? '✦ Coach Review' : '⚖ Jury Evaluation'}
+                                        </span>
+                                        <span className="text-xs text-gray-300">·</span>
+                                        <span className="text-xs text-gray-400">{hDate}</span>
+                                        <span className="text-xs text-gray-300">·</span>
+                                        <span className={`text-xs font-bold tabular-nums ${scoreColor(hist.overall_score)}`}>
+                                          {hist.overall_score.toFixed(1)}/10
+                                        </span>
+                                      </div>
+                                      {hJudgeOutput && (
+                                        <div className="space-y-1.5">
+                                          {hJudgeOutput.talks_up?.slice(0, 2).map((t, i) => (
+                                            <p key={i} className="text-xs text-gray-600 italic border-l-2 border-green-300 pl-2">"{t}"</p>
+                                          ))}
+                                          {hJudgeOutput.kills_it?.slice(0, 2).map((k, i) => (
+                                            <p key={i} className="text-xs text-gray-600 italic border-l-2 border-red-300 pl-2">"{k}"</p>
+                                          ))}
+                                        </div>
+                                      )}
+                                      {hCoachOutput && (
+                                        <div className="space-y-1.5">
+                                          {hCoachOutput.focus_point && (
+                                            <p className="text-xs text-gray-600 border-l-2 border-green-300 pl-2">{hCoachOutput.focus_point}</p>
+                                          )}
+                                          {hCoachOutput.priority_fixes?.slice(0, 2).map((fix, i) => (
+                                            <p key={i} className="text-xs text-gray-500 pl-2">→ {fix.fix}</p>
+                                          ))}
+                                        </div>
+                                      )}
+                                      {!hist.output && hist.strengths && (
+                                        <p className="text-xs text-gray-500 line-clamp-2">{hist.strengths}</p>
+                                      )}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )
+                    const sxsEvalChat = (
+                      <>
+                        {/* Evaluation Chat — gated on hasJudge || hasCoach, not on the active-mode evaluation,
+                             so the section stays mounted when the user switches between judge/coach tabs */}
+                        {(hasJudge || hasCoach) && (
+                          <div className="px-5 py-4 border-b border-gray-200 bg-white">
+                            <button
+                              onClick={() => setEvalChatOpen(prev => ({ ...prev, [dirId]: !prev[dirId] }))}
+                              className="flex items-center gap-2 text-sm font-medium text-green-700 hover:text-green-600 transition-colors"
+                            >
+                              <span>✦ Ask about this evaluation</span>
+                              <span className="text-gray-400 text-xs">{evalChatOpen[dirId] ? '↑' : '↓'}</span>
+                              {(evalChatHistory[dirId] || []).length > 0 && !evalChatOpen[dirId] && (
+                                <span className="bg-green-100 text-green-800 text-xs px-1.5 py-0.5 rounded-full leading-none ml-1">
+                                  {Math.floor((evalChatHistory[dirId] || []).length / 2)} message{Math.floor((evalChatHistory[dirId] || []).length / 2) !== 1 ? 's' : ''}
+                                </span>
+                              )}
+                            </button>
+
+                            {evalChatOpen[dirId] && (
+                              <div className="mt-4">
+                                {/* Message thread */}
+                                {(evalChatHistory[dirId] || []).length === 0 ? (
+                                  <div className="mb-4">
+                                    <p className="text-xs text-gray-400 mb-3">Ask me anything about your scores, what to improve, or how this compares to what wins here.</p>
+                                    {/* Prompt starters */}
+                                    <div className="flex flex-wrap gap-2">
+                                      {[
+                                        'Why did I score low on Insight?',
+                                        'What would a winning entry do differently?',
+                                        'How can I improve my Results section?',
+                                        'What is the jury at this show looking for?',
+                                      ].map(prompt => (
+                                        <button
+                                          key={prompt}
+                                          onClick={() => {
+                                            setEvalChatInput(prev => ({ ...prev, [dirId]: prompt }))
+                                          }}
+                                          className="text-xs text-green-700 border border-green-200 hover:bg-green-50 px-3 py-1.5 rounded-lg transition-colors"
+                                        >
+                                          {prompt}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="space-y-3 mb-4 max-h-96 overflow-y-auto pr-1">
+                                    {(evalChatHistory[dirId] || []).map((msg, i) => (
+                                      <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                        <div className={`max-w-[85%] rounded-xl px-3.5 py-2.5 text-sm leading-relaxed ${
+                                          msg.role === 'user'
+                                            ? 'bg-green-800 text-white'
+                                            : 'bg-gray-50 border border-gray-200 text-gray-700'
+                                        }`}>
+                                          {/* Render line breaks and preserve paragraph spacing */}
+                                          <span className="whitespace-pre-wrap">{msg.content}</span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                    {evalChatting[dirId] && (
+                                      <div className="flex justify-start">
+                                        <div className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 flex items-center gap-1.5">
+                                          <svg className="animate-spin h-3.5 w-3.5 text-green-700" viewBox="0 0 24 24" fill="none">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                                          </svg>
+                                          <span className="text-xs text-gray-400">Thinking…</span>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Input row — disabled if active mode has no evaluation yet */}
+                                {!evaluation ? (
+                                  <p className="text-xs text-gray-400 italic">
+                                    Run a {activeMode === 'judge' ? 'Jury Evaluation' : 'Coach Review'} to start chatting about this entry.
+                                  </p>
+                                ) : (
+                                <div className="flex gap-2">
+                                  <input
+                                    value={evalChatInput[dirId] || ''}
+                                    onChange={e => setEvalChatInput(prev => ({ ...prev, [dirId]: e.target.value }))}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter' && !e.shiftKey && !evalChatting[dirId]) {
+                                        e.preventDefault()
+                                        sendEvalChat(dirId)
+                                      }
+                                    }}
+                                    placeholder="Ask about your scores, what to improve, or what wins here…"
+                                    className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
+                                    disabled={evalChatting[dirId]}
+                                  />
+                                  <button
+                                    onClick={() => sendEvalChat(dirId)}
+                                    disabled={evalChatting[dirId] || !(evalChatInput[dirId] || '').trim()}
+                                    className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded transition-colors flex-shrink-0"
+                                  >
+                                    Send
+                                  </button>
+                                </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )
+                    const sxsRoi = (
+                      <>
+                        {/* ── ROI Estimation ─────────────────────────────────────────
+                             Shows after jury eval, updates when coach review also exists.
+                             Jury-only:   quality = juryScore × 10
+                             Combined:    quality = (juryScore + untappedPotential) × 10
+                             Both capped at 100 before passing to computeRoiIndex. */}
+                        {(hasJudge || hasCoach) && dirShow && (() => {
+                          const juryScore  = evalBoth.judge?.overall_score
+                          const coachScore = evalBoth.coach?.overall_score
+                          const untapped   = coachScore !== undefined
+                            ? parseFloat((10 - coachScore).toFixed(1))
+                            : undefined
+                          // Jury-only quality: score × 10, capped at 100
+                          const juryQuality = juryScore !== undefined
+                            ? Math.min(100, juryScore * 10)
+                            : undefined
+                          // Combined quality: (juryScore + untapped) × 10, capped at 100
+                          const combinedQuality = juryScore !== undefined && untapped !== undefined
+                            ? Math.min(100, (juryScore + untapped) * 10)
+                            : undefined
+                          const baseRoi     = computeRoiIndex(dirShow)
+                          const juryRoi     = juryQuality !== undefined  ? computeRoiIndex(dirShow, juryQuality)     : undefined
+                          const combinedRoi = combinedQuality !== undefined ? computeRoiIndex(dirShow, combinedQuality) : undefined
+                          if (!baseRoi) return null
+                          const roiColor = (v: number) => v >= 70 ? 'text-green-700' : v >= 40 ? 'text-amber-700' : 'text-gray-500'
+                          const roiBg    = (v: number) => v >= 70 ? 'bg-green-50 border-green-200' : v >= 40 ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-200'
+                          return (
+                            <div className="px-5 py-4 border-b border-gray-200 bg-white">
+                              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">ROI Estimation</p>
+                              <div className="flex flex-wrap gap-2">
+                                {/* Base — no quality adjustment */}
+                                <div className={`flex-1 min-w-[100px] border rounded-lg px-3 py-2.5 ${roiBg(baseRoi)}`}>
+                                  <p className={`text-xl font-bold tabular-nums ${roiColor(baseRoi)}`}>
+                                    {baseRoi}<span className="text-xs font-normal text-gray-400">/100</span>
+                                  </p>
+                                  <p className="text-xs text-gray-400 mt-0.5">Base</p>
+                                </div>
+                                {/* Jury-adjusted */}
+                                {juryRoi !== undefined && (
+                                  <div className={`flex-1 min-w-[100px] border rounded-lg px-3 py-2.5 ${roiBg(juryRoi)}`}>
+                                    <p className={`text-xl font-bold tabular-nums ${roiColor(juryRoi)}`}>
+                                      {juryRoi}<span className="text-xs font-normal text-gray-400">/100</span>
+                                    </p>
+                                    <p className="text-xs text-gray-400 mt-0.5">Jury score adjusted</p>
+                                  </div>
+                                )}
+                                {/* Combined potential — jury + coach untapped */}
+                                {combinedRoi !== undefined && (
+                                  <div className={`flex-1 min-w-[100px] border-2 rounded-lg px-3 py-2.5 ${roiBg(combinedRoi)}`}>
+                                    <p className={`text-xl font-bold tabular-nums ${roiColor(combinedRoi)}`}>
+                                      {combinedRoi}<span className="text-xs font-normal text-gray-400">/100</span>
+                                    </p>
+                                    <p className="text-xs text-gray-400 mt-0.5">Maximum potential</p>
+                                    <p className="text-xs text-gray-400">({juryScore?.toFixed(1)} + {untapped?.toFixed(1)} untapped)</p>
+                                  </div>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-400 mt-2.5 leading-relaxed">
+                                Prestige × Base Medal Chance Rate % ÷ entry fee, quality-adjusted. Index normalized to 100.
+                              </p>
+                            </div>
+                          )
+                        })()}
+                      </>
+                    )
+                    return (
+                      <div key={dirId} id={`aoy-dir-${dirId}`} className={`bg-white border rounded-xl overflow-hidden transition-shadow ${justScoredDirId === dirId ? 'border-green-500 ring-2 ring-green-500' : 'border-gray-200'}`}>
+
+                        {/* Direction header — Session 57: stacks on mobile. The old
+                            single-row flex (right block flex-shrink-0) crushed the
+                            title to one word per line on phones. */}
+                        <div className={`px-5 py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 ${isExpanded ? 'border-b border-gray-200' : ''}`}>
+                          {/* Left: clickable toggle (chevron + label + name + show/
+                              category + score/fit badges). Collapsing keeps the whole
+                              card to this compact header (S91). */}
+                          <div className="min-w-0 pt-0.5 flex-1">
+                            <button
+                              onClick={() => setEntryCardExpanded(prev => ({ ...prev, [dirId]: !isExpanded }))}
+                              className="flex items-start gap-2 text-left w-full group"
+                              title={isExpanded ? 'Collapse this entry' : 'Expand this entry'}
+                            >
+                              <span className="text-gray-400 group-hover:text-gray-700 flex-shrink-0 transition-colors text-3xl leading-none w-6 text-center">{isExpanded ? '▾' : '▸'}</span>
+                              <span className="min-w-0">
+                                <span className="block text-xs text-gray-400 uppercase tracking-wider font-medium mb-0.5">Direction</span>
+                                <span className="block font-medium text-gray-900">{dirName}</span>
+                                {dirShow && !(dirName.includes(dirShow) && (!dirCategory || dirName.includes(dirCategory))) && (
+                                  <span className="block text-green-700 text-xs mt-0.5">
+                                    {dirShow}{dirCategory ? <> · <span className="text-gray-400">{dirCategory}</span></> : null}
+                                  </span>
+                                )}
+                                <span className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                  {summaryScore != null && (
+                                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${scoreBg(summaryScore)} ${scoreColor(summaryScore)}`}>{summaryScore}/10</span>
+                                  )}
+                                  {typeof dirFit === 'number' && (
+                                    <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-500 border border-gray-200">{dirFit}% fit</span>
+                                  )}
+                                  {!isExpanded && needsReEval && (
+                                    <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-50 text-amber-700 border border-amber-200">Draft updated</span>
+                                  )}
+                                </span>
+                              </span>
+                            </button>
+                            <button
+                              onClick={() => setTab('directions')}
+                              className="text-xs text-gray-400 hover:text-gray-600 mt-1.5 ml-6 transition-colors"
+                            >
+                              ← View in Directions
+                            </button>
+                          </div>
+
+                          {/* Right: action buttons — only when expanded; a collapsed
+                              card stays compact (S91). */}
+                          {isExpanded && (
+                          <div className="flex flex-col items-start sm:items-end gap-2 w-full sm:w-auto sm:flex-shrink-0">
+
+                            {/* Row 1 — Jury Eval + AOY Coach + Re-Draft */}
+                            <div className="flex items-center gap-2 flex-wrap justify-start sm:justify-end">
+                              <button
+                                onClick={() => evaluateEntry(dirId, 'judge', evalBoth.judge?.id)}
+                                disabled={evaluating || generatingDraft}
+                                title="Evaluate the entry as written — mirrors what a jury member sees"
+                                className="bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded transition-colors flex items-center justify-center gap-2 sm:w-48"
+                              >
+                                {isEvaluatingThis && evaluatingMode[dirId] === 'judge' ? (
+                                  <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Evaluating…</>
+                                ) : (
+                                  <>⚖ {hasJudge ? 'Re-run Jury Eval' : 'Jury Evaluation'}</>
+                                )}
+                              </button>
+                              <button
+                                onClick={() => evaluateEntry(dirId, 'coach', evalBoth.coach?.id)}
+                                disabled={evaluating || generatingDraft || coaching}
+                                title="Review the entry and surface what is missing and how to strengthen it"
+                                className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded transition-colors flex items-center justify-center gap-2 sm:w-48"
+                              >
+                                {((isEvaluatingThis && evaluatingMode[dirId] === 'coach') || (coaching && coachingForDirectionId === dirId)) ? (
+                                  <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Coaching…</>
+                                ) : isAoyShow(d?.best_show ?? '') ? (
+                                  <>✦ {aoyCoaching[dirId] ? 'Re-run AOY Coach' : 'AOY Coach'}</>
+                                ) : configModeFor(dirId, d?.best_show) ? (
+                                  <>✦ {configCoaching[dirId] ? 'Re-run Coach' : 'Coach Review'}</>
+                                ) : (
+                                  <>✦ {hasCoach ? 'Re-run Coach Review' : 'Coach Review'}</>
+                                )}
+                              </button>
+                              <button
+                                onClick={() => generateDraft(dirId)}
+                                disabled={generatingDraft || evaluating}
+                                title="Generate a fresh draft for this direction"
+                                className="text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-300 hover:border-gray-400 disabled:opacity-40 px-4 py-2 rounded transition-colors flex items-center justify-center gap-2 sm:w-48"
+                              >
+                                {isGeneratingThis ? (
+                                  <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Re-Drafting…</>
+                                ) : '↻ Re-Draft'}
+                              </button>
+                            </div>
+
+                            {/* Row 2 — Share Draft + Share Eval (downloads) */}
+                            {((d && getCurrentDraftFields(dirId).length > 0) || (evaluation && d)) && (
+                            <div className="flex items-center gap-2 flex-wrap justify-start sm:justify-end">
+                              {d && getCurrentDraftFields(dirId).length > 0 && (
+                                <button
+                                  onClick={() => downloadDraft(d)}
+                                  className="text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-4 py-2 rounded transition-colors text-center sm:w-48"
+                                  title="Download the current draft as a text file"
+                                >
+                                  ↓ Share Draft
+                                </button>
+                              )}
+                              {evaluation && d && (
+                                <button
+                                  onClick={() => downloadEvaluation(d, evaluation)}
+                                  className="text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-4 py-2 rounded transition-colors text-center sm:w-48"
+                                  title="Download the evaluation report as a text file"
+                                >
+                                  ↓ Share Eval
+                                </button>
+                              )}
+                            </div>
+                            )}
+
+                            {/* Row 3 — Alt Categories / Alt Shows (post-eval) or Suggest Directions (pre-eval) */}
+                            <div className="flex items-center gap-2 flex-wrap justify-start sm:justify-end">
+                              {(hasJudge || hasCoach) ? (
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      const evalForSmart = evalBoth.judge ?? evalBoth.coach
+                                      if (evalForSmart) generateSmartDirections(dirId, evalForSmart.id, 'alternatives')
+                                    }}
+                                    disabled={evaluating || generatingDraft || !!smartDirectionsLoading[dirId]}
+                                    title="Suggest alternative categories in the same show, informed by this evaluation"
+                                    className="text-xs font-medium text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-4 py-2 rounded transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40 sm:w-48"
+                                  >
+                                    {smartDirectionsLoading[dirId] === 'alternatives' ? (
+                                      <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Finding…</>
+                                    ) : '✦ Alt Categories'}
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      const evalForSmart = evalBoth.judge ?? evalBoth.coach
+                                      if (evalForSmart) generateSmartDirections(dirId, evalForSmart.id, 'other_shows')
+                                    }}
+                                    disabled={evaluating || generatingDraft || !!smartDirectionsLoading[dirId]}
+                                    title="Suggest other shows where this entry's strengths would land best"
+                                    className="text-xs font-medium text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-4 py-2 rounded transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40 sm:w-48"
+                                  >
+                                    {smartDirectionsLoading[dirId] === 'other_shows' ? (
+                                      <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Finding…</>
+                                    ) : '✦ Alt Shows'}
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  onClick={() => setTab('directions')}
+                                  className="text-xs font-medium text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-4 py-2 rounded transition-colors flex items-center justify-center gap-1.5 sm:w-48"
+                                  title="Explore AI-recommended show and category directions"
+                                >
+                                  <span>Suggest Directions</span>
+                                  <span>→</span>
+                                </button>
+                              )}
+                            </div>
+
+                          </div>
+                          )}
+                        </div>
+
+                        {isExpanded && (<>
+                        {/* ── Jury intelligence panel — "What wins at this show" ──────────── */}
+                        {/* Shown only when a show_profiles row exists for this direction's show.
+                            Collapsed by default. Uses the same show_profiles query pattern as the
+                            evaluate-entry and generate-draft edge functions. */}
+                        {showProfiles[dirId] && (
+                          <div className="border-b border-gray-100">
+                            <button
+                              onClick={() => setShowProfileOpen(prev => ({ ...prev, [dirId]: !prev[dirId] }))}
+                              className="w-full px-5 py-2.5 flex items-center justify-between text-left hover:bg-gray-50 transition-colors group"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-400 group-hover:text-gray-600 transition-colors">🎯</span>
+                                <span className="text-xs font-medium text-gray-400 group-hover:text-gray-600 transition-colors">
+                                  What wins at {dirShow || showProfiles[dirId]!.show_name}
+                                </span>
+                                {dirCategory && showProfiles[dirId]!.show_name && (
+                                  <span className="text-xs text-gray-300">· {dirCategory}</span>
+                                )}
+                              </div>
+                              <span className="text-gray-300 text-xs group-hover:text-gray-400 transition-colors">
+                                {showProfileOpen[dirId] ? '▲' : '▼'}
+                              </span>
+                            </button>
+
+                            {showProfileOpen[dirId] && (
+                              <div className="px-5 pb-5 pt-3 bg-gray-50 space-y-4">
+                                {showProfiles[dirId]!.judging_philosophy && (
+                                  <div>
+                                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Judging philosophy</p>
+                                    <p className="text-sm text-gray-700 leading-relaxed">{showProfiles[dirId]!.judging_philosophy}</p>
+                                  </div>
+                                )}
+                                {showProfiles[dirId]!.scoring_emphasis && (
+                                  <div>
+                                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">What they score on</p>
+                                    <p className="text-sm text-gray-700 leading-relaxed">{showProfiles[dirId]!.scoring_emphasis}</p>
+                                  </div>
+                                )}
+                                {showProfiles[dirId]!.common_mistakes && (
+                                  <div>
+                                    <p className="text-xs font-semibold text-amber-500 uppercase tracking-wider mb-1.5">Common mistakes</p>
+                                    <p className="text-sm text-gray-700 leading-relaxed">{showProfiles[dirId]!.common_mistakes}</p>
+                                  </div>
+                                )}
+                                {showProfiles[dirId]!.language_guidance && (
+                                  <div>
+                                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Language & tone</p>
+                                    <p className="text-sm text-gray-700 leading-relaxed">{showProfiles[dirId]!.language_guidance}</p>
+                                  </div>
+                                )}
+                                {showProfiles[dirId]!.jury_composition_notes && (
+                                  <p className="text-xs text-gray-400 pt-3 border-t border-gray-200 leading-relaxed">
+                                    {showProfiles[dirId]!.jury_composition_notes}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* ── Jury Profile Intelligence panel — "Who judges this show" ──────── */}
+                        {/* Phase 1: static 2021-2026 dataset. Shows composition, president signal,
+                            and historical win patterns. No individual names exposed. */}
+                        {dirShow && juryShowCells[dirShow] && juryShowCells[dirShow].length > 0 && (
+                          <JuryProfilePanel
+                            showName={dirShow}
+                            category={dirCategory ?? ''}
+                            cells={juryShowCells[dirShow]}
+                            regionalUplift={regionalUplift}
+                            isOpen={!!juryPanelOpen[dirId]}
+                            onToggle={() => setJuryPanelOpen(prev => ({ ...prev, [dirId]: !prev[dirId] }))}
+                          />
+                        )}
+
+                        {isGeneratingThis && (
+                          <div className="px-5 pt-3 pb-1">
+                            <GeneratingBar isGenerating={isGeneratingThis} estimatedDuration={60000} />
+                          </div>
+                        )}
+
+                        {isEvaluatingThis && (
+                          <div className="px-5 pt-3 pb-1">
+                            <GeneratingBar
+                              isGenerating={isEvaluatingThis}
+                              estimatedDuration={50000}
+                              statements={evaluatingMode[dirId] === 'coach' ? COACH_REVIEW_STATEMENTS : JURY_EVAL_STATEMENTS}
+                            />
+                          </div>
+                        )}
+
+                        {/* Smart directions error */}
+                        {smartDirectionsError[dirId] && (
+                          <div className="px-5 py-2 bg-red-50 border-b border-red-100 flex items-center justify-between gap-2">
+                            <p className="text-xs text-red-600">{smartDirectionsError[dirId]}</p>
+                            <button onClick={() => setSmartDirectionsError(prev => { const n = { ...prev }; delete n[dirId]; return n })} className="text-red-400 hover:text-red-600 text-xs">✕</button>
+                          </div>
+                        )}
+
+                        {/* Needs re-evaluation notice — shown when draft has been improved since last eval */}
+                        {needsReEval && !isEvaluatingThis && (
+                          <div className="px-5 py-3 bg-amber-50 border-b border-amber-200 flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-2">
+                              <span className="text-amber-600 text-sm">⚡</span>
+                              <p className="text-sm text-amber-800">
+                                Draft updated — re-evaluate to see the impact on scores
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <button
+                                onClick={() => evaluateEntry(dirId, 'judge', evalBoth.judge?.id)}
+                                disabled={evaluating || generatingDraft}
+                                className="text-xs font-medium text-amber-800 hover:text-amber-900 border border-amber-300 hover:border-amber-500 bg-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40"
+                              >
+                                ⚖ {hasJudge ? 'Re-run Jury Eval' : 'Jury Evaluation'}
+                              </button>
+                              <button
+                                onClick={() => evaluateEntry(dirId, 'coach', evalBoth.coach?.id)}
+                                disabled={evaluating || generatingDraft || coaching}
+                                className="text-xs font-medium text-amber-800 hover:text-amber-900 border border-amber-300 hover:border-amber-500 bg-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40"
+                              >
+                                {((isEvaluatingThis && evaluatingMode[dirId] === 'coach') || (coaching && coachingForDirectionId === dirId)) ? (
+                                  <><svg className="animate-spin h-3 w-3 inline mr-1" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Coaching…</>
+                                ) : isAoyShow(d?.best_show ?? '') ? (
+                                  <>✦ {aoyCoaching[dirId] ? 'Re-run AOY Coach' : 'AOY Coach'}</>
+                                ) : configModeFor(dirId, d?.best_show) ? (
+                                  <>✦ {configCoaching[dirId] ? 'Re-run Coach' : 'Coach Review'}</>
+                                ) : (
+                                  <>✦ {hasCoach ? 'Re-run Coach Review' : 'Coach Review'}</>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* AOY Coach — advisory per-section guidance (generate-aoy-coach,
+                            S77). AOY directions only; not an evaluations row, so it
+                            renders separately from the Jury panel. */}
+                        {isAoyShow(d?.best_show ?? '') && coachingError && coachingForDirectionId === dirId && (
+                          <div className="px-5 py-3 border-b border-gray-200"><ErrorBanner error={coachingError} /></div>
+                        )}
+                        {isAoyShow(d?.best_show ?? '') && aoyCoaching[dirId] && (() => {
+                          const c = aoyCoaching[dirId]
+                          // Chunk 5 staleness flag: the persisted/live coaching is
+                          // keyed to the draft_generation it was run against. If the
+                          // draft has since been regenerated (maxGen is this scope's
+                          // current-generation count, same variable the judge/coach
+                          // needsReEval check above already uses), say so plainly
+                          // instead of silently showing advice for an older draft.
+                          const coachStale = maxGen > c.draft_generation
+                          return (
+                            <div className="border-b border-gray-200 bg-green-50/40 px-5 py-4">
+                              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                <span className="text-sm font-semibold text-gray-800">✦ AOY Coach</span>
+                                <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full capitalize">{c.pillar} pillar</span>
+                                <span className="text-xs text-gray-400">advisory, not a score</span>
+                              </div>
+                              {coachStale && (
+                                <p className="text-xs text-amber-700 mb-2">Draft changed since this coaching. Re-run AOY Coach for advice on the current version.</p>
+                              )}
+                              {c.overall && <p className="text-sm text-gray-700">{c.overall}</p>}
+                              {c.priorities.length > 0 && (
+                                <div className="mt-2">
+                                  <p className="text-xs font-medium text-gray-600 mb-1">Highest-leverage fixes</p>
+                                  <ul className="list-disc list-inside space-y-0.5">{c.priorities.map((p, i) => <li key={i} className="text-xs text-gray-600">{p}</li>)}</ul>
+                                </div>
+                              )}
+                              {(() => {
+                                const maxWeight = c.sections.reduce((m, x) => Math.max(m, x.weight || 0), 1)
+                                return (
+                              <div className="mt-3 space-y-2">
+                                {c.sections.map(sec => (
+                                  <div key={sec.key} className={`border rounded-lg px-3 py-2.5 ${sec.is_placeholder ? 'border-amber-200 bg-amber-50/40' : 'border-gray-200 bg-white'}`}>
+                                    <div className="flex items-baseline justify-between gap-2">
+                                      <p className="text-xs font-medium text-gray-800 min-w-0 flex-1">{sec.label}</p>
+                                      <span className="text-xs text-gray-400 tabular-nums flex-shrink-0">{sec.weight}% of score{sec.is_placeholder ? ' · not written' : ''}</span>
+                                    </div>
+                                    <div className="mt-1.5"><MeterBar fraction={(sec.weight || 0) / maxWeight} color={sec.is_placeholder ? '#d97706' : '#15803d'} /></div>
+                                    {sec.missing.length > 0 && <p className="text-xs text-amber-700 mt-1.5">Missing: {sec.missing.join('; ')}</p>}
+                                    {sec.suggestions.length > 0 && (
+                                      <ul className="list-disc list-inside mt-1 space-y-0.5">{sec.suggestions.map((x, i) => <li key={i} className="text-xs text-gray-600 leading-relaxed">{x}</li>)}</ul>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                                )
+                              })()}
+                              {/* Feedback export (S93): clean plain text bundling this
+                                  coach review + the latest jury eval, to copy into an
+                                  email/message or download. */}
+                              {d && (() => {
+                                const fbInput = {
+                                  kind: 'AOY' as const,
+                                  category: d.best_category ?? null,
+                                  overall: c.overall,
+                                  priorities: c.priorities,
+                                  sections: c.sections.map(s => ({ label: s.label, weight: s.weight, missing: s.missing, suggestions: s.suggestions })),
+                                }
+                                const copyKey = `aoy-fb-${dirId}`
+                                return (
+                                  <div className="mt-3 flex items-center gap-2 flex-wrap">
+                                    <button
+                                      onClick={() => copyTextWithConfirm(copyKey, buildFeedbackText(d, evalBoth.judge, fbInput), setFeedbackCopied)}
+                                      className="text-xs font-medium text-green-700 hover:text-green-900 border border-green-200 hover:border-green-400 px-3 py-1.5 rounded-lg transition-colors"
+                                    >
+                                      {feedbackCopied[copyKey] ? '✓ Copied' : 'Copy feedback'}
+                                    </button>
+                                    <button
+                                      onClick={() => downloadCoachFeedback(d, evalBoth.judge, fbInput)}
+                                      className="text-xs text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors"
+                                    >
+                                      ↓ Feedback .txt
+                                    </button>
+                                  </div>
+                                )
+                              })()}
+                            </div>
+                          )
+                        })()}
+
+                        {/* Config Coach — advisory per-section guidance
+                            (generate-entry-coach-config, S98 Chunk 5). Non-AOY config
+                            directions (weighted or qualitative, e.g. SMARTIES); not an
+                            evaluations row, so it renders separately from the Jury
+                            panel. Replaces the dedicated SMARTIES coach panel (S93).
+                            Reuses the shared coaching error state. */}
+                        {configModeFor(dirId, d?.best_show) && coachingError && coachingForDirectionId === dirId && (
+                          <div className="px-5 py-3 border-b border-gray-200"><ErrorBanner error={coachingError} /></div>
+                        )}
+                        {configCoaching[dirId] && (() => {
+                          const c = configCoaching[dirId]
+                          return (
+                            <div className="border-b border-gray-200 bg-green-50/40 px-5 py-4">
+                              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                <span className="text-lg font-semibold text-gray-800">✦ Coach</span>
+                                {c.category_key && <span className="text-sm font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">{c.category_key}</span>}
+                                <span className="text-sm text-gray-400">advisory, not a score</span>
+                              </div>
+                              {/* framing_degraded (S98 Chunk 4): Coach ran without the
+                                  show's full jury framing. Surface it so a generic pass
+                                  is visible rather than mistaken for show-calibrated advice. */}
+                              {c.framing_degraded && (
+                                <p className="text-sm text-amber-700 mb-2">Coaching without full show framing. Advice is general; seed this show&apos;s jury framing for show-specific guidance.</p>
+                              )}
+                              {c.overall && <p className="text-base text-gray-700 leading-relaxed">{c.overall}</p>}
+                              {c.priorities.length > 0 && (
+                                <div className="mt-2">
+                                  <p className="text-sm font-medium text-gray-600 mb-1">Highest-leverage fixes</p>
+                                  <ul className="list-disc list-inside space-y-1">{c.priorities.map((p, i) => <li key={i} className="text-base text-gray-600 leading-relaxed">{p}</li>)}</ul>
+                                </div>
+                              )}
+                              <div className="mt-3 space-y-2">
+                                {c.sections.map(sec => (
+                                  <div key={sec.key} className={`border rounded-lg px-3 py-2.5 ${sec.is_placeholder ? 'border-amber-200 bg-amber-50/40' : 'border-gray-200 bg-white'}`}>
+                                    <div className="flex items-baseline justify-between gap-2">
+                                      <p className="text-base font-medium text-gray-800 min-w-0 flex-1">{sec.label}{typeof sec.weight === 'number' ? <span className="text-gray-400 font-normal"> {sec.weight}% of score</span> : null}</p>
+                                      {sec.is_placeholder && <span className="text-sm text-gray-400 flex-shrink-0">not written</span>}
+                                    </div>
+                                    {sec.missing.length > 0 && <p className="text-base text-amber-700 mt-1.5 leading-relaxed">Missing: {sec.missing.join('; ')}</p>}
+                                    {sec.suggestions.length > 0 && (
+                                      <ul className="list-disc list-inside mt-1 space-y-1">{sec.suggestions.map((x, i) => <li key={i} className="text-base text-gray-600 leading-relaxed">{x}</li>)}</ul>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                              {/* Feedback export: clean plain text bundling this coach
+                                  review + the latest jury eval. Weighted -> AOY-shaped
+                                  (carries weights), qualitative -> SMARTIES-shaped. */}
+                              {d && (() => {
+                                const fbInput = c.scoring_mode === 'weighted'
+                                  ? {
+                                      kind: 'AOY' as const,
+                                      category: c.category_key,
+                                      overall: c.overall,
+                                      priorities: c.priorities,
+                                      sections: c.sections.map(s => ({ label: s.label, weight: s.weight ?? 0, missing: s.missing, suggestions: s.suggestions })),
+                                    }
+                                  : {
+                                      kind: 'SMARTIES' as const,
+                                      category: c.category_key,
+                                      overall: c.overall,
+                                      priorities: c.priorities,
+                                      sections: c.sections.map(s => ({ label: s.label, missing: s.missing, suggestions: s.suggestions })),
+                                    }
+                                const copyKey = `config-fb-${dirId}`
+                                return (
+                                  <div className="mt-3 flex items-center gap-2 flex-wrap">
+                                    <button
+                                      onClick={() => copyTextWithConfirm(copyKey, buildFeedbackText(d, evalBoth.judge, fbInput), setFeedbackCopied)}
+                                      className="text-sm font-medium text-green-700 hover:text-green-900 border border-green-200 hover:border-green-400 px-3 py-1.5 rounded-lg transition-colors"
+                                    >
+                                      {feedbackCopied[copyKey] ? '✓ Copied' : 'Copy feedback'}
+                                    </button>
+                                    <button
+                                      onClick={() => downloadCoachFeedback(d, evalBoth.judge, fbInput)}
+                                      className="text-sm text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors"
+                                    >
+                                      ↓ Feedback .txt
+                                    </button>
+                                  </div>
+                                )
+                              })()}
+                            </div>
+                          )
+                        })()}
+                        {sideBySidePreview ? (
+                          <>
+                            <div className="flex flex-col lg:flex-row lg:gap-6 lg:items-start">
+                              <div className="w-full min-w-0 lg:flex-1">
+                                {sxsEditSurface}
+                              </div>
+                              <div className="w-full min-w-0 lg:w-[360px] lg:flex-shrink-0 lg:sticky lg:top-4 lg:self-start">
+                                {sxsEvalTop}
+                                {sxsEvalChat}
+                              </div>
+                            </div>
+                            {sxsRoi}
+                          </>
+                        ) : (
+                          <>
+                            {sxsEvalTop}
+                            {sxsRoi}
+                            {sxsEvalChat}
+                            {sxsEditSurface}
+                          </>
+                        )}
                         </>)}
 
                       </div>
@@ -9166,7 +9218,7 @@ export default function ProjectPage() {
                         {scriptMode === 'review' ? 'Optimised Script' : 'Generated Script'}
                       </h3>
                       <p className="text-xs text-gray-400 mt-0.5">
-                        {scriptMode === 'generate' ? 'Claude Sonnet 4.6' : 'Claude Opus 4.6'} · 2-minute case study film
+                        2-minute case study film
                         {(scriptShow || effectiveCategoryLabel) && (
                           <span className="text-green-700"> · {[scriptShow, effectiveCategoryLabel && effectiveCategoryLabel !== 'Suggest Best Fits' ? effectiveCategoryLabel : null].filter(Boolean).join(' — ')}</span>
                         )}
