@@ -8277,7 +8277,7 @@ export default function ProjectPage() {
                                 onClick={() => evaluateEntry(dirId, 'judge', evalBoth.judge?.id)}
                                 disabled={evaluating || generatingDraft}
                                 title="Evaluate the entry as written — mirrors what a jury member sees"
-                                className="bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded transition-colors flex items-center gap-2"
+                                className="bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded transition-colors flex items-center justify-center gap-2 sm:w-48"
                               >
                                 {isEvaluatingThis && evaluatingMode[dirId] === 'judge' ? (
                                   <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Evaluating…</>
@@ -8289,7 +8289,7 @@ export default function ProjectPage() {
                                 onClick={() => evaluateEntry(dirId, 'coach', evalBoth.coach?.id)}
                                 disabled={evaluating || generatingDraft || coaching}
                                 title="Review the entry and surface what is missing and how to strengthen it"
-                                className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded transition-colors flex items-center gap-2"
+                                className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded transition-colors flex items-center justify-center gap-2 sm:w-48"
                               >
                                 {((isEvaluatingThis && evaluatingMode[dirId] === 'coach') || (coaching && coachingForDirectionId === dirId)) ? (
                                   <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Coaching…</>
@@ -8305,7 +8305,7 @@ export default function ProjectPage() {
                                 onClick={() => generateDraft(dirId)}
                                 disabled={generatingDraft || evaluating}
                                 title="Generate a fresh draft for this direction"
-                                className="text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-300 hover:border-gray-400 disabled:opacity-40 px-4 py-2 rounded transition-colors flex items-center gap-2"
+                                className="text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-300 hover:border-gray-400 disabled:opacity-40 px-4 py-2 rounded transition-colors flex items-center justify-center gap-2 sm:w-48"
                               >
                                 {isGeneratingThis ? (
                                   <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Re-Drafting…</>
@@ -8319,7 +8319,7 @@ export default function ProjectPage() {
                               {d && getCurrentDraftFields(dirId).length > 0 && (
                                 <button
                                   onClick={() => downloadDraft(d)}
-                                  className="text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-4 py-2 rounded transition-colors"
+                                  className="text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-4 py-2 rounded transition-colors text-center sm:w-48"
                                   title="Download the current draft as a text file"
                                 >
                                   ↓ Share Draft
@@ -8328,7 +8328,7 @@ export default function ProjectPage() {
                               {evaluation && d && (
                                 <button
                                   onClick={() => downloadEvaluation(d, evaluation)}
-                                  className="text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-4 py-2 rounded transition-colors"
+                                  className="text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-4 py-2 rounded transition-colors text-center sm:w-48"
                                   title="Download the evaluation report as a text file"
                                 >
                                   ↓ Share Eval
@@ -8348,7 +8348,7 @@ export default function ProjectPage() {
                                     }}
                                     disabled={evaluating || generatingDraft || !!smartDirectionsLoading[dirId]}
                                     title="Suggest alternative categories in the same show, informed by this evaluation"
-                                    className="text-xs font-medium text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-4 py-2 rounded transition-colors flex items-center gap-1.5 disabled:opacity-40"
+                                    className="text-xs font-medium text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-4 py-2 rounded transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40 sm:w-48"
                                   >
                                     {smartDirectionsLoading[dirId] === 'alternatives' ? (
                                       <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Finding…</>
@@ -8361,7 +8361,7 @@ export default function ProjectPage() {
                                     }}
                                     disabled={evaluating || generatingDraft || !!smartDirectionsLoading[dirId]}
                                     title="Suggest other shows where this entry's strengths would land best"
-                                    className="text-xs font-medium text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-4 py-2 rounded transition-colors flex items-center gap-1.5 disabled:opacity-40"
+                                    className="text-xs font-medium text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-4 py-2 rounded transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40 sm:w-48"
                                   >
                                     {smartDirectionsLoading[dirId] === 'other_shows' ? (
                                       <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Finding…</>
@@ -8371,7 +8371,7 @@ export default function ProjectPage() {
                               ) : (
                                 <button
                                   onClick={() => setTab('directions')}
-                                  className="text-xs font-medium text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-4 py-2 rounded transition-colors flex items-center gap-1.5"
+                                  className="text-xs font-medium text-green-700 hover:text-green-600 border border-green-200 hover:border-green-400 px-4 py-2 rounded transition-colors flex items-center justify-center gap-1.5 sm:w-48"
                                   title="Explore AI-recommended show and category directions"
                                 >
                                   <span>Suggest Directions</span>

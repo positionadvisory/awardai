@@ -92,6 +92,7 @@ export default function SectionWorkbench({
   const [editing, setEditing] = useState(false)
   const [buffer, setBuffer] = useState('')
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)  // S154 item 1: per-section collapse
 
   const canEdit = !!onSaveText
   const words = countWords(editing ? buffer : text)
@@ -105,7 +106,8 @@ export default function SectionWorkbench({
     <div id={anchorId} className="scroll-mt-24 px-5 py-4">
       {/* Header */}
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => setCollapsed((v) => !v)} className="flex flex-wrap items-center gap-2 text-left group">
+          <span className="text-gray-400 group-hover:text-gray-700 transition-colors">{collapsed ? '▸' : '▾'}</span>
           <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-600">{label}</h4>
           {weight != null && (
             <span className="text-xs text-gray-400">{weight}% of score</span>
@@ -123,15 +125,15 @@ export default function SectionWorkbench({
               → {rescore.score} directional
             </span>
           )}
-        </div>
+        </button>
         <div className="flex flex-shrink-0 items-center gap-3">
           <span className={`text-xs tabular-nums ${overLimit ? 'text-red-600' : 'text-gray-400'}`}>
             {words.toLocaleString()}{wordLimit ? ` / ${wordLimit}` : ''} words
           </span>
-          {canEdit && !editing && (
+          {canEdit && !editing && !collapsed && (
             <button type="button" onClick={startEdit} className="rounded-lg border border-green-200 px-3 py-1.5 text-xs font-medium text-green-700 hover:border-green-400 hover:text-green-600 transition-colors">✎ Edit</button>
           )}
-          {onRecheck && !editing && (
+          {onRecheck && !editing && !collapsed && (
             <button
               type="button"
               onClick={() => onRecheck(sectionKey)}
@@ -145,6 +147,7 @@ export default function SectionWorkbench({
         </div>
       </div>
 
+      {!collapsed && (<>
       {/* Body: text or editor */}
       {editing ? (
         <div className="mt-2">
@@ -273,6 +276,7 @@ export default function SectionWorkbench({
 
       {/* P4 chat mount point */}
       {chatSlot ? <div className="mt-3">{chatSlot}</div> : null}
+      </>)}
     </div>
   )
 }
