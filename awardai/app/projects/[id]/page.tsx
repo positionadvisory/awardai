@@ -63,7 +63,7 @@ function AvatarMenu({ email, onSignOut }: { email: string; onSignOut: () => void
 }
 import ShowsDrawer from '@/components/shows/ShowsDrawer'
 import { MATERIALS_EVAL_STATEMENTS, JURY_EVAL_STATEMENTS, COACH_REVIEW_STATEMENTS } from '@/lib/generatingStatements'
-import { appErrorFromResponse, formatError, parseErrorString } from '@/lib/errorMessages'
+import { appErrorFromResponse, formatError } from '@/lib/errorMessages'
 import { computeRoiIndex, normaliseKbShow, DEADLINES_2026 } from '@/lib/shows-data'
 import { isAoyShow, AOY_SHOW_NAME, aoyResolveStored, aoyTrackById, buildAoyBestCategory, pillarForKey, normalizeAoyCategory, type AoyPillar } from '@/lib/aoy-taxonomy'
 // Workbench P2 Chunk 1 (S138): source-agnostic section-workbench surface. Rendered
@@ -91,42 +91,20 @@ import AgencyFactsValidator from '@/components/AgencyFactsValidator'
 import PillarFactsValidator from '@/components/PillarFactsValidator'
 import EndorsementsChecklist, { ENDORSEMENT_ITEMS, EndorsementItemKey } from '@/components/EndorsementsChecklist'
 import JuryProfilePanel, { JuryCell, RegionalUplift } from '@/components/JuryProfilePanel'
-
-// ── ErrorBanner — renders a friendly message with a small diagnostic code ────
-// Expects error strings in "message [CODE]" format from formatError().
-// Falls back gracefully for plain strings.
-function ErrorBanner({ error }: { error: string }) {
-  const { message, code } = parseErrorString(error)
-  return (
-    <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
-      <p className="text-red-600 text-sm">{message}</p>
-      {code && (
-        <p className="text-red-300 text-xs font-mono mt-1 select-all">{code}</p>
-      )}
-    </div>
-  )
-}
+import PressKitTab from '@/components/tabs/PressKitTab'
+import VideoScriptTab from '@/components/tabs/VideoScriptTab'
+import { ErrorBanner } from '@/components/ErrorBanner'
+import { COLLAB_TYPE_LABELS, materialWordCount, buildAnalysisText, type CollabType } from '@/lib/project-page-shared'
 
 // ── TonalBrief — structured production brief returned by generate-tonal-brief ─
-type ColorSwatch = { hex: string; name: string; role: string }
+export type ColorSwatch = { hex: string; name: string; role: string }
 
 // ── Collaborator ──────────────────────────────────────────────────────────────
-type CollabType =
-  | 'lead_agency' | 'creative_agency' | 'media_agency'
-  | 'production_company' | 'pr_agency' | 'brand_team' | 'tech_partner' | 'other'
+// CollabType + COLLAB_TYPE_LABELS moved to lib/project-page-shared.ts (build fix,
+// refactor-r1r2-tabs-2026-07-13): page.tsx may only export default + the Next.js
+// page-export allowlist, and COLLAB_TYPE_LABELS was a runtime value export.
 
-const COLLAB_TYPE_LABELS: Record<CollabType, string> = {
-  lead_agency:        'Lead Agency',
-  creative_agency:    'Creative Agency',
-  media_agency:       'Media Agency',
-  production_company: 'Production Company',
-  pr_agency:          'PR Agency',
-  brand_team:         'Brand / Client Team',
-  tech_partner:       'Technology Partner',
-  other:              'Other',
-}
-
-type Collaborator = {
+export type Collaborator = {
   id: number
   collaborator_name: string
   collaborator_type: CollabType
@@ -138,7 +116,7 @@ type Collaborator = {
 }
 
 // ── Org press profile (lightweight subset of agency_profiles for press kit) ──
-type OrgPressProfile = {
+export type OrgPressProfile = {
   org_type: string
   agency_name: string | null
   in_house_team_name: string | null
@@ -152,7 +130,7 @@ type OrgPressProfile = {
   instagram_handle: string | null
   logo_url: string | null
 }
-type PressKitExtra = {
+export type PressKitExtra = {
   quickSummary: string
   pressHook: string
   linkedinPost: string
@@ -173,7 +151,7 @@ type ShowProfile = {
 
 // ── Press Kit Draft — persisted AI copy with up to 3 versions ────────────────
 // project_id + direction_id + id are all bigint in the DB (bigint PK pattern used across all tables)
-type PressKitDraftRow = {
+export type PressKitDraftRow = {
   id: number
   project_id: number
   direction_id: number
@@ -189,7 +167,7 @@ type PressKitDraftRow = {
   updated_at: string
 }
 
-type TonalBrief = {
+export type TonalBrief = {
   summary: string
   mood: string
   color_palette: ColorSwatch[]
@@ -301,7 +279,7 @@ function getRegionalShowWarnings(targetShows: string[]): { show: string; market:
     .map(show => ({ show, ...REGIONAL_SHOWS[show] }))
 }
 
-type Material = {
+export type Material = {
   name: string
   path: string
   type: string
@@ -318,10 +296,9 @@ type Material = {
 // still carry extracted_text in memory. ALWAYS use these helpers instead of
 // checking m.extracted_text directly for gating/badges/word counts.
 const materialHasText = (m: Material): boolean => !!m.extracted_text || !!m.has_text
-const materialWordCount = (m: Material): number =>
-  typeof m.text_words === 'number'
-    ? m.text_words
-    : (m.extracted_text || '').trim().split(/\s+/).filter(Boolean).length
+// materialWordCount moved to lib/project-page-shared.ts (build fix,
+// refactor-r1r2-tabs-2026-07-13): page.tsx may only export default + the
+// Next.js page-export allowlist, and it was a runtime value export.
 
 type ScriptChange = {
   section: string
@@ -329,7 +306,7 @@ type ScriptChange = {
   reason: string
 }
 
-type ScriptAnalysis = {
+export type ScriptAnalysis = {
   mode: 'review'
   original_script: string
   summary: string
@@ -337,12 +314,12 @@ type ScriptAnalysis = {
   changes: ScriptChange[]
 }
 
-type CategorySuggestion = {
+export type CategorySuggestion = {
   category: string
   reasoning: string
 }
 
-type Project = {
+export type Project = {
   id: number
   campaign_name: string
   client_name: string | null
@@ -360,7 +337,7 @@ type Project = {
   endorsements_checklist: Record<string, boolean> | null
 }
 
-type Direction = {
+export type Direction = {
   id: number
   name: string
   angle: string | null
@@ -374,7 +351,7 @@ type Direction = {
   chosen: boolean
 }
 
-type ChatMessage = {
+export type ChatMessage = {
   role: 'user' | 'assistant'
   content: string
   version_created?: string
@@ -488,7 +465,7 @@ type AoyMarketAdjustment = {
   note?: string
 }
 
-type EntryDraft = {
+export type EntryDraft = {
   id: number
   direction_id: number
   field_key: string
@@ -511,8 +488,7 @@ type EntryDraft = {
   created_at?: string
 }
 
-
-type Evaluation = {
+export type Evaluation = {
   id: number
   entry_draft_id: number
   overall_score: number
@@ -532,50 +508,15 @@ type Evaluation = {
   section_rescores?: Record<string, SectionRescore> | null
 }
 
-type Tab = 'brief' | 'materials' | 'entries' | 'script' | 'directions' | 'facts' | 'endorsements' | 'presskit'
-
+export type Tab = 'brief' | 'materials' | 'entries' | 'script' | 'directions' | 'facts' | 'endorsements' | 'presskit'
 
 // Always-openable show picker (S78 bug fix, replaces the datalist whose list was
 // hidden until the field was cleared). Free text is still allowed (unknown shows
 // route to the request flow). Chevron toggles the list; typing filters it;
 // clicking outside closes it.
-function buildAnalysisText(
-  analysis: ScriptAnalysis,
-  campaignName: string,
-  show: string,
-  category: string
-): string {
-  const lines = [
-    'SCRIPT ANALYSIS REPORT',
-    '================================',
-    `Project:  ${campaignName}`,
-    ...(show ? [`Show:     ${show}`] : []),
-    ...(category ? [`Category: ${category}`] : []),
-    '',
-    'OVERALL ASSESSMENT',
-    '================================',
-    analysis.summary,
-    '',
-  ]
-  if (analysis.key_improvements.length > 0) {
-    lines.push('KEY IMPROVEMENTS', '================================')
-    analysis.key_improvements.forEach((item, i) => {
-      lines.push(`${i + 1}. ${item}`)
-    })
-    lines.push('')
-  }
-  if (analysis.changes.length > 0) {
-    lines.push('SCENE-BY-SCENE CHANGES', '================================')
-    analysis.changes.forEach((change, i) => {
-      lines.push(`\n[${i + 1}] ${change.section}`)
-      if (change.original) lines.push(`Original: "${change.original}"`)
-      lines.push(`Rationale: ${change.reason}`)
-    })
-    lines.push('')
-  }
-  lines.push('---', 'Generated by Shortlist · shortlist.app')
-  return lines.join('\n')
-}
+// buildAnalysisText moved to lib/project-page-shared.ts (build fix,
+// refactor-r1r2-tabs-2026-07-13): page.tsx may only export default + the
+// Next.js page-export allowlist, and it was a runtime value export.
 
 export default function ProjectPage() {
   const { user, loading } = useAuth()
@@ -667,17 +608,7 @@ export default function ProjectPage() {
   // Draft focus items (Feature 4 — Fix-this chips)
   const [draftFocusItems, setDraftFocusItems] = useState<Record<number, string[]>>({})
 
-  // Tonal brief (Feature 6)
-  const [tonalBriefLoading, setTonalBriefLoading] = useState(false)
-  const [tonalBriefData, setTonalBriefData] = useState<TonalBrief | null>(null)
-  const [tonalBriefError, setTonalBriefError] = useState('')
-
-  // Script editor chat
-  const [scriptChatOpen, setScriptChatOpen] = useState(false)
-  const [scriptChatInput, setScriptChatInput] = useState('')
-  const [scriptChatting, setScriptChatting] = useState(false)
-  const [scriptChatHistory, setScriptChatHistory] = useState<ChatMessage[]>([])
-  const [scriptChatError, setScriptChatError] = useState('')
+  // Tonal brief + Script editor chat state moved into VideoScriptTab (R2).
 
   // Collaborators
   const [collaborators, setCollaborators] = useState<Collaborator[]>([])
@@ -696,26 +627,16 @@ export default function ProjectPage() {
     contact_name: '', contact_email: '', website_url: '', is_lead_credit: false,
   })
 
-  // Press Kit
+  // Press Kit — orgPressProfile stays lifted (shared with PressKitTab as a
+  // prop). Everything else moved into components/tabs/PressKitTab.tsx (R1);
+  // pressKitStarted replaces the old spinePressKitStarted computation, now
+  // fed by a callback prop since pressKitDrafts/pressKitOutputs live in the
+  // child component.
   const [orgPressProfile, setOrgPressProfile] = useState<OrgPressProfile | null>(null)
-  const [selectedPressKitDirs, setSelectedPressKitDirs] = useState<Set<number>>(new Set())
-  const [pressKitOutputs, setPressKitOutputs] = useState<Record<number, string>>({}) // dirId → email HTML
-  const [pressKitExtras, setPressKitExtras] = useState<Record<number, PressKitExtra>>({}) // dirId → extra sections
-  const [pressKitAiCopy, setPressKitAiCopy] = useState<Record<string, string>>({}) // key: `${dirId}-${field}` or `${dirId}-pressHook-${target}`
-  const [pressKitDrafts, setPressKitDrafts] = useState<Record<string, PressKitDraftRow>>({}) // key: `${dirId}-${field_key}`
-  const [pressKitAiLoading, setPressKitAiLoading] = useState<Record<string, boolean>>({})
-  const [pressTargets, setPressTargets] = useState<Record<number, string[]>>({}) // dirId → selected press targets
-  const [pressHookCopied, setPressHookCopied] = useState<Record<string, boolean>>({})
-  const [pressKitCopied, setPressKitCopied] = useState<Record<number, boolean>>({})
-  const [pressKitCopiedExtra, setPressKitCopiedExtra] = useState<Record<string, boolean>>({}) // key: `${dirId}-${field}`
-  const [pressKitGenerating, setPressKitGenerating] = useState(false)
+  const [pressKitStarted, setPressKitStarted] = useState(false)
 
-  // Brief editor chat
-  const [briefChatOpen, setBriefChatOpen] = useState(false)
-  const [briefChatInput, setBriefChatInput] = useState('')
-  const [briefChatting, setBriefChatting] = useState(false)
-  const [briefChatHistory, setBriefChatHistory] = useState<ChatMessage[]>([])
-  const [briefChatError, setBriefChatError] = useState('')
+  // Brief editor chat (tonal-brief editor) state moved into VideoScriptTab (R2).
+  const [scriptStarted, setScriptStarted] = useState(false)
 
   // Opener suggestions (generate-hooks)
   const [hooksLoading, setHooksLoading] = useState<Record<number, boolean>>({})
@@ -828,32 +749,7 @@ export default function ProjectPage() {
   const [fieldEditValue, setFieldEditValue] = useState('')
   const [savingFieldEdit, setSavingFieldEdit] = useState(false)
 
-  // Phase 3 — Video Script
-  type ScriptMode = 'generate' | 'review'
-  const [scriptMode, setScriptMode] = useState<ScriptMode>('generate')
-  const [scriptText, setScriptText] = useState<string>('')
-  const [scriptAnalysis, setScriptAnalysis] = useState<ScriptAnalysis | null>(null)
-  const [generatingScript, setGeneratingScript] = useState(false)
-  const [scriptError, setScriptError] = useState('')
-  // Award Show + Category dropdowns for script
-  const [scriptShow, setScriptShow] = useState<string>('')
-  const [scriptCategory, setScriptCategory] = useState<string>('')
-  const [customScriptCategory, setCustomScriptCategory] = useState<string>('')
-  // Category suggestions
-  const [suggestingCategories, setSuggestingCategories] = useState(false)
-  const [categorySuggestions, setCategorySuggestions] = useState<CategorySuggestion[]>([])
-  const [suggestCategoryError, setSuggestCategoryError] = useState('')
-  // Review mode — file upload
-  const [uploadedScriptText, setUploadedScriptText] = useState('')
-  const [uploadedScriptName, setUploadedScriptName] = useState('')
-  const [scriptFileUploading, setScriptFileUploading] = useState(false)
-  const [scriptFileError, setScriptFileError] = useState('')
-  // Track last reviewed show/category so button reactivates when user changes them
-  const [lastReviewedParams, setLastReviewedParams] = useState<{ show: string; category: string } | null>(null)
-  // Script tab: source selector
-  const [scriptSourceType, setScriptSourceType] = useState<'all' | 'material' | 'entry'>('all')
-  const [scriptSourceMaterialIdx, setScriptSourceMaterialIdx] = useState<number>(-1)
-  const [scriptSourceEntryDirectionId, setScriptSourceEntryDirectionId] = useState<number>(-1)
+  // Phase 3 — Video Script state moved into VideoScriptTab (R2).
   // Directions tab: source selector (same pattern)
   const [dirSourceType, setDirSourceType] = useState<'all' | 'material' | 'entry'>('all')
   const [dirSourceMaterialIdx, setDirSourceMaterialIdx] = useState<number>(-1)
@@ -868,12 +764,7 @@ export default function ProjectPage() {
   const [juryShowCells, setJuryShowCells] = useState<Record<string, JuryCell[]>>({})
   const [juryPanelOpen, setJuryPanelOpen] = useState<Record<number, boolean>>({})
   const [regionalUplift, setRegionalUplift] = useState<RegionalUplift[]>([])
-  // KB awards count for Script Analysis subheadline
-  const [kbCount, setKbCount] = useState<number>(0)
-  // Script: asset mode + eval inclusion
-  const [scriptAssetMode, setScriptAssetMode] = useState<'best_possible' | 'minimal'>('best_possible')
-  const [scriptIncludeEval, setScriptIncludeEval] = useState(false)
-  const [scriptEvalDirectionId, setScriptEvalDirectionId] = useState<number>(-1)
+  // kbCount + scriptAssetMode/scriptIncludeEval/scriptEvalDirectionId moved into VideoScriptTab (R2).
 
   // Quick evaluate from uploaded material
   const [orgId, setOrgId] = useState<number | null>(null)
@@ -974,9 +865,7 @@ export default function ProjectPage() {
     // if this effect fires a second time (e.g. after a token refresh re-sets user).
     let cancelled = false
 
-    // Fetch total KB campaign count for the Script Analysis subheadline
-    supabase.from('campaigns').select('*', { count: 'exact', head: true })
-      .then(({ count }) => { if (!cancelled && count !== null) setKbCount(count) })
+    // kbCount fetch moved into VideoScriptTab (R2).
 
     supabase.from('campaigns').select('show_raw').not('show_raw', 'is', null)
       .then(({ data }) => {
@@ -1036,20 +925,8 @@ export default function ProjectPage() {
       }
     })
 
-    // Fetch saved press kit drafts for this project (non-critical)
-    supabase
-      .from('press_kit_drafts')
-      .select('id, project_id, direction_id, field_key, field_label, version_a, version_b, version_c, selected, custom_text, press_target, model_used, updated_at')
-      .eq('project_id', projectId)
-      .then(({ data }) => {
-        if (!cancelled && data && data.length > 0) {
-          const map: Record<string, PressKitDraftRow> = {}
-          for (const row of data) {
-            map[`${row.direction_id}-${row.field_key}`] = row as PressKitDraftRow
-          }
-          setPressKitDrafts(map)
-        }
-      })
+    // press_kit_drafts fetch moved into PressKitTab (R1) — pressKitDrafts
+    // state lives there now.
 
     // Fetch persisted AOY coach feedback for this project (Chunk 5, S106/S111
     // decision, 4 Jul). Dedicated coach_feedback table, never `evaluations`
@@ -1134,9 +1011,7 @@ export default function ProjectPage() {
         setProject({ ...proj, materials: ((matsMeta as Material[] | null) ?? []) })
         setBriefText(proj.combined_text || '')
         setTargetShows(proj.target_shows || [])
-        if (proj.script_text) setScriptText(proj.script_text)
-        if (proj.script_analysis) setScriptAnalysis(proj.script_analysis)
-        if (proj.tonal_brief) setTonalBriefData(proj.tonal_brief as TonalBrief)
+        // script_text/script_analysis/tonal_brief hydration moved into VideoScriptTab (R2) — it syncs from the project prop itself.
       }
       if (dirs) setDirections(dirs)
 
@@ -1243,38 +1118,7 @@ export default function ProjectPage() {
     trackSectionView(tab, { project_id: Number(projectId) })
   }, [tab, fetching, user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-restore saved press kit drafts into pressKitAiCopy when there are saved drafts.
-  // Runs whenever pressKitDrafts loads or tab changes to 'presskit'.
-  useEffect(() => {
-    if (tab !== 'presskit') return
-    if (Object.keys(pressKitDrafts).length === 0) return
-    setPressKitAiCopy(prev => {
-      const next = { ...prev }
-      for (const [storeKey, draft] of Object.entries(pressKitDrafts)) {
-        // Only restore if not already showing something (don't clobber a new generation)
-        if (next[storeKey]) continue
-        const selected = draft.selected === 'b' ? draft.version_b
-                       : draft.selected === 'c' ? draft.version_c
-                       : draft.version_a
-        if (selected) next[storeKey] = selected
-      }
-      return next
-    })
-    // Also restore selected press targets from saved press hook drafts
-    setPressTargets(prev => {
-      const next = { ...prev }
-      for (const [, draft] of Object.entries(pressKitDrafts)) {
-        if (draft.field_key.startsWith('pressHook-') && draft.press_target) {
-          const dirId = draft.direction_id
-          const current = next[dirId] ?? []
-          if (!current.includes(draft.press_target)) {
-            next[dirId] = [...current, draft.press_target]
-          }
-        }
-      }
-      return next
-    })
-  }, [tab, pressKitDrafts])
+  // Auto-restore effect moved into PressKitTab (R1).
 
   // Fetch show_profiles rows for any directions not yet loaded.
   // Keyed by directionId so each card has instant access without a secondary lookup.
@@ -1490,337 +1334,6 @@ export default function ProjectPage() {
       .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
   }
 
-  // Display name for the submitting org
-  const getOrgDisplayName = (): string => {
-    if (!orgPressProfile) return ''
-    if (orgPressProfile.org_type === 'brand' && orgPressProfile.in_house_team_name) {
-      return orgPressProfile.in_house_team_name
-    }
-    return orgPressProfile.agency_name || ''
-  }
-
-  // Build Outlook-safe HTML press kit for one direction
-  const buildPressKitEmail = (dirId: number): string => {
-    const direction = directions.find(d => d.id === dirId)
-    if (!direction || !project) return ''
-    const fields = getCurrentDraftFields(dirId)
-    const orgName = getOrgDisplayName()
-    const pr = orgPressProfile
-
-    // Colours
-    const green = '#166534'
-    const darkGray = '#111111'
-    const midGray = '#555555'
-    const lightGray = '#888888'
-    const ruleColor = '#eeeeee'
-    const placeholderBg = '#f9fafb'
-    const placeholderBorder = '#d1d5db'
-
-    const rule = `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 20px 0;"><tr><td style="border-top: 1px solid ${ruleColor}; font-size: 0; line-height: 0;">&nbsp;</td></tr></table>`
-
-    // Build credits block
-    const leadCollabs = collaborators.filter(c => c.is_lead_credit)
-    const otherCollabs = collaborators.filter(c => !c.is_lead_credit)
-    const allCredits = [...leadCollabs, ...otherCollabs]
-    let creditsHtml = ''
-    if (orgName || allCredits.length > 0) {
-      const creditItems: string[] = []
-      if (orgName) {
-        creditItems.push(`<strong>${orgName}</strong>${pr?.tagline ? ` — ${pr.tagline}` : ''}`)
-      }
-      for (const c of allCredits) {
-        creditItems.push(`${COLLAB_TYPE_LABELS[c.collaborator_type]}: ${c.collaborator_name}`)
-      }
-      creditsHtml = `
-        <p style="margin: 0 0 6px 0; font-size: 11px; color: ${lightGray}; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">Credits</p>
-        ${creditItems.map(item => `<p style="margin: 0 0 4px 0; font-size: 13px; color: ${midGray};">${item}</p>`).join('')}
-        ${rule}`
-    }
-
-    // Build contact block
-    let contactHtml = ''
-    if (pr?.pr_contact_name || pr?.pr_contact_email) {
-      const contactParts: string[] = []
-      if (pr.pr_contact_name) contactParts.push(`<strong>${pr.pr_contact_name}</strong>`)
-      if (pr.pr_contact_email) contactParts.push(`<a href="mailto:${pr.pr_contact_email}" style="color: ${green}; text-decoration: none;">${pr.pr_contact_email}</a>`)
-      if (pr.pr_contact_phone) contactParts.push(pr.pr_contact_phone)
-      if (pr.website_url) contactParts.push(`<a href="${pr.website_url}" style="color: ${green}; text-decoration: none;">${pr.website_url.replace(/^https?:\/\//, '')}</a>`)
-      const socialParts: string[] = []
-      if (pr.linkedin_url) socialParts.push(`LinkedIn: ${pr.linkedin_url.replace(/^https?:\/\/(www\.)?linkedin\.com\//, '').replace(/\/$/, '')}`)
-      if (pr.x_handle) socialParts.push(`X: @${pr.x_handle.replace(/^@/, '')}`)
-      if (pr.instagram_handle) socialParts.push(`Instagram: @${pr.instagram_handle.replace(/^@/, '')}`)
-      contactHtml = `
-        <p style="margin: 0 0 6px 0; font-size: 11px; color: ${lightGray}; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">Press Contact</p>
-        <p style="margin: 0 0 4px 0; font-size: 13px; color: ${midGray}; line-height: 1.6;">${contactParts.join(' &nbsp;·&nbsp; ')}</p>
-        ${socialParts.length > 0 ? `<p style="margin: 0 0 4px 0; font-size: 12px; color: ${lightGray};">${socialParts.join(' &nbsp;·&nbsp; ')}</p>` : ''}
-        ${rule}`
-    }
-
-    // Entry field sections
-    const fieldsSections = fields.map(f => {
-      const content = resolveFieldContent(f)
-      if (!content) return ''
-      // Preserve line breaks in the content
-      const contentHtml = content.replace(/\n\n/g, '</p><p style="margin: 0 0 14px 0; font-size: 14px; line-height: 1.65; color: ' + darkGray + ';">').replace(/\n/g, '<br>')
-      return `
-        <p style="margin: 0 0 5px 0; font-size: 11px; color: ${lightGray}; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">${f.field_label}</p>
-        <p style="margin: 0 0 20px 0; font-size: 14px; line-height: 1.65; color: ${darkGray};">${contentHtml}</p>`
-    }).filter(Boolean).join('')
-
-    // Date
-    const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
-
-    return `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"></head>
-<body style="margin: 0; padding: 0; background: #ffffff;">
-<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: #ffffff;">
-<tr><td align="center">
-<table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; font-family: Arial, Helvetica, sans-serif;">
-
-  <!-- INTRO PLACEHOLDER -->
-  <tr><td style="padding: 28px 0 0 0;">
-    <table width="100%" cellpadding="0" cellspacing="0" border="0">
-    <tr><td style="padding: 14px 16px; background: ${placeholderBg}; border: 1px dashed ${placeholderBorder}; border-radius: 6px;">
-      <p style="margin: 0; font-size: 13px; color: ${lightGray}; font-style: italic; line-height: 1.5;">
-        [Add your personal introduction here &mdash; who you are, any shared context, and why you&rsquo;re sharing this work with them specifically.]
-      </p>
-    </td></tr>
-    </table>
-  </td></tr>
-
-  <!-- SHOW CONTEXT -->
-  <tr><td style="padding: 28px 0 0 0;">
-    <p style="margin: 0 0 8px 0; font-size: 11px; color: ${lightGray}; text-transform: uppercase; letter-spacing: 0.8px; font-weight: bold;">
-      ${direction.best_show || ''}${direction.best_category ? ' &nbsp;&middot;&nbsp; ' + direction.best_category : ''}
-    </p>
-
-    <!-- CAMPAIGN NAME -->
-    <p style="margin: 0 0 4px 0; font-size: 24px; font-weight: bold; color: ${darkGray}; line-height: 1.2;">
-      ${project.campaign_name}
-    </p>
-
-    <!-- CLIENT -->
-    ${project.client_name ? `<p style="margin: 0 0 24px 0; font-size: 14px; color: ${lightGray};">for ${project.client_name}</p>` : `<p style="margin: 0 0 24px 0;"></p>`}
-
-    ${direction.hook ? `
-    <!-- HOOK -->
-    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 24px;">
-    <tr>
-      <td width="3" style="background: ${green}; border-radius: 2px;">&nbsp;</td>
-      <td width="12">&nbsp;</td>
-      <td>
-        <p style="margin: 0; font-size: 15px; color: ${darkGray}; font-style: italic; line-height: 1.6;">${direction.hook}</p>
-      </td>
-    </tr>
-    </table>` : ''}
-  </td></tr>
-
-  ${rule}
-
-  <!-- ENTRY FIELDS -->
-  <tr><td>
-    ${fieldsSections || `<p style="font-size: 14px; color: ${lightGray}; font-style: italic;">Generate an entry draft to populate this section.</p>`}
-  </td></tr>
-
-  ${rule}
-
-  <!-- CREDITS -->
-  <tr><td>
-    ${creditsHtml}
-  </td></tr>
-
-  <!-- CONTACT -->
-  <tr><td>
-    ${contactHtml || ''}
-  </td></tr>
-
-  <!-- CLOSE PLACEHOLDER -->
-  <tr><td style="padding: 0 0 28px 0;">
-    <table width="100%" cellpadding="0" cellspacing="0" border="0">
-    <tr><td style="padding: 14px 16px; background: ${placeholderBg}; border: 1px dashed ${placeholderBorder}; border-radius: 6px;">
-      <p style="margin: 0; font-size: 13px; color: ${lightGray}; font-style: italic; line-height: 1.5;">
-        [Your personal sign-off &mdash; e.g. &ldquo;Happy to share assets or a full case film. Let me know if you&rsquo;d like to talk through the work. Best, [Name]&rdquo;]
-      </p>
-    </td></tr>
-    </table>
-  </td></tr>
-
-  <!-- FOOTER -->
-  <tr><td style="padding: 16px 0; border-top: 1px solid ${ruleColor};">
-    <p style="margin: 0; font-size: 11px; color: ${lightGray};">Generated by Shortlist &middot; ${today}</p>
-  </td></tr>
-
-</table>
-</td></tr>
-</table>
-</body>
-</html>`
-  }
-
-  // Build social / summary extras for one direction
-  const buildPressKitExtra = (dirId: number): PressKitExtra => {
-    const direction = directions.find(d => d.id === dirId)
-    const empty: PressKitExtra = { quickSummary: '', pressHook: '', linkedinPost: '', xPost: '', instagramCaption: '' }
-    if (!direction || !project) return empty
-
-    const fields = getCurrentDraftFields(dirId)
-    const orgName = getOrgDisplayName()
-    const show = direction.best_show || ''
-    const category = direction.best_category || ''
-    const hook = direction.hook || direction.angle || ''
-    const campaign = project.campaign_name
-    const client = project.client_name || ''
-    const showCategory = [category, show].filter(Boolean).join(' at ')
-
-    // First entry field body (for LinkedIn/summary depth)
-    const firstField = fields[0] ? resolveFieldContent(fields[0]) : ''
-    const bodySnippet = firstField ? firstField.replace(/\n+/g, ' ').trim().slice(0, 220) + (firstField.length > 220 ? '…' : '') : ''
-
-    // ── Quick Summary (2–3 sentences for email intros / press release openers) ──
-    const summaryParts: string[] = []
-    summaryParts.push(`${campaign}${client ? ` for ${client}` : ''}${orgName ? ` by ${orgName}` : ''} is entered in ${showCategory || 'the show'}.`)
-    if (hook) summaryParts.push(hook)
-    if (bodySnippet && bodySnippet !== hook) summaryParts.push(bodySnippet)
-    const quickSummary = summaryParts.join(' ')
-
-    // ── Press Hook (single punchy line tailored to show/category) ──
-    const pressHook = hook
-      ? `${campaign}${client ? ` for ${client}` : ''}: ${hook}`
-      : `${campaign}${client ? ` for ${client}` : ''}${orgName ? `, by ${orgName}` : ''} — entered in ${showCategory || 'the show'}.`
-
-    // ── LinkedIn Post ──
-    const linkedinParts: string[] = []
-    linkedinParts.push(`We've entered ${campaign}${client ? ` for ${client}` : ''} in ${showCategory || 'the show'}.`)
-    if (hook) linkedinParts.push(`\n${hook}`)
-    if (bodySnippet) linkedinParts.push(`\n${bodySnippet}`)
-    if (orgName) linkedinParts.push(`\n— ${orgName}`)
-    const showTag = show ? `#${show.toLowerCase().replace(/[^a-z0-9]/g, '')}` : ''
-    const lgHashtags = ['#awards', showTag, '#advertising', '#creative'].filter(Boolean).join(' ')
-    linkedinParts.push(`\n\n${lgHashtags}`)
-    const linkedinPost = linkedinParts.join('\n')
-
-    // ── X / Twitter Post (≤ 280 chars) ──
-    const xCore = `${campaign}${client ? ` for ${client}` : ''}${showCategory ? ` — entered in ${showCategory}` : ''}. ${hook}`.trim()
-    const xPost = xCore.length > 277 ? xCore.slice(0, 274) + '…' : xCore
-
-    // ── Instagram Caption ──
-    const igParts: string[] = []
-    igParts.push(`${campaign}${client ? ` for ${client}` : ''} 🏆`)
-    if (hook) igParts.push(hook)
-    if (showCategory) igParts.push(`\nEntered in ${showCategory}.`)
-    if (orgName) igParts.push(`\n${orgName}`)
-    const igTag = show ? `#${show.toLowerCase().replace(/[^a-z0-9]/g, '')}` : ''
-    const igHashtags = ['#awards', igTag, '#advertising', '#creative', '#design'].filter(Boolean).join(' ')
-    igParts.push(`\n\n${igHashtags}`)
-    const instagramCaption = igParts.join('\n')
-
-    return { quickSummary, pressHook, linkedinPost, xPost, instagramCaption }
-  }
-
-  // Copy plain text extra section to clipboard
-  const copyPressKitExtra = async (dirId: number, field: keyof PressKitExtra) => {
-    const text = pressKitExtras[dirId]?.[field]
-    if (!text) return
-    const key = `${dirId}-${field}`
-    try {
-      await navigator.clipboard.writeText(text)
-    } catch {
-      const el = document.createElement('textarea')
-      el.value = text
-      document.body.appendChild(el)
-      el.select()
-      document.execCommand('copy')
-      document.body.removeChild(el)
-    }
-    setPressKitCopiedExtra(prev => ({ ...prev, [key]: true }))
-    setTimeout(() => setPressKitCopiedExtra(prev => ({ ...prev, [key]: false })), 2500)
-  }
-
-  // Generate AI-drafted copy for one direction + field (social + quick summary)
-  const generateAiPressCopy = async (dirId: number, field: 'linkedinPost' | 'xPost' | 'instagramCaption' | 'quickSummary') => {
-    const formatMap: Record<string, string> = {
-      linkedinPost: 'linkedin',
-      xPost: 'x',
-      instagramCaption: 'instagram',
-      quickSummary: 'quicksummary',
-    }
-    const labelMap: Record<string, string> = {
-      linkedinPost: 'LinkedIn Post',
-      xPost: 'X / Twitter Post',
-      instagramCaption: 'Instagram Caption',
-      quickSummary: 'Quick Summary',
-    }
-    const key = `${dirId}-${field}`
-    setPressKitAiLoading(prev => ({ ...prev, [key]: true }))
-    try {
-      // Session 47 audit fix S1: generate-press-copy now requires user auth —
-      // send the session access token, not the anon key.
-      const accessToken = await getToken()
-      if (!accessToken) { window.location.href = '/login'; return }
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-press-copy`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
-            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-          },
-          body: JSON.stringify({ direction_id: dirId, format: formatMap[field], project_id: projectId }),
-        }
-      )
-      const data = await res.json()
-      if (data.copy) {
-        setPressKitAiCopy(prev => ({ ...prev, [key]: data.copy }))
-        // Persist to DB with version shifting
-        await upsertPressKitDraft(dirId, field, labelMap[field], data.copy)
-      }
-    } catch (err) {
-      console.error('AI press copy failed:', err)
-    } finally {
-      setPressKitAiLoading(prev => ({ ...prev, [key]: false }))
-    }
-  }
-
-  // Generate AI press hooks for all selected press targets for a direction
-  const generateAiPressHooks = async (dirId: number) => {
-    const targets = pressTargets[dirId] ?? []
-    if (targets.length === 0) return
-    await Promise.all(targets.map(async (target) => {
-      const key = `${dirId}-pressHook-${target}`
-      const fieldKey = `pressHook-${target}`
-      setPressKitAiLoading(prev => ({ ...prev, [key]: true }))
-      try {
-        // Session 47 audit fix S1: generate-press-copy now requires user auth.
-        const accessToken = await getToken()
-        if (!accessToken) { window.location.href = '/login'; return }
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-press-copy`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${accessToken}`,
-              'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-            },
-            body: JSON.stringify({ direction_id: dirId, format: 'presshook', press_target: target, project_id: projectId }),
-          }
-        )
-        const data = await res.json()
-        if (data.copy) {
-          setPressKitAiCopy(prev => ({ ...prev, [key]: data.copy }))
-          // Persist to DB with version shifting
-          await upsertPressKitDraft(dirId, fieldKey, `Press Hook (${target})`, data.copy, target)
-        }
-      } catch (err) {
-        console.error('AI press hook failed:', err)
-      } finally {
-        setPressKitAiLoading(prev => ({ ...prev, [key]: false }))
-      }
-    }))
-  }
-
   // Copy a plain text string to clipboard with keyed confirmation
   const copyTextWithConfirm = async (key: string, text: string, setter: React.Dispatch<React.SetStateAction<Record<string, boolean>>>) => {
     try {
@@ -1835,473 +1348,6 @@ export default function ProjectPage() {
     }
     setter(prev => ({ ...prev, [key]: true }))
     setTimeout(() => setter(prev => ({ ...prev, [key]: false })), 2500)
-  }
-
-  // Copy formatted HTML to clipboard so it pastes as rich text in Outlook
-  const copyPressKitToClipboard = async (dirId: number) => {
-    const html = pressKitOutputs[dirId]
-    if (!html) return
-    try {
-      if (typeof ClipboardItem !== 'undefined') {
-        const blob = new Blob([html], { type: 'text/html' })
-        await navigator.clipboard.write([new ClipboardItem({ 'text/html': blob })])
-      } else {
-        // Fallback: create a temp div, select, copy via execCommand
-        const div = document.createElement('div')
-        div.innerHTML = html
-        div.style.position = 'fixed'
-        div.style.opacity = '0'
-        div.style.pointerEvents = 'none'
-        document.body.appendChild(div)
-        const range = document.createRange()
-        range.selectNode(div)
-        window.getSelection()?.removeAllRanges()
-        window.getSelection()?.addRange(range)
-        document.execCommand('copy')
-        window.getSelection()?.removeAllRanges()
-        document.body.removeChild(div)
-      }
-      setPressKitCopied(prev => ({ ...prev, [dirId]: true }))
-      setTimeout(() => setPressKitCopied(prev => ({ ...prev, [dirId]: false })), 2500)
-    } catch {
-      // Silent fail — clipboard access may be blocked in some contexts
-    }
-  }
-
-  // Download PDF via jsPDF (dynamic import to avoid SSR issues)
-  const downloadPressKitPDF = async (dirId: number) => {
-    const direction = directions.find(d => d.id === dirId)
-    if (!direction || !project) return
-    const fields = getCurrentDraftFields(dirId)
-    const orgName = getOrgDisplayName()
-    const pr = orgPressProfile
-
-    try {
-      const { jsPDF } = await import('jspdf' as never) as { jsPDF: new (o?: Record<string, unknown>) => {
-        setFillColor: (r: number, g: number, b: number) => void
-        rect: (x: number, y: number, w: number, h: number, style: string) => void
-        setTextColor: (r: number, g: number, b: number) => void
-        setFontSize: (size: number) => void
-        setFont: (font: string, style: string) => void
-        text: (text: string, x: number, y: number, opts?: Record<string, unknown>) => void
-        splitTextToSize: (text: string, maxWidth: number) => string[]
-        setDrawColor: (r: number, g: number, b: number) => void
-        line: (x1: number, y1: number, x2: number, y2: number) => void
-        addPage: () => void
-        save: (filename: string) => void
-        addImage: (data: string, format: string, x: number, y: number, w: number, h: number) => void
-        internal: { pageSize: { getWidth: () => number; getHeight: () => number } }
-      } }
-
-      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-      const pageW = doc.internal.pageSize.getWidth()
-      const pageH = doc.internal.pageSize.getHeight()
-      const margin = 20
-      const contentW = pageW - margin * 2
-      let y = 0
-
-      const checkPage = (neededHeight: number) => {
-        if (y + neededHeight > pageH - margin) { doc.addPage(); y = margin }
-      }
-
-      const rule = (gap = 8) => {
-        doc.setDrawColor(225, 225, 225)
-        doc.line(margin, y, pageW - margin, y)
-        y += gap
-      }
-
-      const sectionLabel = (text: string) => {
-        doc.setFontSize(7.5)
-        doc.setFont('helvetica', 'bold')
-        doc.setTextColor(22, 101, 52) // green-800
-        doc.text(text.toUpperCase(), margin, y)
-        y += 5
-      }
-
-      // ── Header bar ──
-      doc.setFillColor(22, 101, 52)
-      doc.rect(0, 0, pageW, 16, 'F')
-      doc.setTextColor(255, 255, 255)
-      doc.setFontSize(7.5)
-      doc.setFont('helvetica', 'bold')
-      doc.text('PRESS KIT', margin, 10)
-
-      // Show · Category badge (right-aligned in header)
-      if (direction.best_show || direction.best_category) {
-        const badge = [direction.best_show, direction.best_category].filter(Boolean).join('  ·  ')
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(7.5)
-        doc.text(badge, pageW - margin, 10, { align: 'right' } as Record<string, unknown>)
-      }
-
-      y = 24
-
-      // ── Logo (top-right, loaded async) ──
-      if (pr?.logo_url) {
-        try {
-          const { data: { publicUrl } } = supabase.storage.from('org-logos').getPublicUrl(pr.logo_url)
-          const logoDataUrl = await new Promise<string>((resolve, reject) => {
-            const img = new Image()
-            img.crossOrigin = 'anonymous'
-            img.onload = () => {
-              const canvas = document.createElement('canvas')
-              canvas.width = img.naturalWidth
-              canvas.height = img.naturalHeight
-              const ctx = canvas.getContext('2d')
-              if (!ctx) { reject(new Error('no ctx')); return }
-              ctx.drawImage(img, 0, 0)
-              resolve(canvas.toDataURL('image/png'))
-            }
-            img.onerror = reject
-            img.src = publicUrl
-          })
-          // Place logo top-right: max 32mm wide, max 14mm tall
-          const tmpImg = new Image()
-          tmpImg.src = logoDataUrl
-          const aspect = tmpImg.naturalWidth / (tmpImg.naturalHeight || 1)
-          const maxW = 32
-          const maxH = 14
-          const logoH = Math.min(maxH, maxW / (aspect || 1))
-          const logoW = logoH * (aspect || 1)
-          doc.addImage(logoDataUrl, 'PNG', pageW - margin - logoW, 18, logoW, logoH)
-          y = Math.max(y, 18 + logoH + 4)
-        } catch {
-          // Logo load failed — continue without it
-        }
-      }
-
-      // ── Campaign name ──
-      doc.setTextColor(15, 15, 15)
-      doc.setFontSize(22)
-      doc.setFont('helvetica', 'bold')
-      const nameLines = doc.splitTextToSize(project.campaign_name, contentW - (pr?.logo_url ? 36 : 0))
-      nameLines.forEach((line: string) => { doc.text(line, margin, y); y += 9 })
-
-      // ── Client ──
-      if (project.client_name) {
-        doc.setFontSize(11)
-        doc.setFont('helvetica', 'normal')
-        doc.setTextColor(120, 120, 120)
-        doc.text(`for ${project.client_name}`, margin, y)
-        y += 7
-      }
-
-      // ── Org name + tagline ──
-      if (orgName) {
-        doc.setFontSize(9.5)
-        doc.setFont('helvetica', 'bold')
-        doc.setTextColor(22, 101, 52)
-        const orgLine = orgName + (pr?.tagline ? `  —  ${pr.tagline}` : '')
-        doc.text(orgLine, margin, y)
-        y += 7
-      }
-
-      // ── Hook ──
-      if (direction.hook) {
-        y += 3
-        // Green accent bar
-        doc.setFillColor(22, 101, 52)
-        doc.rect(margin, y - 3.5, 2.5, 0, 'F') // placeholder — draw after measuring
-        const hookLines = doc.splitTextToSize(direction.hook, contentW - 8)
-        const hookBlockH = hookLines.length * 6 + 2
-        checkPage(hookBlockH + 8)
-        doc.setFillColor(22, 101, 52)
-        doc.rect(margin, y - 3.5, 2.5, hookBlockH, 'F')
-        doc.setFontSize(12)
-        doc.setFont('helvetica', 'bolditalic')
-        doc.setTextColor(30, 30, 30)
-        hookLines.forEach((line: string) => { doc.text(line, margin + 6, y); y += 6 })
-        y += 6
-      }
-
-      y += 2
-      rule(10)
-
-      // ── Entry fields ──
-      for (const f of fields) {
-        const content = resolveFieldContent(f)
-        if (!content) continue
-        checkPage(22)
-        sectionLabel(f.field_label)
-        doc.setFontSize(11)
-        doc.setFont('helvetica', 'normal')
-        doc.setTextColor(25, 25, 25)
-        const contentLines = doc.splitTextToSize(content, contentW)
-        for (const line of contentLines) {
-          checkPage(6)
-          doc.text(line, margin, y)
-          y += 5.5
-        }
-        y += 7
-      }
-
-      // ── Credits ──
-      const leadCollabs = collaborators.filter(c => c.is_lead_credit)
-      const otherCollabs = collaborators.filter(c => !c.is_lead_credit)
-      const allCredits = [...leadCollabs, ...otherCollabs]
-      if (orgName || allCredits.length > 0) {
-        checkPage(22)
-        rule(8)
-        sectionLabel('Credits')
-        doc.setFontSize(11)
-        doc.setFont('helvetica', 'bold')
-        doc.setTextColor(25, 25, 25)
-        if (orgName) {
-          doc.text(orgName, margin, y)
-          if (pr?.tagline) {
-            doc.setFont('helvetica', 'normal')
-            doc.setTextColor(120, 120, 120)
-            doc.setFontSize(9.5)
-            doc.text(pr.tagline, margin, y + 5)
-            y += 5
-          }
-          y += 6
-        }
-        doc.setFontSize(10.5)
-        doc.setFont('helvetica', 'normal')
-        doc.setTextColor(60, 60, 60)
-        for (const c of allCredits) {
-          checkPage(6)
-          doc.text(`${COLLAB_TYPE_LABELS[c.collaborator_type]}: ${c.collaborator_name}`, margin, y)
-          y += 5.5
-        }
-        y += 4
-      }
-
-      // ── Press Contact ──
-      if (pr?.pr_contact_name || pr?.pr_contact_email) {
-        checkPage(22)
-        rule(8)
-        sectionLabel('Press Contact')
-        doc.setFontSize(11)
-        doc.setFont('helvetica', 'bold')
-        doc.setTextColor(25, 25, 25)
-        if (pr.pr_contact_name) { doc.text(pr.pr_contact_name, margin, y); y += 5.5 }
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(10.5)
-        doc.setTextColor(60, 60, 60)
-        const contactLine = [pr.pr_contact_email, pr.pr_contact_phone].filter(Boolean).join('  ·  ')
-        if (contactLine) { doc.text(contactLine, margin, y); y += 5 }
-        if (pr.website_url) {
-          doc.setTextColor(22, 101, 52)
-          doc.text(pr.website_url.replace(/^https?:\/\//, ''), margin, y)
-          y += 5
-        }
-        const social = [
-          pr.linkedin_url ? `LinkedIn: ${pr.linkedin_url.replace(/^https?:\/\/(www\.)?linkedin\.com\//, '').replace(/\/$/, '')}` : '',
-          pr.x_handle ? `X: @${pr.x_handle.replace(/^@/, '')}` : '',
-          pr.instagram_handle ? `IG: @${pr.instagram_handle.replace(/^@/, '')}` : '',
-        ].filter(Boolean).join('  ·  ')
-        if (social) {
-          doc.setTextColor(120, 120, 120)
-          doc.setFontSize(9.5)
-          doc.text(social, margin, y)
-          y += 5
-        }
-      }
-
-      // ── Footer ──
-      doc.setFontSize(8)
-      doc.setFont('helvetica', 'normal')
-      doc.setTextColor(180, 180, 180)
-      const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
-      doc.text(`Generated by Shortlist  ·  ${today}`, margin, pageH - 10)
-
-      const safeShow = (direction.best_show || 'show').replace(/[^a-z0-9]/gi, '-').toLowerCase()
-      const safeCampaign = project.campaign_name.replace(/[^a-z0-9]/gi, '-').toLowerCase()
-      doc.save(`${safeCampaign}-${safeShow}-press-kit.pdf`)
-    } catch (err) {
-      console.error('Press kit PDF generation failed:', err)
-      alert('PDF generation failed. Make sure jspdf is installed.')
-    }
-  }
-
-  // Generate press kits for all selected directions
-  const generatePressKits = () => {
-    setPressKitGenerating(true)
-    const outputs: Record<number, string> = {}
-    const extras: Record<number, PressKitExtra> = {}
-    for (const dirId of Array.from(selectedPressKitDirs)) {
-      const html = buildPressKitEmail(dirId)
-      if (html) outputs[dirId] = html
-      extras[dirId] = buildPressKitExtra(dirId)
-    }
-    setPressKitOutputs(prev => ({ ...prev, ...outputs }))
-    setPressKitExtras(prev => ({ ...prev, ...extras }))
-    setPressKitGenerating(false)
-    if (Object.keys(outputs).length > 0) {
-      track('presskit_generated', { project_id: Number(projectId), direction_count: Object.keys(outputs).length })
-    }
-  }
-
-  // Upsert an AI-generated copy string into press_kit_drafts.
-  // Shifts version_a → version_b → version_c on each new generation.
-  const upsertPressKitDraft = async (
-    dirId: number,
-    fieldKey: string,
-    fieldLabel: string,
-    newText: string,
-    pressTarget?: string,
-  ) => {
-    const storeKey = `${dirId}-${fieldKey}`
-    const existing = pressKitDrafts[storeKey]
-
-    // Compute new version columns by shifting
-    let version_a = newText
-    let version_b: string | null = null
-    let version_c: string | null = null
-    if (existing) {
-      version_b = existing.version_a ?? null
-      version_c = existing.version_b ?? null
-      // existing version_c is dropped
-    }
-
-    const upsertData = {
-      project_id: project?.id ?? null,
-      direction_id: dirId,
-      field_key: fieldKey,
-      field_label: fieldLabel,
-      version_a,
-      version_b,
-      version_c,
-      selected: 'a' as const,
-      press_target: pressTarget ?? null,
-      model_used: 'claude-haiku-4-5-20251001',
-    }
-
-    const { data, error } = await supabase
-      .from('press_kit_drafts')
-      .upsert(upsertData, { onConflict: 'direction_id,field_key' })
-      .select('id, project_id, direction_id, field_key, field_label, version_a, version_b, version_c, selected, custom_text, press_target, model_used, updated_at')
-      .single()
-
-    if (!error && data) {
-      setPressKitDrafts(prev => ({ ...prev, [storeKey]: data as PressKitDraftRow }))
-    }
-  }
-
-  // Select a specific saved version for a draft field and update pressKitAiCopy to display it.
-  const selectPressKitVersion = async (dirId: number, fieldKey: string, version: 'a' | 'b' | 'c') => {
-    const storeKey = `${dirId}-${fieldKey}`
-    const draft = pressKitDrafts[storeKey]
-    if (!draft) return
-
-    const text = version === 'a' ? draft.version_a
-                : version === 'b' ? draft.version_b
-                : draft.version_c
-    if (!text) return
-
-    // Optimistic UI update
-    setPressKitDrafts(prev => ({ ...prev, [storeKey]: { ...draft, selected: version } }))
-    setPressKitAiCopy(prev => ({ ...prev, [storeKey]: text }))
-
-    // Persist selection to DB
-    await supabase
-      .from('press_kit_drafts')
-      .update({ selected: version })
-      .eq('direction_id', dirId)
-      .eq('field_key', fieldKey)
-  }
-
-  const generateTonalBrief = async (scriptText?: string) => {
-    if (!project) return
-    setTonalBriefLoading(true)
-    setTonalBriefError('')
-    setTonalBriefData(null)
-    try {
-      const accessToken = await getToken()
-      if (!accessToken) return
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-tonal-brief`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}`, 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
-          body: JSON.stringify({ project_id: project.id, ...(scriptText ? { script_text: scriptText } : {}) }),
-        }
-      )
-      const data = await res.json()
-      if (!res.ok || data.error) {
-        setTonalBriefError(formatError(appErrorFromResponse(data, res.status, 'TONAL')))
-        return
-      }
-      if (data.brief) setTonalBriefData(data.brief as TonalBrief)
-    } catch (err) {
-      setTonalBriefError(formatError({ message: 'Network error — check your connection and try again.', retryable: true, code: 'TONAL-NET' }))
-    } finally {
-      setTonalBriefLoading(false)
-    }
-  }
-
-  // Script editor chat — sends targeted edit instruction, receives updated script + confirmation
-  const sendScriptChat = async () => {
-    if (!project || !scriptChatInput.trim() || scriptChatting) return
-    const message = scriptChatInput.trim()
-    setScriptChatInput('')
-    setScriptChatting(true)
-    setScriptChatError('')
-    const newHistory: ChatMessage[] = [...scriptChatHistory, { role: 'user', content: message }]
-    setScriptChatHistory(newHistory)
-    try {
-      const accessToken = await getToken()
-      if (!accessToken) return
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat-script`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}`, 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
-          body: JSON.stringify({ project_id: project.id, message, target: 'script', chat_history: scriptChatHistory }),
-        }
-      )
-      const data = await res.json()
-      if (!res.ok || data.error) {
-        setScriptChatError(formatError(appErrorFromResponse(data, res.status, 'CHAT-SCRIPT')))
-        setScriptChatHistory(prev => prev.slice(0, -1))
-        return
-      }
-      if (data.script) setScriptText(data.script)
-      setScriptChatHistory([...newHistory, { role: 'assistant', content: data.reply || 'Script updated.' }])
-    } catch (err) {
-      setScriptChatError(formatError({ message: 'Network error — check your connection and try again.', retryable: true, code: 'CHAT-SCRIPT-NET' }))
-      setScriptChatHistory(prev => prev.slice(0, -1))
-    } finally {
-      setScriptChatting(false)
-    }
-  }
-
-  // Brief editor chat — sends targeted edit instruction, receives updated brief + confirmation
-  const sendBriefChat = async () => {
-    if (!project || !briefChatInput.trim() || briefChatting) return
-    const message = briefChatInput.trim()
-    setBriefChatInput('')
-    setBriefChatting(true)
-    setBriefChatError('')
-    const newHistory: ChatMessage[] = [...briefChatHistory, { role: 'user', content: message }]
-    setBriefChatHistory(newHistory)
-    try {
-      const accessToken = await getToken()
-      if (!accessToken) return
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat-script`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}`, 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
-          body: JSON.stringify({ project_id: project.id, message, target: 'brief', chat_history: briefChatHistory, current_brief: tonalBriefData }),
-        }
-      )
-      const data = await res.json()
-      if (!res.ok || data.error) {
-        setBriefChatError(formatError(appErrorFromResponse(data, res.status, 'CHAT-BRIEF')))
-        setBriefChatHistory(prev => prev.slice(0, -1))
-        return
-      }
-      if (data.brief) setTonalBriefData(data.brief as TonalBrief)
-      setBriefChatHistory([...newHistory, { role: 'assistant', content: data.reply || 'Brief updated.' }])
-    } catch (err) {
-      setBriefChatError(formatError({ message: 'Network error — check your connection and try again.', retryable: true, code: 'CHAT-BRIEF-NET' }))
-      setBriefChatHistory(prev => prev.slice(0, -1))
-    } finally {
-      setBriefChatting(false)
-    }
   }
 
   const saveShows = async () => {
@@ -4261,102 +3307,6 @@ export default function ProjectPage() {
     }
   }
 
-  const handleScriptFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const ext = file.name.split('.').pop()?.toLowerCase()
-    if (!['pdf', 'docx', 'txt'].includes(ext || '')) {
-      setScriptFileError('Only PDF, DOCX, and TXT files are supported.')
-      return
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      setScriptFileError('File size must be under 10MB.')
-      return
-    }
-    setScriptFileUploading(true)
-    setScriptFileError('')
-    setUploadedScriptText('')
-    setUploadedScriptName(file.name)
-
-    try {
-      const arrayBuffer = await file.arrayBuffer()
-      let text = ''
-      if (ext === 'txt') {
-        text = new TextDecoder().decode(arrayBuffer).slice(0, 50000)
-      } else if (ext === 'docx') {
-        const mammoth = (await import('mammoth')).default
-        const result = await mammoth.extractRawText({ arrayBuffer })
-        text = result.value.slice(0, 50000)
-      } else if (ext === 'pdf') {
-        const pdfjsLib = await import('pdfjs-dist')
-        pdfjsLib.GlobalWorkerOptions.workerSrc =
-          `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`
-        const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise
-        const textParts: string[] = []
-        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-          const page = await pdf.getPage(pageNum)
-          const textContent = await page.getTextContent()
-          const pageText = (textContent.items as Array<{ str?: string }>)
-            .filter(item => typeof item.str === 'string')
-            .map(item => item.str as string)
-            .join(' ').trim()
-          if (pageText.length > 10) textParts.push(pageText)
-        }
-        text = textParts.join('\n\n').slice(0, 50000)
-      }
-      if (!text.trim()) {
-        setScriptFileError('Could not extract text from this file. Try a different format.')
-      } else {
-        setUploadedScriptText(text)
-      }
-    } catch (err) {
-      setScriptFileError(err instanceof Error ? err.message : 'Failed to read file.')
-    } finally {
-      setScriptFileUploading(false)
-      e.target.value = ''
-    }
-  }
-
-  // Suggest best-fit categories for the chosen award show
-  const suggestCategories = async () => {
-    if (!project || !scriptShow) return
-    setSuggestingCategories(true)
-    setSuggestCategoryError('')
-    setCategorySuggestions([])
-    try {
-      const accessToken = await getToken()
-      if (!accessToken) return
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-video-script`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
-            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-          },
-          body: JSON.stringify({
-            project_id: project.id,
-            mode: 'suggest_categories',
-            show: scriptShow,
-          }),
-        }
-      )
-      const data = await res.json()
-      if (!res.ok || data.error) {
-        setSuggestCategoryError(data.error || `Error ${res.status}`)
-        return
-      }
-      if (data.suggestions && Array.isArray(data.suggestions)) {
-        setCategorySuggestions(data.suggestions)
-      }
-    } catch (err) {
-      setSuggestCategoryError(err instanceof Error ? err.message : 'Network error.')
-    } finally {
-      setSuggestingCategories(false)
-    }
-  }
-
   // Send a message to the evaluation chat for a given direction
   const sendEvalChat = async (dirId: number) => {
     // Session 57: 'nextsteps' is a view, not a mode — chat targets judge then
@@ -4427,109 +3377,12 @@ export default function ProjectPage() {
     }).filter(Boolean).join('\n\n')
   }
 
-  // Call generate-video-script Edge Function (generate or review mode)
-  const generateScript = async () => {
-    if (!project) return
-    if (scriptMode === 'review' && !uploadedScriptText.trim()) {
-      setScriptError('Please upload a script file first.')
-      return
-    }
-    setGeneratingScript(true)
-    setScriptError('')
-    try {
-      const accessToken = await getToken()
-      if (!accessToken) return
-
-      // Resolve effective show and category
-      const effectiveShow = scriptShow.trim() || undefined
-      const effectiveCategory = (scriptCategory && scriptCategory !== 'suggest')
-        ? scriptCategory
-        : customScriptCategory.trim() || undefined
-
-      // Resolve source override (generate mode only)
-      // Session 52 (P-03): material text fetched on demand — filtered-list index
-      // matches the selector render (same materialHasText predicate).
-      let contextOverride: string | undefined
-      if (scriptMode === 'generate' && scriptSourceType !== 'all') {
-        if (scriptSourceType === 'material') {
-          const mats = (project.materials || []).filter(materialHasText)
-          contextOverride = (await fetchMaterialText(mats[scriptSourceMaterialIdx])) || undefined
-        } else if (scriptSourceType === 'entry' && scriptSourceEntryDirectionId > -1) {
-          contextOverride = getEntryDraftContent(scriptSourceEntryDirectionId) || undefined
-        }
-      }
-
-      // Resolve eval ID for eval-informed script
-      let resolvedEvalId: number | undefined
-      if (scriptMode === 'generate' && scriptIncludeEval && scriptEvalDirectionId > -1) {
-        const dirEvalBoth = evaluations[scriptEvalDirectionId] ?? {}
-        const evalForScript = dirEvalBoth.judge ?? dirEvalBoth.coach
-        if (evalForScript) resolvedEvalId = evalForScript.id
-      }
-
-      const body: Record<string, unknown> = {
-        project_id: project.id,
-        mode: scriptMode,
-        ...(effectiveShow ? { show: effectiveShow } : {}),
-        ...(effectiveCategory ? { category: effectiveCategory } : {}),
-        ...(scriptMode === 'review' ? { uploaded_script_text: uploadedScriptText } : {}),
-        ...(contextOverride ? { context_override: contextOverride } : {}),
-        ...(scriptMode === 'generate' ? { asset_mode: scriptAssetMode } : {}),
-        ...(resolvedEvalId ? { evaluation_id: resolvedEvalId } : {}),
-      }
-
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-video-script`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
-            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-          },
-          body: JSON.stringify(body),
-        }
-      )
-      const data = await res.json()
-      if (!res.ok || data.error) {
-        setScriptError(data.error || `Error ${res.status}`)
-        return
-      }
-      if (data.script) setScriptText(data.script)
-      if (data.analysis) {
-        setScriptAnalysis(data.analysis)
-        // Track which show/category was used so button reactivates when user changes them
-        if (scriptMode === 'review') {
-          setLastReviewedParams({ show: scriptShow, category: scriptCategory })
-        }
-      }
-      setProject(p => p ? {
-        ...p,
-        script_text: data.script || p.script_text,
-        script_analysis: data.analysis || p.script_analysis,
-      } : p)
-
-      // Auto-generate production brief alongside the script — clear any prior chat histories
-      if (data.script) {
-        setScriptChatHistory([])
-        setBriefChatHistory([])
-        generateTonalBrief(data.script)
-        track('script_generated', { project_id: Number(projectId), mode: scriptMode, show: scriptShow.trim() || null })
-      }
-    } catch (err) {
-      setScriptError(err instanceof Error ? err.message : 'Network error.')
-    } finally {
-      setGeneratingScript(false)
-    }
-  }
-
   const countWords = (text: string) => text.trim().split(/\s+/).filter(Boolean).length
   const formatBytes = (bytes: number) => bytes < 1024 * 1024
     ? `${(bytes / 1024).toFixed(1)} KB`
     : `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 
-  // Derive the available categories for the chosen script show
-  const availableCategories = scriptShow ? categoriesForShow(scriptShow) : []
+  // availableCategories moved into VideoScriptTab (R2).
 
   if (loading || fetching) return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center">
@@ -4595,8 +3448,8 @@ export default function ProjectPage() {
   }
   const spineHasEval = Object.keys(evaluations).length > 0
   const spineBestJudge = spineJudgeScores.length > 0 ? Math.max(...spineJudgeScores) : null
-  const spinePressKitStarted = Object.keys(pressKitDrafts).length > 0 || Object.keys(pressKitOutputs).length > 0
-  const spineScriptDone = !!(scriptText && scriptText.trim()) || !!project.script_text
+  const spinePressKitStarted = pressKitStarted
+  const spineScriptDone = scriptStarted || !!project.script_text
 
   // AOY spine (S106 redesign, chunk 1): score-first, mode-aware, gated on
   // projectIsAoy. The campaign spine below is byte-unchanged. AOY has no Brief
@@ -4697,10 +3550,7 @@ export default function ProjectPage() {
     setTab(target)
   }
 
-  // Effective script category label for display
-  const effectiveCategoryLabel = scriptCategory === 'suggest'
-    ? (customScriptCategory || 'Suggest Best Fits')
-    : scriptCategory
+  // effectiveCategoryLabel moved into VideoScriptTab (R2) — computed locally there from its own scriptCategory/customScriptCategory state.
 
   // Shows strip — target shows reference bar shown at the top of Directions, Entries, and Video Script tabs
   const showsStrip = (
@@ -6674,7 +5524,7 @@ export default function ProjectPage() {
                                   coachRunCount={coachRunCount}
                                   hasJudge={hasJudge}
                                   hasCoach={hasCoach}
-                                  hasScript={!!((scriptText && scriptText.trim()) || project?.script_text)}
+                                  hasScript={!!(scriptStarted || project?.script_text)}
                                   hasDirections={realDirs.length > 0}
                                   strongerDirections={strongerDirections}
                                   altCategoriesLoading={smartDirectionsLoading[dirId] === 'alternatives'}
@@ -7581,1331 +6431,56 @@ export default function ProjectPage() {
           </div>
         )}
 
-        {/* ── VIDEO SCRIPT ── */}
-        {tab === 'script' && (
-          <div className="max-w-3xl">
-            {showsStrip}
+        {/* ── VIDEO SCRIPT (extracted, R2) ── */}
+        <div className={tab === 'script' ? '' : 'hidden'}>
+          <VideoScriptTab
+            tab={tab}
+            projectId={projectId}
+            project={project}
+            setProject={setProject}
+            directions={directions}
+            entries={entries}
+            evaluations={evaluations}
+            user={user}
+            guidanceEnabled={guidanceEnabled}
+            projectIsAoy={projectIsAoy}
+            kbShows={kbShows}
+            showsStrip={showsStrip}
+            getToken={getToken}
+            materialHasText={materialHasText}
+            fetchMaterialText={fetchMaterialText}
+            getEntryDraftContent={getEntryDraftContent}
+            track={track}
+            setShowRequestName={setShowRequestName}
+            setShowRequestUrl={setShowRequestUrl}
+            setShowRequestMarket={setShowRequestMarket}
+            setShowRequestKitUrl={setShowRequestKitUrl}
+            setShowRequestDone={setShowRequestDone}
+            setShowRequestNoKit={setShowRequestNoKit}
+            setShowRequestModal={setShowRequestModal}
+            onScriptStartedChange={setScriptStarted}
+          />
+        </div>
 
-            {/* Session 54 — guidance-flavored first-visit line (v3 brief §10).
-                Shown only while no script exists; respects the toggle. */}
-            {guidanceEnabled && !spineScriptDone && (
-              <p className="text-gray-700 text-sm mb-4">
-                {projectIsAoy
-                  ? 'A two-minute agency highlight reel or sizzle of the work, scored for win likelihood, in about twenty minutes.'
-                  : 'A two-minute case study script, scored for win likelihood, in about twenty minutes.'}
-              </p>
-            )}
-
-            {/* Mode toggle */}
-            <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl p-1 w-fit mb-6">
-              {(['generate', 'review'] as const).map(m => (
-                <button
-                  key={m}
-                  onClick={() => { setScriptMode(m); setScriptError('') }}
-                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                    scriptMode === m
-                      ? 'bg-green-800 text-white'
-                      : 'text-gray-500 hover:text-gray-900'
-                  }`}
-                >
-                  {m === 'generate' ? 'Generate Script' : 'Review my Script'}
-                </button>
-              ))}
-            </div>
-
-            {/* Mode description */}
-            <p className="text-sm text-gray-500 mb-5">
-              {scriptMode === 'generate'
-                ? (projectIsAoy
-                    ? 'Generate a 2-minute agency highlight reel or sizzle of the work from your uploaded materials or a completed entry draft. The script follows the Hook → Challenge → Idea → Execution → Results → Close structure used at Cannes, D&AD, and Effies.'
-                    : 'Generate a 2-minute award case study film script from your uploaded materials or a completed entry draft. The script follows the Hook → Challenge → Idea → Execution → Results → Close structure used at Cannes, D&AD, and Effies.')
-                : (projectIsAoy
-                    ? 'Upload your existing highlight reel script and get an optimised version with detailed reasoning on every change — written by a simulated 20-year award jury veteran.'
-                    : 'Upload your existing video script and get an optimised version with detailed reasoning on every change — written by a simulated 20-year award jury veteran.')}
-            </p>
-
-            {/* Source selector — generate mode only */}
-            {scriptMode === 'generate' && (() => {
-              const materialsWithText = (project.materials || []).filter(materialHasText)
-              const entryDirectionIds = Array.from(new Set(entries.map(e => e.direction_id)))
-              if (materialsWithText.length === 0 && entryDirectionIds.length === 0) return null
-              return (
-                <div className="bg-white border border-gray-200 rounded-xl p-5 mb-5">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Script Source</p>
-                  <div className="space-y-2.5">
-                    <label className="flex items-start gap-3 cursor-pointer">
-                      <input type="radio" name="scriptSource" checked={scriptSourceType === 'all'}
-                        onChange={() => setScriptSourceType('all')}
-                        className="mt-0.5 accent-green-700" />
-                      <div>
-                        <p className="text-sm text-gray-900">All project context</p>
-                        <p className="text-xs text-gray-400">Brief description + all uploaded materials</p>
-                      </div>
-                    </label>
-                    {materialsWithText.map((m, i) => (
-                      <label key={i} className="flex items-start gap-3 cursor-pointer">
-                        <input type="radio" name="scriptSource"
-                          checked={scriptSourceType === 'material' && scriptSourceMaterialIdx === i}
-                          onChange={() => { setScriptSourceType('material'); setScriptSourceMaterialIdx(i) }}
-                          className="mt-0.5 accent-green-700" />
-                        <div>
-                          <p className="text-sm text-gray-900">{m.name}</p>
-                          <p className="text-xs text-gray-400">Uploaded material · {materialWordCount(m).toLocaleString()} words</p>
-                        </div>
-                      </label>
-                    ))}
-                    {entryDirectionIds.map(dirId => {
-                      const dir = directions.find(d => d.id === dirId)
-                      return (
-                        <label key={dirId} className="flex items-start gap-3 cursor-pointer">
-                          <input type="radio" name="scriptSource"
-                            checked={scriptSourceType === 'entry' && scriptSourceEntryDirectionId === dirId}
-                            onChange={() => { setScriptSourceType('entry'); setScriptSourceEntryDirectionId(dirId) }}
-                            className="mt-0.5 accent-green-700" />
-                          <div>
-                            <p className="text-sm text-gray-900">Entry Draft{dir?.name ? ` — ${dir.name}` : ''}</p>
-                            <p className="text-xs text-gray-400">{dir?.best_show || 'Generated entry'}{dir?.best_category ? ` · ${dir.best_category}` : ''}</p>
-                          </div>
-                        </label>
-                      )
-                    })}
-                  </div>
-                </div>
-              )
-            })()}
-
-            {/* Award Show + Category selectors — shared across both modes */}
-            <div className="bg-white border border-gray-200 rounded-xl p-5 mb-5 space-y-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Target Award Show &amp; Category <span className="text-gray-400 font-normal normal-case">(optional — focuses the script)</span></p>
-
-              {/* Award Show + Category dropdowns */}
-              <div className="grid grid-cols-2 gap-4">
-                {/* Award Show */}
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1.5">Award Show</label>
-                  <div className="relative">
-                    <select
-                      value={scriptShow}
-                      onChange={e => {
-                        if (e.target.value === '__request__') {
-                          setShowRequestName('')
-                          setShowRequestUrl('')
-                          setShowRequestMarket('')
-                          setShowRequestKitUrl('')
-                          setShowRequestDone(false)
-                          setShowRequestNoKit(false)
-                          setShowRequestModal(true)
-                          return
-                        }
-                        setScriptShow(e.target.value)
-                        setScriptCategory('')
-                        setCategorySuggestions([])
-                        setSuggestCategoryError('')
-                      }}
-                      className="w-full appearance-none bg-white border border-gray-300 rounded-xl px-3 py-2 pr-8 text-sm text-gray-900 focus:outline-none focus:border-green-600 transition-colors cursor-pointer"
-                    >
-                      <option value="">No specific show</option>
-                      {kbShows.map(show => (
-                        <option key={show} value={show}>{show}</option>
-                      ))}
-                      <option value="__request__">✦ Request a show…</option>
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2.5">
-                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Category */}
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1.5">Category</label>
-                  {availableCategories.length > 0 ? (
-                    <div className="relative">
-                      <select
-                        value={scriptCategory}
-                        onChange={e => {
-                          setScriptCategory(e.target.value)
-                          setCategorySuggestions([])
-                          setSuggestCategoryError('')
-                        }}
-                        className="w-full appearance-none bg-white border border-gray-300 rounded-xl px-3 py-2 pr-8 text-sm text-gray-900 focus:outline-none focus:border-green-600 transition-colors cursor-pointer"
-                      >
-                        <option value="">No specific category</option>
-                        <option value="suggest">✦ Suggest Best Fits (AI)</option>
-                        {availableCategories.map(cat => (
-                          <option key={cat} value={cat}>{cat}</option>
-                        ))}
-                      </select>
-                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2.5">
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </div>
-                    </div>
-                  ) : scriptShow ? (
-                    // Show not in SHOW_CATEGORIES map — free-text input
-                    <input
-                      type="text"
-                      value={customScriptCategory}
-                      onChange={e => setCustomScriptCategory(e.target.value)}
-                      placeholder="Type category…"
-                      className="w-full bg-white border border-gray-300 rounded-xl px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
-                    />
-                  ) : (
-                    <div className="relative">
-                      <select disabled className="w-full appearance-none bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 pr-8 text-sm text-gray-400 cursor-not-allowed">
-                        <option>Select a show first</option>
-                      </select>
-                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2.5">
-                        <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Suggest Best Fits panel */}
-              {scriptCategory === 'suggest' && scriptShow && (
-                <div className="pt-1">
-                  {categorySuggestions.length === 0 ? (
-                    <div>
-                      <p className="text-xs text-gray-500 mb-3">
-                        AI will analyse your campaign and suggest the top 3 best-fit categories for <strong className="text-gray-700">{scriptShow}</strong>.
-                      </p>
-                      {suggestCategoryError && (
-                        <p className="text-xs text-red-600 mb-2">{suggestCategoryError}</p>
-                      )}
-                      <button
-                        onClick={suggestCategories}
-                        disabled={suggestingCategories || (!project.combined_text && !(project.materials || []).some(materialHasText))}
-                        className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium px-4 py-2 rounded transition-colors flex items-center gap-2"
-                      >
-                        {suggestingCategories ? (
-                          <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Analysing…</>
-                        ) : 'Suggest Best Fit Categories'}
-                      </button>
-                      {!project.combined_text && !(project.materials || []).some(materialHasText) && (
-                        <p className="text-xs text-amber-700 mt-2">Add a brief or upload materials first.</p>
-                      )}
-                    </div>
-                  ) : (
-                    <div>
-                      <p className="text-xs text-gray-500 mb-3">Click a suggestion to select it as your target category:</p>
-                      <div className="space-y-2">
-                        {categorySuggestions.map((sug, i) => (
-                          <button
-                            key={i}
-                            onClick={() => {
-                              setScriptCategory(sug.category)
-                              setCategorySuggestions([])
-                            }}
-                            className="w-full text-left bg-gray-50 border border-gray-200 hover:border-green-500 hover:bg-green-50 rounded-lg px-4 py-3 transition-colors group"
-                          >
-                            <div className="flex items-start gap-3">
-                              <span className="text-xs font-bold text-green-700 bg-green-100 rounded-full w-5 h-5 flex items-center justify-center flex-shrink-0 mt-0.5">
-                                {i + 1}
-                              </span>
-                              <div>
-                                <p className="text-sm font-medium text-gray-900 group-hover:text-green-800">{sug.category}</p>
-                                <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{sug.reasoning}</p>
-                              </div>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                      <button
-                        onClick={() => { setCategorySuggestions([]); setSuggestCategoryError('') }}
-                        className="text-xs text-gray-400 hover:text-gray-700 mt-3 transition-colors"
-                      >
-                        ← Try again
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Review mode — file upload */}
-            {scriptMode === 'review' && (
-              <div className="mb-5 space-y-3">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-2">Upload your script (PDF, DOCX, or TXT)</label>
-                  <label className={`block w-full border-2 border-dashed rounded-xl p-6 text-center transition-colors ${
-                    scriptFileUploading ? 'border-gray-200 opacity-60 cursor-not-allowed' : 'border-gray-300 hover:border-green-600 cursor-pointer'
-                  }`}>
-                    <input
-                      type="file"
-                      accept=".pdf,.docx,.txt"
-                      onChange={handleScriptFileUpload}
-                      className="hidden"
-                      disabled={scriptFileUploading}
-                    />
-                    {scriptFileUploading ? (
-                      <p className="text-green-700 text-sm font-medium">Extracting text…</p>
-                    ) : uploadedScriptText ? (
-                      <div>
-                        <p className="text-green-700 text-sm font-medium">✓ {uploadedScriptName}</p>
-                        <p className="text-gray-400 text-xs mt-1">{uploadedScriptText.trim().split(/\s+/).length.toLocaleString()} words extracted · click to replace</p>
-                      </div>
-                    ) : (
-                      <><span className="text-green-700 font-medium text-sm">Click to upload your script</span><span className="text-gray-400 text-sm"> — PDF, DOCX, or TXT · max 10MB</span></>
-                    )}
-                  </label>
-                  {scriptFileError && <p className="text-red-600 text-xs mt-1.5">{scriptFileError}</p>}
-                </div>
-              </div>
-            )}
-
-            {/* Generate mode guard */}
-            {scriptMode === 'generate' && !project.combined_text && !(project.materials || []).some(materialHasText) && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-5">
-                <p className="text-amber-700 text-sm">Add a campaign brief on the Brief tab, or upload materials, before generating a script.</p>
-              </div>
-            )}
-
-            {/* Asset mode + eval options — generate mode only */}
-            {scriptMode === 'generate' && (
-              <div className="mb-5 space-y-4">
-                {/* Asset mode toggle */}
-                <div>
-                  <p className="text-xs font-medium text-gray-600 mb-2">Asset availability</p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setScriptAssetMode('best_possible')}
-                      className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                        scriptAssetMode === 'best_possible'
-                          ? 'bg-gray-800 text-white border-gray-800'
-                          : 'bg-white text-gray-500 border-gray-300 hover:border-gray-600 hover:text-gray-700'
-                      }`}
-                    >
-                      Best possible assets
-                    </button>
-                    <button
-                      onClick={() => setScriptAssetMode('minimal')}
-                      className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                        scriptAssetMode === 'minimal'
-                          ? 'bg-gray-800 text-white border-gray-800'
-                          : 'bg-white text-gray-500 border-gray-300 hover:border-gray-600 hover:text-gray-700'
-                      }`}
-                    >
-                      Minimal assets only
-                    </button>
-                  </div>
-                  {scriptAssetMode === 'minimal' && (
-                    <p className="text-xs text-gray-400 mt-1.5">Script will call out exactly what to source for each scene — ideal for lean productions.</p>
-                  )}
-                </div>
-
-                {/* Eval context inclusion */}
-                {directions.some(d => !!(evaluations[d.id]?.judge ?? evaluations[d.id]?.coach)) && (
-                  <div>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={scriptIncludeEval}
-                        onChange={e => setScriptIncludeEval(e.target.checked)}
-                        className="rounded border-gray-300 text-green-700 focus:ring-green-600"
-                      />
-                      <span className="text-xs font-medium text-gray-700">Include evaluation insights</span>
-                    </label>
-                    {scriptIncludeEval && (
-                      <div className="mt-2 ml-5">
-                        <p className="text-xs text-gray-400 mb-1.5">Which direction's evaluation to use:</p>
-                        <select
-                          value={scriptEvalDirectionId}
-                          onChange={e => setScriptEvalDirectionId(Number(e.target.value))}
-                          className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-xs text-gray-900 focus:outline-none focus:border-green-600 transition-colors"
-                        >
-                          <option value={-1}>Select a direction…</option>
-                          {directions.filter(d => !!(evaluations[d.id]?.judge ?? evaluations[d.id]?.coach)).map(d => (
-                            <option key={d.id} value={d.id}>{d.name}</option>
-                          ))}
-                        </select>
-                        {scriptEvalDirectionId > -1 && (
-                          <p className="text-xs text-gray-400 mt-1">
-                            Script will amplify this entry's strengths and directly address the gaps identified in the evaluation.
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Error */}
-            {scriptError && (
-              <div className="mb-5 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-                <p className="text-red-600 text-sm">{scriptError}</p>
-              </div>
-            )}
-
-            {/* Generate / Review CTA */}
-            <button
-              onClick={generateScript}
-              disabled={
-                generatingScript ||
-                (scriptMode === 'generate' && !project.combined_text && !(project.materials || []).some(materialHasText)) ||
-                (scriptMode === 'review' && !uploadedScriptText.trim()) ||
-                scriptCategory === 'suggest'
-              }
-              className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-5 py-2.5 rounded transition-colors flex items-center gap-2 mb-8"
-            >
-              {generatingScript ? (
-                <><svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
-                {scriptMode === 'generate' ? 'Writing script…' : 'Reviewing script…'}</>
-              ) : scriptText && scriptMode === 'generate' ? 'Regenerate Script'
-                : scriptMode === 'review' ? (scriptAnalysis ? 'Review Script Again' : 'Review & Optimise Script')
-                : 'Generate Script'}
-            </button>
-            {generatingScript && (
-              <div className="mb-6 -mt-4">
-                <GeneratingBar isGenerating={generatingScript} estimatedDuration={70000} />
-              </div>
-            )}
-
-            {scriptCategory === 'suggest' && (
-              <p className="text-xs text-amber-700 -mt-6 mb-8">Select a category from the suggestions above before generating.</p>
-            )}
-            {scriptMode === 'review' && scriptAnalysis && lastReviewedParams &&
-              (scriptShow !== lastReviewedParams.show || scriptCategory !== lastReviewedParams.category) && (
-              <p className="text-xs text-green-700 -mt-6 mb-8">Show or category changed — click to re-review with new settings.</p>
-            )}
-
-            {/* Script output */}
-            {scriptText && (
-              <div className="space-y-6">
-
-                {/* Review mode: reasoning panel first */}
-                {scriptMode === 'review' && scriptAnalysis && (
-                  <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                    <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
-                      <div>
-                        <h3 className="text-sm font-semibold text-gray-900">Script Analysis</h3>
-                        <p className="text-xs text-gray-400 mt-0.5">Based on 20 years of award jury experience and {kbCount > 0 ? kbCount.toLocaleString() : '…'} awards won.</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => {
-                            const text = buildAnalysisText(
-                              scriptAnalysis,
-                              project.campaign_name,
-                              scriptShow,
-                              scriptCategory !== 'suggest' ? scriptCategory : customScriptCategory
-                            )
-                            navigator.clipboard.writeText(text)
-                          }}
-                          className="text-xs text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors"
-                          title="Copy analysis to clipboard"
-                        >
-                          Copy analysis
-                        </button>
-                        <button
-                          onClick={() => {
-                            const text = buildAnalysisText(
-                              scriptAnalysis,
-                              project.campaign_name,
-                              scriptShow,
-                              scriptCategory !== 'suggest' ? scriptCategory : customScriptCategory
-                            )
-                            const blob = new Blob([text], { type: 'text/plain' })
-                            const url = URL.createObjectURL(blob)
-                            const a = document.createElement('a')
-                            a.href = url
-                            a.download = `${(project.campaign_name || 'script').replace(/[^a-z0-9]/gi, '-').toLowerCase()}-analysis.txt`
-                            a.click()
-                            URL.revokeObjectURL(url)
-                          }}
-                          className="text-xs text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors"
-                          title="Download analysis as text file"
-                        >
-                          ↓ Download
-                        </button>
-                      </div>
-                    </div>
-                    <div className="px-5 py-5 space-y-5">
-                      {/* Summary */}
-                      <div>
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Overall Assessment</p>
-                        <p className="text-sm text-gray-700 leading-relaxed">{scriptAnalysis.summary}</p>
-                      </div>
-
-                      {/* Key improvements */}
-                      {scriptAnalysis.key_improvements.length > 0 && (
-                        <div>
-                          <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-2">Key Improvements</p>
-                          <ul className="space-y-2">
-                            {scriptAnalysis.key_improvements.map((item, i) => (
-                              <li key={i} className="text-sm text-gray-700 flex gap-2">
-                                <span className="text-green-700 flex-shrink-0 mt-0.5">✦</span>
-                                <span>{item}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-
-                      {/* Change-by-change breakdown */}
-                      {scriptAnalysis.changes.length > 0 && (
-                        <div>
-                          <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">Scene-by-Scene Changes</p>
-                          <div className="space-y-3">
-                            {scriptAnalysis.changes.map((change, i) => (
-                              <div key={i} className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3">
-                                <p className="text-xs font-medium text-amber-700 mb-1">{change.section}</p>
-                                {change.original && (
-                                  <p className="text-xs text-gray-400 italic mb-1.5">Original: "{change.original}"</p>
-                                )}
-                                <p className="text-sm text-gray-700">{change.reason}</p>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Script text */}
-                <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                  <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
-                    <div>
-                      <h3 className="text-sm font-semibold text-gray-900">
-                        {scriptMode === 'review' ? 'Optimised Script' : 'Generated Script'}
-                      </h3>
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        2-minute case study film
-                        {(scriptShow || effectiveCategoryLabel) && (
-                          <span className="text-green-700"> · {[scriptShow, effectiveCategoryLabel && effectiveCategoryLabel !== 'Suggest Best Fits' ? effectiveCategoryLabel : null].filter(Boolean).join(' — ')}</span>
-                        )}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => navigator.clipboard.writeText(scriptText)}
-                        className="text-xs text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors"
-                      >
-                        Copy script
-                      </button>
-                      <button
-                        onClick={() => {
-                          const blob = new Blob([scriptText], { type: 'text/plain' })
-                          const url = URL.createObjectURL(blob)
-                          const a = document.createElement('a')
-                          a.href = url
-                          a.download = `${(project.campaign_name || 'script').replace(/[^a-z0-9]/gi, '-').toLowerCase()}-script.txt`
-                          a.click()
-                          URL.revokeObjectURL(url)
-                        }}
-                        className="text-xs text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors"
-                      >
-                        ↓ Download
-                      </button>
-                    </div>
-                  </div>
-                  <div className="px-5 py-5">
-                    <pre className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap font-mono">{scriptText}</pre>
-                  </div>
-
-                  {/* ── Script editor chat ─────────────────────────────────────── */}
-                  <div className="px-5 py-4 border-t border-gray-100">
-                    <button
-                      onClick={() => setScriptChatOpen(v => !v)}
-                      className="flex items-center gap-2 text-sm font-medium text-green-700 hover:text-green-600 transition-colors"
-                    >
-                      <span>✦ Refine with feedback</span>
-                      <span className="text-gray-400 text-xs">{scriptChatOpen ? '↑' : '↓'}</span>
-                      {scriptChatHistory.length > 0 && !scriptChatOpen && (
-                        <span className="bg-green-100 text-green-800 text-xs px-1.5 py-0.5 rounded-full leading-none ml-1">
-                          {Math.floor(scriptChatHistory.length / 2)} edit{Math.floor(scriptChatHistory.length / 2) !== 1 ? 's' : ''}
-                        </span>
-                      )}
-                    </button>
-
-                    {scriptChatOpen && (
-                      <div className="mt-4">
-                        {scriptChatHistory.length === 0 ? (
-                          <div className="mb-4">
-                            <p className="text-xs text-gray-400 mb-3">Tell me what to change — a specific scene, the VO tone, the close. I'll apply the edit and leave everything else untouched.</p>
-                            <div className="flex flex-wrap gap-2">
-                              {[
-                                'Make the hook snappier',
-                                'The VO is too formal — loosen it',
-                                'Cut Scene 4, it\'s too long',
-                                'Rewrite the close to land harder',
-                              ].map(prompt => (
-                                <button
-                                  key={prompt}
-                                  onClick={() => setScriptChatInput(prompt)}
-                                  className="text-xs text-green-700 border border-green-200 hover:bg-green-50 px-3 py-1.5 rounded-lg transition-colors"
-                                >
-                                  {prompt}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="space-y-3 mb-4 max-h-80 overflow-y-auto pr-1">
-                            {scriptChatHistory.map((msg, i) => (
-                              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                <div className={`max-w-[85%] rounded-xl px-3.5 py-2.5 text-sm leading-relaxed ${
-                                  msg.role === 'user'
-                                    ? 'bg-green-800 text-white'
-                                    : 'bg-gray-50 border border-gray-200 text-gray-700'
-                                }`}>
-                                  <span className="whitespace-pre-wrap">{msg.content}</span>
-                                </div>
-                              </div>
-                            ))}
-                            {scriptChatting && (
-                              <div className="flex justify-start">
-                                <div className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 flex items-center gap-1.5">
-                                  <svg className="animate-spin h-3.5 w-3.5 text-green-700" viewBox="0 0 24 24" fill="none">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                                  </svg>
-                                  <span className="text-xs text-gray-400">Editing script…</span>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {scriptChatError && (
-                          <div className="mb-3">
-                            <ErrorBanner error={scriptChatError} />
-                          </div>
-                        )}
-
-                        <div className="flex gap-2">
-                          <input
-                            value={scriptChatInput}
-                            onChange={e => setScriptChatInput(e.target.value)}
-                            onKeyDown={e => {
-                              if (e.key === 'Enter' && !e.shiftKey && !scriptChatting) {
-                                e.preventDefault()
-                                sendScriptChat()
-                              }
-                            }}
-                            placeholder="What would you like to change? e.g. 'Scene 2 VO is too long — cut it by half'"
-                            className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
-                            disabled={scriptChatting}
-                          />
-                          <button
-                            onClick={sendScriptChat}
-                            disabled={scriptChatting || !scriptChatInput.trim()}
-                            className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded transition-colors flex-shrink-0"
-                          >
-                            Edit
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* ── Production Brief (Feature 6) ─────────────────────────────── */}
-                {(tonalBriefLoading || tonalBriefData || tonalBriefError) && (
-                  <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                    {/* Header */}
-                    <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
-                      <div>
-                        <h3 className="text-sm font-semibold text-gray-900">Production Brief</h3>
-                        <p className="text-xs text-gray-400 mt-0.5">Creative direction for your production team — colour, tone, type, voice, and music.</p>
-                      </div>
-                      {tonalBriefData && (
-                        <button
-                          onClick={() => {
-                            if (!tonalBriefData) return
-                            const lines: string[] = [
-                              `PRODUCTION BRIEF — ${project.campaign_name || 'Campaign'}`,
-                              '═'.repeat(60),
-                              '',
-                              'OVERVIEW',
-                              tonalBriefData.summary,
-                              '',
-                              'MOOD & TONE',
-                              tonalBriefData.mood,
-                              '',
-                              'COLOUR PALETTE',
-                              ...tonalBriefData.color_palette.map(c => `  ${c.hex}  ${c.name} — ${c.role}`),
-                              '',
-                              'TYPOGRAPHY & SUPERS',
-                              tonalBriefData.typography,
-                              '',
-                              'VOICE OVER DIRECTION',
-                              tonalBriefData.vo_style,
-                              '',
-                              'MUSIC & SOUND',
-                              tonalBriefData.music_style,
-                              '',
-                              'BRAND VISUAL ALIGNMENT',
-                              tonalBriefData.brand_notes,
-                            ]
-                            const blob = new Blob([lines.join('\n')], { type: 'text/plain' })
-                            const url = URL.createObjectURL(blob)
-                            const a = document.createElement('a')
-                            a.href = url
-                            a.download = `${(project.campaign_name || 'brief').replace(/[^a-z0-9]/gi, '-').toLowerCase()}-production-brief.txt`
-                            a.click()
-                            URL.revokeObjectURL(url)
-                          }}
-                          className="text-xs text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors"
-                        >
-                          ↓ Download
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Loading state */}
-                    {tonalBriefLoading && (
-                      <div className="px-5 py-8 flex items-center gap-3 text-gray-400">
-                        <svg className="animate-spin h-4 w-4 flex-shrink-0" viewBox="0 0 24 24" fill="none">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                        </svg>
-                        <span className="text-sm">Generating production brief…</span>
-                      </div>
-                    )}
-
-                    {/* Error state */}
-                    {!tonalBriefLoading && tonalBriefError && (
-                      <div className="px-5 py-5">
-                        <ErrorBanner error={tonalBriefError} />
-                        <button
-                          onClick={() => generateTonalBrief(scriptText)}
-                          className="text-sm text-green-700 hover:text-green-900 font-medium"
-                        >
-                          Try again
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Brief content */}
-                    {!tonalBriefLoading && tonalBriefData && (
-                      <div className="px-5 py-6 space-y-7">
-
-                        {/* Summary */}
-                        <div>
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Overview</p>
-                          <p className="text-sm text-gray-700 leading-relaxed">{tonalBriefData.summary}</p>
-                        </div>
-
-                        {/* Mood */}
-                        <div>
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Mood &amp; Tone</p>
-                          <p className="text-sm text-gray-700 leading-relaxed">{tonalBriefData.mood}</p>
-                        </div>
-
-                        {/* Colour palette */}
-                        {tonalBriefData.color_palette.length > 0 && (
-                          <div>
-                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Colour Palette</p>
-                            <div className="flex gap-3 flex-wrap">
-                              {tonalBriefData.color_palette.map((swatch, i) => (
-                                <div key={i} className="flex flex-col items-center gap-1.5 min-w-[72px]">
-                                  <div
-                                    className="w-14 h-14 rounded-xl border border-black/10 shadow-sm flex-shrink-0"
-                                    style={{ backgroundColor: swatch.hex }}
-                                    title={swatch.name}
-                                  />
-                                  <span className="text-xs font-mono text-gray-500 select-all">{swatch.hex.toUpperCase()}</span>
-                                  <span className="text-xs text-gray-600 text-center leading-snug max-w-[80px]">{swatch.name}</span>
-                                </div>
-                              ))}
-                            </div>
-                            <div className="mt-4 space-y-2">
-                              {tonalBriefData.color_palette.map((swatch, i) => (
-                                <div key={i} className="flex items-start gap-2.5">
-                                  <div
-                                    className="w-3 h-3 rounded-sm flex-shrink-0 mt-0.5 border border-black/10"
-                                    style={{ backgroundColor: swatch.hex }}
-                                  />
-                                  <p className="text-xs text-gray-600 leading-snug">
-                                    <span className="font-medium text-gray-700">{swatch.name}</span> — {swatch.role}
-                                  </p>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Typography */}
-                        <div>
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Typography &amp; Supers</p>
-                          <p className="text-sm text-gray-700 leading-relaxed">{tonalBriefData.typography}</p>
-                        </div>
-
-                        {/* VO Style */}
-                        <div>
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Voice Over Direction</p>
-                          <p className="text-sm text-gray-700 leading-relaxed">{tonalBriefData.vo_style}</p>
-                        </div>
-
-                        {/* Music */}
-                        <div>
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Music &amp; Sound</p>
-                          <p className="text-sm text-gray-700 leading-relaxed">{tonalBriefData.music_style}</p>
-                        </div>
-
-                        {/* Brand notes */}
-                        <div>
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Brand Visual Alignment</p>
-                          <p className="text-sm text-gray-700 leading-relaxed">{tonalBriefData.brand_notes}</p>
-                        </div>
-
-                      </div>
-                    )}
-
-                    {/* ── Brief editor chat ──────────────────────────────────── */}
-                    {!tonalBriefLoading && tonalBriefData && (
-                      <div className="px-5 py-4 border-t border-gray-100">
-                        <button
-                          onClick={() => setBriefChatOpen(v => !v)}
-                          className="flex items-center gap-2 text-sm font-medium text-green-700 hover:text-green-600 transition-colors"
-                        >
-                          <span>✦ Refine with feedback</span>
-                          <span className="text-gray-400 text-xs">{briefChatOpen ? '↑' : '↓'}</span>
-                          {briefChatHistory.length > 0 && !briefChatOpen && (
-                            <span className="bg-green-100 text-green-800 text-xs px-1.5 py-0.5 rounded-full leading-none ml-1">
-                              {Math.floor(briefChatHistory.length / 2)} edit{Math.floor(briefChatHistory.length / 2) !== 1 ? 's' : ''}
-                            </span>
-                          )}
-                        </button>
-
-                        {briefChatOpen && (
-                          <div className="mt-4">
-                            {briefChatHistory.length === 0 ? (
-                              <div className="mb-4">
-                                <p className="text-xs text-gray-400 mb-3">Tell me what to adjust — a specific field or the whole direction. Everything else stays the same.</p>
-                                <div className="flex flex-wrap gap-2">
-                                  {[
-                                    'Make the palette more muted',
-                                    'The VO style is too formal',
-                                    'Suggest a different music direction',
-                                    'Make the typography more contemporary',
-                                  ].map(prompt => (
-                                    <button
-                                      key={prompt}
-                                      onClick={() => setBriefChatInput(prompt)}
-                                      className="text-xs text-green-700 border border-green-200 hover:bg-green-50 px-3 py-1.5 rounded-lg transition-colors"
-                                    >
-                                      {prompt}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="space-y-3 mb-4 max-h-80 overflow-y-auto pr-1">
-                                {briefChatHistory.map((msg, i) => (
-                                  <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                    <div className={`max-w-[85%] rounded-xl px-3.5 py-2.5 text-sm leading-relaxed ${
-                                      msg.role === 'user'
-                                        ? 'bg-green-800 text-white'
-                                        : 'bg-gray-50 border border-gray-200 text-gray-700'
-                                    }`}>
-                                      <span className="whitespace-pre-wrap">{msg.content}</span>
-                                    </div>
-                                  </div>
-                                ))}
-                                {briefChatting && (
-                                  <div className="flex justify-start">
-                                    <div className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 flex items-center gap-1.5">
-                                      <svg className="animate-spin h-3.5 w-3.5 text-green-700" viewBox="0 0 24 24" fill="none">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                                      </svg>
-                                      <span className="text-xs text-gray-400">Updating brief…</span>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-
-                            {briefChatError && (
-                              <div className="mb-3">
-                                <ErrorBanner error={briefChatError} />
-                              </div>
-                            )}
-
-                            <div className="flex gap-2">
-                              <input
-                                value={briefChatInput}
-                                onChange={e => setBriefChatInput(e.target.value)}
-                                onKeyDown={e => {
-                                  if (e.key === 'Enter' && !e.shiftKey && !briefChatting) {
-                                    e.preventDefault()
-                                    sendBriefChat()
-                                  }
-                                }}
-                                placeholder="What would you like to change? e.g. 'Swap the green for a warm amber'"
-                                className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
-                                disabled={briefChatting}
-                              />
-                              <button
-                                onClick={sendBriefChat}
-                                disabled={briefChatting || !briefChatInput.trim()}
-                                className="bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded transition-colors flex-shrink-0"
-                              >
-                                Edit
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-              </div>
-            )}
-
-            {/* Empty state */}
-            {!scriptText && !generatingScript && (
-              <div className="bg-white border border-gray-200 rounded-xl p-10 text-center max-w-lg">
-                <div className="w-10 h-10 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <span className="text-green-700 text-lg">▶</span>
-                </div>
-                <h3 className="text-sm font-medium text-gray-900 mb-2">No script yet</h3>
-                <p className="text-gray-400 text-sm">
-                  {scriptMode === 'generate'
-                    ? 'Click Generate Script to create a 2-minute award case study film script from your campaign materials.'
-                    : 'Upload your existing script and click Review & Optimise to get a rewritten version with detailed change notes.'}
-                </p>
-              </div>
-            )}
-
-          </div>
-        )}
-
-        {/* ── PRESS KIT ── */}
-        {tab === 'presskit' && (
-          <div className="max-w-2xl">
-
-            {/* Nudge: no press contact configured */}
-            {!orgPressProfile?.pr_contact_name && !orgPressProfile?.pr_contact_email && (
-              <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-6">
-                <span className="text-amber-500 text-base mt-0.5">⚠</span>
-                <div>
-                  <p className="text-sm text-amber-800 font-medium">Press contact not configured</p>
-                  <p className="text-xs text-amber-700 mt-0.5">Add your press contact details and agency profile on the <button onClick={() => window.open('/projects', '_self')} className="underline">Projects page</button> to include them in generated press kits.</p>
-                </div>
-              </div>
-            )}
-
-            {/* Logo display / nudge */}
-            {orgPressProfile && (
-              <div className="flex items-center gap-3 mb-5 px-4 py-3 bg-white border border-gray-200 rounded-xl">
-                {orgPressProfile.logo_url ? (
-                  <>
-                    <img
-                      src={supabase.storage.from('org-logos').getPublicUrl(orgPressProfile.logo_url).data.publicUrl}
-                      alt="Logo"
-                      className="h-8 max-w-[100px] object-contain"
-                    />
-                    <p className="text-xs text-gray-400">Logo will appear in PDF press kits. <button onClick={() => router.push('/projects')} className="text-green-700 hover:text-green-600 underline">Manage on Profile page.</button></p>
-                  </>
-                ) : (
-                  <p className="text-xs text-gray-400">No logo uploaded. <button onClick={() => router.push('/projects')} className="text-green-700 hover:text-green-600 underline">Add a logo on the Profile page</button> to include it in PDF press kits.</p>
-                )}
-              </div>
-            )}
-
-            {/* Header + Select All */}
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-sm font-semibold text-gray-800">Select Directions to Export</h2>
-                <p className="text-xs text-gray-400 mt-0.5">One press kit per direction. Directions without an entry draft are unavailable.</p>
-              </div>
-              {directions.length > 0 && (
-                <div className="flex gap-3 flex-shrink-0 ml-4">
-                  <button
-                    onClick={() => {
-                      const eligibleIds = directions.filter(d => getCurrentDraftFields(d.id).length > 0).map(d => d.id)
-                      setSelectedPressKitDirs(new Set(eligibleIds))
-                    }}
-                    className="text-xs text-green-700 hover:text-green-600 transition-colors"
-                  >Select all</button>
-                  <button
-                    onClick={() => setSelectedPressKitDirs(new Set())}
-                    className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
-                  >Clear</button>
-                </div>
-              )}
-            </div>
-
-            {/* Direction list */}
-            {directions.length === 0 ? (
-              <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
-                {/* Session 54 — guidance-flavored empty state (v3 brief §10) */}
-                {guidanceEnabled && (
-                  <p className="text-gray-700 text-sm mb-2">
-                    One click after the entry. The press materials are often what travels farthest.
-                  </p>
-                )}
-                <p className="text-sm text-gray-400">
-                  No directions yet. Generate directions first, then create entry drafts before producing press kits.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-2 mb-6">
-                {directions.map(d => {
-                  const hasFields = getCurrentDraftFields(d.id).length > 0
-                  const isSelected = selectedPressKitDirs.has(d.id)
-                  const isGenerated = !!pressKitOutputs[d.id]
-                  return (
-                    <div
-                      key={d.id}
-                      className={`bg-white border rounded-xl px-4 py-3 transition-colors ${
-                        isSelected ? 'border-green-400 bg-green-50/30' : 'border-gray-200'
-                      } ${!hasFields ? 'opacity-50' : ''}`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          disabled={!hasFields}
-                          onChange={e => {
-                            setSelectedPressKitDirs(prev => {
-                              const next = new Set(prev)
-                              if (e.target.checked) next.add(d.id)
-                              else next.delete(d.id)
-                              return next
-                            })
-                          }}
-                          className="w-4 h-4 accent-green-700 flex-shrink-0"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">
-                            {d.best_show && d.best_category ? `${d.best_show} — ${d.best_category}` : d.name}
-                          </p>
-                          {d.hook && (
-                            <p className="text-xs text-gray-400 mt-0.5 truncate italic">{d.hook}</p>
-                          )}
-                          {!hasFields && (
-                            <p className="text-xs text-amber-600 mt-0.5">No entry draft — generate one first</p>
-                          )}
-                          {hasFields && (
-                            <p className="text-xs text-gray-400 mt-0.5">{getCurrentDraftFields(d.id).length} fields ready</p>
-                          )}
-                        </div>
-                        {isGenerated && (
-                          <span className="text-xs text-green-700 font-medium flex-shrink-0">✓ Ready</span>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-
-            {/* Generate button */}
-            {directions.length > 0 && (
-              <button
-                onClick={generatePressKits}
-                disabled={selectedPressKitDirs.size === 0 || pressKitGenerating}
-                className="w-full bg-green-800 hover:bg-green-700 disabled:opacity-40 text-white text-sm font-medium px-4 py-2.5 rounded transition-colors mb-8"
-              >
-                {pressKitGenerating
-                  ? 'Generating…'
-                  : selectedPressKitDirs.size === 0
-                  ? 'Select at least one direction'
-                  : `Generate ${selectedPressKitDirs.size} Press Kit${selectedPressKitDirs.size > 1 ? 's' : ''}`}
-              </button>
-            )}
-
-            {/* Generated outputs */}
-            {Object.keys(pressKitOutputs).length > 0 && (
-              <div className="space-y-6">
-                <h2 className="text-sm font-semibold text-gray-800">Generated Press Kits</h2>
-                {directions
-                  .filter(d => pressKitOutputs[d.id])
-                  .map(d => {
-                    const extra = pressKitExtras[d.id]
-                    const dirLabel = d.best_show && d.best_category ? `${d.best_show} — ${d.best_category}` : d.name
-
-                    // Press target options for press hook AI generation
-                    const PRESS_TARGET_OPTIONS = ['Local', 'Regional', 'Global', 'Trade / Industry', 'Consumer', 'Broadcast']
-                    const dirPressTargets = pressTargets[d.id] ?? []
-                    const anyPressHookLoading = PRESS_TARGET_OPTIONS.some(t => pressKitAiLoading[`${d.id}-pressHook-${t}`])
-
-                    // Helper to render a plain-text copyable section (with optional AI generation)
-                    const aiFields = new Set<keyof PressKitExtra>(['quickSummary', 'linkedinPost', 'xPost', 'instagramCaption'])
-                    const ExtraSection = ({ label, field, value, hint }: { label: string; field: keyof PressKitExtra; value: string; hint?: string }) => {
-                      const key = `${d.id}-${field}`
-                      const copied = pressKitCopiedExtra[key]
-                      const aiText = pressKitAiCopy[key]
-                      const aiLoading = pressKitAiLoading[key]
-                      const displayText = aiText || value
-                      const canAI = aiFields.has(field)
-                      const draft = pressKitDrafts[key]
-                      const hasVersionB = !!(draft?.version_b)
-                      const hasVersionC = !!(draft?.version_c)
-                      const selectedVersion = draft?.selected ?? 'a'
-                      return (
-                        <div className="border-t border-gray-100 px-4 py-4">
-                          <div className="flex items-center justify-between gap-3 mb-2">
-                            <div>
-                              <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">{label}</p>
-                              {hint && <p className="text-xs text-gray-400 mt-0.5">{hint}</p>}
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              {canAI && (
-                                <button
-                                  onClick={() => generateAiPressCopy(d.id, field as 'linkedinPost' | 'xPost' | 'instagramCaption' | 'quickSummary')}
-                                  disabled={aiLoading}
-                                  className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
-                                    aiLoading ? 'bg-gray-100 text-gray-400' : 'bg-green-50 hover:bg-green-100 text-green-800 border border-green-200'
-                                  }`}
-                                >
-                                  {aiLoading ? '…' : aiText ? '✦ Regenerate' : '✦ AI Draft'}
-                                </button>
-                              )}
-                              <button
-                                onClick={() => copyPressKitExtra(d.id, field)}
-                                className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
-                                  copied ? 'bg-green-100 text-green-800' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                                }`}
-                              >
-                                {copied ? '✓ Copied!' : '📋 Copy'}
-                              </button>
-                            </div>
-                          </div>
-                          {/* Version pills — shown when more than one AI generation exists */}
-                          {draft && (hasVersionB || hasVersionC) && (
-                            <div className="flex items-center gap-1.5 mb-2">
-                              <span className="text-xs text-gray-400 mr-0.5">Version:</span>
-                              {(['a', 'b', 'c'] as const).filter(v => v === 'a' || (v === 'b' && hasVersionB) || (v === 'c' && hasVersionC)).map(v => (
-                                <button
-                                  key={v}
-                                  onClick={() => selectPressKitVersion(d.id, field, v)}
-                                  className={`text-xs px-2 py-0.5 rounded-md border transition-colors ${
-                                    selectedVersion === v
-                                      ? 'bg-green-700 text-white border-green-700'
-                                      : 'bg-white text-gray-500 border-gray-200 hover:border-green-400 hover:text-green-700'
-                                  }`}
-                                >
-                                  {v === 'a' ? 'Latest' : v === 'b' ? 'Previous' : 'Older'}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                          <p className={`text-xs leading-relaxed whitespace-pre-wrap ${aiText ? 'text-gray-800' : 'text-gray-500'}`}>{displayText}</p>
-                          {aiText && <p className="text-xs text-green-700 mt-1.5 font-medium">✦ AI draft — edit before posting</p>}
-                        </div>
-                      )
-                    }
-
-                    return (
-                      <div key={d.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-
-                        {/* Card header */}
-                        <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-gray-900 truncate">{dirLabel}</p>
-                            <p className="text-xs text-gray-400 mt-0.5">{d.name}</p>
-                          </div>
-                        </div>
-
-                        {/* ── Outlook Email ── */}
-                        <div className="border-t border-gray-100 px-4 py-4">
-                          <div className="flex items-center justify-between gap-3 mb-3">
-                            <div>
-                              <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Outlook Email</p>
-                              <p className="text-xs text-gray-400 mt-0.5">Formatted press email — paste directly into Outlook</p>
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              <button
-                                onClick={() => downloadPressKitPDF(d.id)}
-                                className="flex items-center gap-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium px-3 py-1.5 rounded-lg transition-colors"
-                              >
-                                ⬇ PDF
-                              </button>
-                              <button
-                                onClick={() => copyPressKitToClipboard(d.id)}
-                                className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
-                                  pressKitCopied[d.id]
-                                    ? 'bg-green-100 text-green-800'
-                                    : 'bg-green-800 hover:bg-green-700 text-white'
-                                }`}
-                              >
-                                {pressKitCopied[d.id] ? '✓ Copied!' : '📋 Copy for Outlook'}
-                              </button>
-                            </div>
-                          </div>
-                          <div
-                            className="text-xs text-gray-600 leading-relaxed overflow-hidden bg-gray-50 rounded-lg px-3 py-2"
-                            style={{ maxHeight: '100px', WebkitMaskImage: 'linear-gradient(to bottom, black 50%, transparent 100%)' }}
-                            dangerouslySetInnerHTML={{ __html: pressKitOutputs[d.id] }}
-                          />
-                        </div>
-
-                        {/* ── Extra sections ── */}
-                        {extra && (
-                          <>
-                            {extra.quickSummary && (
-                              <ExtraSection
-                                label="Quick Summary"
-                                field="quickSummary"
-                                value={extra.quickSummary}
-                                hint="2–3 sentences for email intros or press release openers"
-                              />
-                            )}
-                            {/* ── Press Hook — multi-target AI ── */}
-                            {extra.pressHook && (
-                              <div className="border-t border-gray-100 px-4 py-4">
-                                <div className="flex items-start justify-between gap-3 mb-3">
-                                  <div>
-                                    <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Press Hook</p>
-                                    <p className="text-xs text-gray-400 mt-0.5">Select target press types, then generate a tailored hook for each</p>
-                                  </div>
-                                  <button
-                                    onClick={() => generateAiPressHooks(d.id)}
-                                    disabled={dirPressTargets.length === 0 || anyPressHookLoading}
-                                    className={`flex-shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
-                                      dirPressTargets.length === 0 || anyPressHookLoading
-                                        ? 'bg-gray-50 text-gray-300 border-gray-200'
-                                        : 'bg-green-50 hover:bg-green-100 text-green-800 border-green-200'
-                                    }`}
-                                  >
-                                    {anyPressHookLoading ? '…' : '✦ AI Draft'}
-                                  </button>
-                                </div>
-
-                                {/* Press target checkboxes */}
-                                <div className="flex flex-wrap gap-x-4 gap-y-2 mb-4">
-                                  {PRESS_TARGET_OPTIONS.map(target => (
-                                    <label key={target} className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
-                                      <input
-                                        type="checkbox"
-                                        checked={dirPressTargets.includes(target)}
-                                        onChange={e => {
-                                          setPressTargets(prev => {
-                                            const current = prev[d.id] ?? []
-                                            return {
-                                              ...prev,
-                                              [d.id]: e.target.checked
-                                                ? [...current, target]
-                                                : current.filter(t => t !== target),
-                                            }
-                                          })
-                                        }}
-                                        className="rounded accent-green-700"
-                                      />
-                                      <span className="text-gray-600">{target}</span>
-                                    </label>
-                                  ))}
-                                </div>
-
-                                {/* Template hook (shown when no AI copies exist) */}
-                                {!dirPressTargets.some(t => pressKitAiCopy[`${d.id}-pressHook-${t}`]) && (
-                                  <p className="text-xs text-gray-400 leading-relaxed italic">{extra.pressHook}</p>
-                                )}
-
-                                {/* AI hooks — one per selected target */}
-                                {dirPressTargets.length > 0 && (
-                                  <div className="space-y-2 mt-2">
-                                    {dirPressTargets.map(target => {
-                                      const hookKey = `${d.id}-pressHook-${target}`
-                                      const fieldKey = `pressHook-${target}`
-                                      const aiHook = pressKitAiCopy[hookKey]
-                                      const hookLoading = pressKitAiLoading[hookKey]
-                                      const hookCopied = pressHookCopied[hookKey]
-                                      const hookDraft = pressKitDrafts[`${d.id}-${fieldKey}`]
-                                      const hookHasB = !!(hookDraft?.version_b)
-                                      const hookHasC = !!(hookDraft?.version_c)
-                                      const hookSelected = hookDraft?.selected ?? 'a'
-                                      if (!aiHook && !hookLoading) return null
-                                      return (
-                                        <div key={target} className="rounded-lg bg-green-50 border border-green-100 px-3 py-2.5">
-                                          <div className="flex items-center justify-between gap-2 mb-1.5">
-                                            <p className="text-xs font-semibold text-green-800">{target} Press</p>
-                                            {aiHook && (
-                                              <button
-                                                onClick={() => copyTextWithConfirm(hookKey, aiHook, setPressHookCopied)}
-                                                className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
-                                                  hookCopied ? 'bg-green-200 text-green-900' : 'bg-white hover:bg-green-100 text-green-800 border border-green-200'
-                                                }`}
-                                              >
-                                                {hookCopied ? '✓ Copied!' : '📋 Copy'}
-                                              </button>
-                                            )}
-                                          </div>
-                                          {/* Version pills for press hooks */}
-                                          {hookDraft && (hookHasB || hookHasC) && (
-                                            <div className="flex items-center gap-1.5 mb-2">
-                                              <span className="text-xs text-green-700 opacity-70 mr-0.5">Version:</span>
-                                              {(['a', 'b', 'c'] as const).filter(v => v === 'a' || (v === 'b' && hookHasB) || (v === 'c' && hookHasC)).map(v => (
-                                                <button
-                                                  key={v}
-                                                  onClick={() => selectPressKitVersion(d.id, fieldKey, v)}
-                                                  className={`text-xs px-2 py-0.5 rounded-md border transition-colors ${
-                                                    hookSelected === v
-                                                      ? 'bg-green-700 text-white border-green-700'
-                                                      : 'bg-white text-green-700 border-green-200 hover:bg-green-100'
-                                                  }`}
-                                                >
-                                                  {v === 'a' ? 'Latest' : v === 'b' ? 'Previous' : 'Older'}
-                                                </button>
-                                              ))}
-                                            </div>
-                                          )}
-                                          {hookLoading
-                                            ? <p className="text-xs text-gray-400 italic">Generating…</p>
-                                            : <p className="text-xs text-gray-800 leading-relaxed">{aiHook}</p>
-                                          }
-                                        </div>
-                                      )
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                            {extra.linkedinPost && (
-                              <ExtraSection
-                                label="LinkedIn Post"
-                                field="linkedinPost"
-                                value={extra.linkedinPost}
-                                hint="Professional announcement — edit before posting"
-                              />
-                            )}
-                            {extra.xPost && (
-                              <ExtraSection
-                                label="X / Twitter Post"
-                                field="xPost"
-                                value={extra.xPost}
-                                hint={`${extra.xPost.length} / 280 characters`}
-                              />
-                            )}
-                            {extra.instagramCaption && (
-                              <ExtraSection
-                                label="Instagram Caption"
-                                field="instagramCaption"
-                                value={extra.instagramCaption}
-                                hint="Edit hashtags and emoji to suit your brand voice"
-                              />
-                            )}
-                          </>
-                        )}
-                      </div>
-                    )
-                  })}
-              </div>
-            )}
-
-            {/* Usage note */}
-            <div className="mt-8 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl">
-              <p className="text-xs text-gray-500 leading-relaxed">
-                <strong className="text-gray-700">How to use Copy for Outlook:</strong> Click the button, then open a new email in Outlook and paste (Cmd/Ctrl+V). The formatted content will paste with styling intact. The grey placeholder sections show you where to add your personal introduction and sign-off before sending. All other sections copy as plain text.
-              </p>
-            </div>
-
-          </div>
-        )}
+        {/* ── PRESS KIT (extracted, R1) ── */}
+        <div className={tab === 'presskit' ? '' : 'hidden'}>
+          <PressKitTab
+            tab={tab}
+            projectId={projectId}
+            project={project}
+            directions={directions}
+            entries={entries}
+            collaborators={collaborators}
+            orgPressProfile={orgPressProfile}
+            guidanceEnabled={guidanceEnabled}
+            getToken={getToken}
+            getCurrentDraftFields={getCurrentDraftFields}
+            resolveFieldContent={resolveFieldContent}
+            copyTextWithConfirm={copyTextWithConfirm}
+            track={track}
+            onStartedChange={setPressKitStarted}
+          />
+        </div>
 
       </main>
 
