@@ -1,17 +1,14 @@
 'use client'
 // app/start/page.tsx — Trial first-run activation route (spec: Trial-First-Run-BUILD-SPEC-2026-07-13.md)
 //
-// The converting moment for a solo indie trial: land here straight from Stripe
-// checkout, upload a past award entry, and get a jury read + fixes in one flow.
-//
-// Scope (S158, deliberately thin):
-//  - Inline score covers the dominant standard-creative path (evaluate-entry,
-//    6-dimension jury), rendered via the reused EvalSummaryBar + a fix-list.
-//  - AOY / config-mode / SMARTIES entries hand off to /projects/[id] (their
-//    section-keyed results need the project-page canvas).
-//  - Scorers/edge functions reused unchanged. Publicly model-agnostic.
-//  - Show + category selection reuses the SAME ShowCombobox + category taxonomy
-//    (lib/show-taxonomy) as the main Quick Eval workflow — no drift.
+// One-screen first run: upload a past award entry, get a jury read + fixes.
+// S158 round 2 (Ben demo feedback): AOY and MMA SMARTIES now score INLINE here
+// (no hand-off) — they are the key Asia demos. Standard, AOY, config-mode
+// (weighted|qualitative) and SMARTIES entries all score in this flow via the
+// SAME edge fns the project-page Quick Eval uses (scorers byte-frozen). Full
+// editing still lives on /projects/[id] behind "Save & open full breakdown".
+// Result screen matches the app: colored score chips, green/red section headers,
+// left-border quote cards; kept brief for a new-user quick read.
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
@@ -24,28 +21,27 @@ import {
   CANONICAL_SHOWS, categoriesForShow, showHasNoCategoryConcept,
   showHasNoCategoryList, NO_CATEGORY_PLACEHOLDER, isSmartiesShow,
 } from '@/lib/show-taxonomy'
-import EvalSummaryBar, { type SummarySection } from '@/components/EvalSummaryBar'
 import ShowCombobox from '@/components/ShowCombobox'
+import AoyEntryPicker from '@/components/AoyEntryPicker'
 import { extractEntryText, safeFileName, fileExt } from '@/lib/extract-entry-text'
 
-// ── minimal local types (mirror of the project page's Evaluation shape) ──────
-type EvaluationScores = {
-  strategic_clarity: number; insight: number; idea: number
-  execution: number; results: number; jury_fit: number
+// ── eval shape (loose union of the standard 6-dim judge + section-keyed evals) ─
+type EvalSection = { key?: string; label?: string; score?: number | null; rationale?: string | null }
+type EvalOutput = {
+  talks_up?: string[]; kills_it?: string[]; recommendations?: string
+  sections?: EvalSection[]; verdict?: string
 }
-type JudgeOutput = { talks_up?: string[]; kills_it?: string[]; recommendations?: string }
 type Evaluation = {
   id: number
   overall_score: number
-  scores: EvaluationScores
-  strengths: string[]
-  gaps: string[]
-  recommendations: string
+  scores?: Record<string, number> | null
+  strengths?: string[] | null
+  gaps?: string[] | null
   evaluation_mode?: 'judge' | 'coach'
-  output?: JudgeOutput | null
+  output?: EvalOutput | null
 }
 
-const SCORE_DIMENSIONS: { key: keyof EvaluationScores; label: string }[] = [
+const SCORE_DIMENSIONS: { key: string; label: string }[] = [
   { key: 'strategic_clarity', label: 'Strategic Clarity' },
   { key: 'insight', label: 'Insight' },
   { key: 'idea', label: 'Idea' },
@@ -54,38 +50,45 @@ const SCORE_DIMENSIONS: { key: keyof EvaluationScores; label: string }[] = [
   { key: 'jury_fit', label: 'Jury Fit' },
 ]
 
-function nameFromFile(fileName: string): string {
-  const stem = fileName.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim()
-  return stem || 'Untitled entry'
+// App score-colour thresholds (>=8 green, >=6 amber, else red) — matches scoreBg/scoreColor.
+function chipClasses(score?: number | null): string {
+  if (score == null) return 'bg-gray-50 border-gray-200 text-gray-400'
+  if (score >= 8) return 'bg-green-50 border-green-200 text-green-700'
+  if (score >= 6) return 'bg-amber-50 border-amber-200 text-amber-700'
+  return 'bg-red-50 border-red-200 text-red-600'
+}
+function overallColor(score?: number | null): string {
+  if (score == null) return 'text-gray-500'
+  if (score >= 8) return 'text-green-700'
+  if (score >= 6) return 'text-amber-700'
+  return 'text-red-600'
 }
 
-// AOY safety net: detect-entry-context sometimes returns a non-canonical AOY name
-// (e.g. 'Campaign Agency of the Year' without 'Asia', or an AOY CATEGORY like
-// 'PR Agency of the Year'), which isAoyShow (needs the literal 'campaign asia')
-// misses — so the entry would wrongly score through the standard 6-dim path
-// instead of the AOY section rubric. Every Campaign AOY track is literally
-// '... Agency of the Year', so that phrase in the show OR category is a reliable
-// AOY signal. On a hit we hand off to the project page (AoyEntryPicker + the AOY
-// segmenter live there).
+// AOY safety net: detect-entry-context can return a non-canonical AOY name
+// ('Campaign Agency of the Year' without 'Asia') or an AOY category
+// ('PR Agency of the Year') with aoy=false, which isAoyShow misses. Every
+// Campaign AOY track is literally '... Agency of the Year'.
 function looksLikeAoy(show?: string | null, category?: string | null): boolean {
   const re = /agency of the year/i
   return isAoyShow(show ?? '') || re.test(show ?? '') || re.test(category ?? '')
 }
 
-type Stage = 'idle' | 'working' | 'confirm' | 'scored' | 'handoff' | 'notext' | 'error'
+function nameFromFile(fileName: string): string {
+  const stem = fileName.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim()
+  return stem || 'Untitled entry'
+}
 
-// Bundled anonymized sample for the empty-handed fallback (spec §8 decision 2).
-// PLACEHOLDER — Ben may swap in a real scrubbed entry. Fixed show/category so it
-// always scores through the standard path.
+type Stage = 'idle' | 'working' | 'confirm' | 'scored' | 'notext' | 'error'
+
 const SAMPLE_URL = '/sample-entry.txt'
 const SAMPLE_SHOW = 'Spikes Asia'
 const SAMPLE_CATEGORY = 'Creative Effectiveness'
 
-// Brand mark — identical to the app header (green square "S" + sl-serif wordmark).
+// Centered app brand mark (green "S" + sl-serif wordmark).
 function AppHeader() {
   return (
     <header className="border-b border-gray-200 bg-white py-4">
-      <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 flex items-center gap-3">
+      <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 flex items-center justify-center gap-3">
         <div className="w-7 h-7 rounded-lg bg-green-800 flex items-center justify-center">
           <span className="text-xs font-bold text-white">S</span>
         </div>
@@ -107,12 +110,12 @@ export default function StartPage() {
   const runningRef = useRef(false)
 
   const [projectId, setProjectId] = useState<number | null>(null)
+  const [materialPath, setMaterialPath] = useState('')
   const [entryText, setEntryText] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [show, setShow] = useState('')
   const [category, setCategory] = useState('')
   const [detected, setDetected] = useState(false)
-  const [handoffReason, setHandoffReason] = useState('')
 
   const [evaluation, setEvaluation] = useState<Evaluation | null>(null)
   const [projectName, setProjectName] = useState('')
@@ -131,15 +134,12 @@ export default function StartPage() {
   }, [])
 
   const resolveMyOrgId = useCallback(async (): Promise<string | null> => {
-    // Canonical org resolution, same RPC the project page / Quick Eval use.
     const { data, error } = await supabase.rpc('get_my_org_id')
     if (error) { console.error('get_my_org_id failed', error); return null }
     return (data as string | null) ?? null
   }, [])
 
-  // Is this a config-scored (weighted|qualitative) show? Mirrors resolveEntryFormFor
-  // on the project page: find the canonical show_profiles key that prefixes the
-  // free-text show, then defer to the shared resolveEntryForm helper.
+  // config entry_form mode for a non-AOY show (mirror of resolveEntryFormFor).
   const resolveConfigMode = useCallback(async (showName: string, cat: string): Promise<'weighted' | 'qualitative' | null> => {
     const best = (showName ?? '').trim()
     if (!best || isAoyShow(best)) return null
@@ -155,7 +155,7 @@ export default function StartPage() {
     return null
   }, [])
 
-  // ── main flow: upload → project → material → detect → confirm/handoff ───────
+  // ── upload → project → material → detect → confirm ──────────────────────────
   const startFromFile = async (file: File) => {
     if (runningRef.current) return
     setError('')
@@ -181,16 +181,8 @@ export default function StartPage() {
       setProgress('Setting up your project…')
       const { data: proj, error: projErr } = await supabase
         .from('projects')
-        .insert({
-          campaign_name: nameFromFile(file.name),
-          org_id: orgId,
-          user_id: user?.id,
-          status: 'draft',
-          award_year: new Date().getFullYear(),
-          target_shows: [],
-        })
-        .select('id')
-        .single()
+        .insert({ campaign_name: nameFromFile(file.name), org_id: orgId, user_id: user?.id, status: 'draft', award_year: new Date().getFullYear(), target_shows: [] })
+        .select('id').single()
       if (projErr || !proj) { setError(projErr?.message || 'Could not set up your project.'); setStage('error'); runningRef.current = false; return }
       const pid = (proj as { id: number }).id
       setProjectId(pid)
@@ -200,6 +192,7 @@ export default function StartPage() {
       const key = `${pid}/${Date.now()}-${safeFileName(file.name)}`
       const { error: upErr } = await supabase.storage.from('project-materials').upload(key, file)
       if (upErr) { setError(upErr.message); setStage('error'); runningRef.current = false; return }
+      setMaterialPath(key)
 
       const chartPaths: string[] = []
       for (const cb of chartBlobs) {
@@ -207,12 +200,9 @@ export default function StartPage() {
         const { error: cErr } = await supabase.storage.from('project-materials').upload(cpath, cb.blob, { contentType: 'image/jpeg' })
         if (!cErr) chartPaths.push(cpath)
       }
-
       const material = {
-        name: file.name, path: key, type: ext, size: file.size,
-        uploaded_at: new Date().toISOString(),
-        extracted_text: text,
-        ...(chartPaths.length ? { chart_image_paths: chartPaths } : {}),
+        name: file.name, path: key, type: ext, size: file.size, uploaded_at: new Date().toISOString(),
+        extracted_text: text, ...(chartPaths.length ? { chart_image_paths: chartPaths } : {}),
       }
       const { error: saveErr } = await supabase.rpc('append_project_material', { p_project_id: pid, p_material: material })
       if (saveErr) { setError('The file uploaded but could not be saved. Please try again.'); setStage('error'); runningRef.current = false; return }
@@ -222,37 +212,29 @@ export default function StartPage() {
       let detCat = ''
       let detAoy = false
       try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/detect-entry-context`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
-            body: JSON.stringify({ text }),
-          }
-        )
+        const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/detect-entry-context`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
+          body: JSON.stringify({ text }),
+        })
         if (res.ok) {
           const d = await res.json()
           detShow = typeof d.show === 'string' ? d.show : ''
-          detAoy = !!d.aoy || isAoyShow(detShow)
+          detAoy = !!d.aoy || looksLikeAoy(detShow, typeof d.category === 'string' ? d.category : '')
           if (!detAoy && typeof d.category === 'string') detCat = d.category
         }
       } catch (err) { console.warn('detect-entry-context failed', err) }
 
-      const aoy = detAoy || looksLikeAoy(detShow, detCat)
-      setShow(aoy ? '' : detShow)
-      setCategory(aoy ? '' : (showHasNoCategoryConcept(detShow) ? NO_CATEGORY_PLACEHOLDER : detCat))
-      setDetected(!aoy && (!!detShow || !!detCat))
-
-      if (aoy) {
-        // Tag the project as the canonical AOY show so the project page recognises
-        // it immediately (projectIsAoy keys off target_shows) and opens the AOY UI.
-        await supabase.from('projects').update({ target_shows: [AOY_SHOW_NAME] }).eq('id', pid)
-        setHandoffReason('This looks like an Agency of the Year entry. It is scored against the AOY rubric section by section, using the guided category picker in the full workspace.')
-        setStage('handoff')
-        runningRef.current = false
-        return
+      if (detAoy) {
+        // Normalise to the canonical AOY show; the picker drives the category.
+        setShow(AOY_SHOW_NAME)
+        setCategory('')
+        setDetected(true)
+      } else {
+        setShow(detShow)
+        setCategory(showHasNoCategoryConcept(detShow) ? NO_CATEGORY_PLACEHOLDER : detCat)
+        setDetected(!!detShow || !!detCat)
       }
-
       setStage('confirm')
       runningRef.current = false
     } catch (err) {
@@ -262,87 +244,80 @@ export default function StartPage() {
     }
   }
 
-  // ── score from the confirm step ─────────────────────────────────────────────
+  // ── score (inline for standard AND AOY/SMARTIES/config) ─────────────────────
   const scoreIt = async () => {
     if (runningRef.current) return
     if (!projectId || !user) return
     const showT = show.trim()
     if (!showT) { setError('Please choose the award show this entry targeted.'); return }
+    const quickIsAoy = isAoyShow(showT)
+    if (quickIsAoy && !category.trim()) { setError('Please pick a category from the picker.'); return }
 
     runningRef.current = true
     setError('')
+    setStage('working')
 
     try {
       const token = await getToken()
       if (!token) { router.replace('/login'); return }
       const orgId = await resolveMyOrgId()
 
-      // config-mode / SMARTIES / AOY → structured section scoring; hand off to the
-      // project page's Quick Eval, which renders those natively.
-      if (looksLikeAoy(showT, category)) {
-        await supabase.from('projects').update({ target_shows: [AOY_SHOW_NAME] }).eq('id', projectId)
-        setHandoffReason('Agency of the Year entries are scored against the AOY rubric section by section, using the guided category picker in the full workspace.')
-        setStage('handoff'); runningRef.current = false; return
-      }
-      const smarties = isSmartiesShow(showT)
-      const configMode = smarties ? null : await resolveConfigMode(showT, category.trim())
-      if (smarties || configMode) {
-        setHandoffReason('This show is scored section by section. Open the full workspace to run the jury read on it.')
-        setStage('handoff'); runningRef.current = false; return
-      }
+      const quickIsSmarties = isSmartiesShow(showT)
+      const configMode = (quickIsAoy || quickIsSmarties) ? null : await resolveConfigMode(showT, category.trim())
+      const sectionPath = quickIsAoy || quickIsSmarties || !!configMode
 
-      // ── standard path (evaluate-entry) ──
-      setStage('working')
       setProgress('Setting up the evaluation…')
       const { data: newDir, error: dirErr } = await supabase
         .from('directions')
         .insert({
-          project_id: projectId,
-          org_id: orgId,
-          created_by: user.id,
+          project_id: projectId, org_id: orgId, created_by: user.id,
           name: category.trim() ? `${showT} — ${category.trim()}` : showT,
-          best_show: showT,
-          best_category: category.trim(),
-          angle: 'Uploaded entry — direct evaluation',
-          sort_order: 0,
+          best_show: showT, best_category: category.trim(),
+          angle: 'Uploaded entry — direct evaluation', sort_order: 0,
         })
-        .select()
-        .single()
+        .select().single()
       if (dirErr || !newDir) { setError(dirErr?.message || 'Could not set up the evaluation.'); setStage('confirm'); runningRef.current = false; return }
       const dir = newDir as { id: number }
 
-      const { data: draft, error: draftErr } = await supabase
-        .from('entry_drafts')
-        .insert({
-          project_id: projectId,
-          direction_id: dir.id,
-          org_id: orgId,
-          created_by: user.id,
-          field_key: 'entry',
-          field_label: 'Entry',
-          version_a: entryText.slice(0, 50000),
-          selected: 'a',
-          award_show: showT,
-          category: category.trim(),
-          sort_order: 0,
-        })
-        .select()
-        .single()
-      if (draftErr || !draft) {
-        await supabase.from('directions').delete().eq('id', dir.id)
-        setError(draftErr?.message || 'Could not prepare the entry for scoring.'); setStage('confirm'); runningRef.current = false; return
-      }
-
-      setProgress('Reading it like a jury…')
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/evaluate-entry`,
-        {
+      if (sectionPath) {
+        // Structured shows: map the uploaded entry onto the rubric sections, then
+        // score section by section (same edge fns as the project-page Quick Eval).
+        const segFn = quickIsAoy ? 'segment-aoy-entry' : configMode ? 'segment-entry-config' : 'segment-smarties-entry'
+        setProgress('Mapping your entry onto the rubric sections…')
+        const segRes = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/${segFn}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
-          body: JSON.stringify({ project_id: projectId, direction_id: dir.id }),
+          body: JSON.stringify({ project_id: projectId, direction_id: dir.id, material_path: materialPath }),
+        })
+        const segData = await segRes.json().catch(() => ({}))
+        if (!segRes.ok || segData.error) {
+          await supabase.from('directions').delete().eq('id', dir.id)
+          setError(segData.error || `Could not map the entry to the rubric (status ${segRes.status}).`); setStage('confirm'); runningRef.current = false; return
         }
-      )
-      const data = await res.json()
+      } else {
+        // Standard creative entry: one blob draft, scored holistically (6 dims).
+        const { data: draft, error: draftErr } = await supabase
+          .from('entry_drafts')
+          .insert({
+            project_id: projectId, direction_id: dir.id, org_id: orgId, created_by: user.id,
+            field_key: 'entry', field_label: 'Entry', version_a: entryText.slice(0, 50000), selected: 'a',
+            award_show: showT, category: category.trim(), sort_order: 0,
+          })
+          .select().single()
+        if (draftErr || !draft) {
+          await supabase.from('directions').delete().eq('id', dir.id)
+          setError(draftErr?.message || 'Could not prepare the entry for scoring.'); setStage('confirm'); runningRef.current = false; return
+        }
+      }
+
+      const evalFn = quickIsAoy ? 'evaluate-aoy-entry' : configMode ? 'evaluate-entry-config' : quickIsSmarties ? 'evaluate-smarties-entry' : 'evaluate-entry'
+      setProgress(sectionPath ? 'Scoring each section like a jury…' : 'Reading it like a jury…')
+      const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/${evalFn}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
+        body: JSON.stringify({ project_id: projectId, direction_id: dir.id }),
+      })
+      const data = await res.json().catch(() => ({}))
       if (!res.ok || data.error) { setError(data.error || `Evaluation error (${res.status}).`); setStage('confirm'); runningRef.current = false; return }
       if (!data.evaluation) { setError('The jury read did not come back. Please try again.'); setStage('confirm'); runningRef.current = false; return }
 
@@ -369,18 +344,8 @@ export default function StartPage() {
       const blob = await res.blob()
       const file = new File([blob], 'sample-entry.txt', { type: 'text/plain' })
       await startFromFile(file)
-      setShow(SAMPLE_SHOW)
-      setCategory(SAMPLE_CATEGORY)
-      setDetected(true)
-    } catch {
-      setError('Could not load the sample. Please upload your own entry.')
-    }
-  }
-
-  const goToProject = (nextStep: string) => {
-    if (!projectId) return
-    track('first_run_nextstep_selected', { next: nextStep, project_id: projectId })
-    router.push(`/projects/${projectId}`)
+      setShow(SAMPLE_SHOW); setCategory(SAMPLE_CATEGORY); setDetected(true)
+    } catch { setError('Could not load the sample. Please upload your own entry.') }
   }
 
   const saveNameAndOpen = async () => {
@@ -399,32 +364,33 @@ export default function StartPage() {
 
   const reset = () => {
     setStage('idle'); setError(''); setProgress('')
-    setProjectId(null); setEntryText(''); setDisplayName(''); setShow(''); setCategory(''); setDetected(false)
-    setEvaluation(null); setHandoffReason(''); setProjectName('')
+    setProjectId(null); setMaterialPath(''); setEntryText(''); setDisplayName(''); setShow(''); setCategory(''); setDetected(false)
+    setEvaluation(null); setProjectName('')
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  // ── render ──────────────────────────────────────────────────────────────────
   if (authLoading) {
     return (
       <div className="min-h-screen w-full bg-gray-100">
         <AppHeader />
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-20 text-center">
-          <p className="text-sm text-gray-500">Loading…</p>
-        </div>
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-20 text-center"><p className="text-sm text-gray-500">Loading…</p></div>
       </div>
     )
   }
 
-  const summarySections: SummarySection[] = evaluation
-    ? SCORE_DIMENSIONS.map(d => ({ key: d.key, label: d.label, score: evaluation.scores?.[d.key] ?? null }))
-    : []
-  const fixList = evaluation ? (evaluation.output?.kills_it?.length ? evaluation.output.kills_it : evaluation.gaps) : []
-  const verdict = evaluation ? (evaluation.output?.recommendations || evaluation.recommendations || '') : ''
-
   const showIsAoy = isAoyShow(show)
   const showNoCat = showHasNoCategoryConcept(show)
   const catOptions = categoriesForShow(show)
+
+  // normalize the eval into brief, consistent render data
+  const out = evaluation?.output ?? {}
+  const chips = evaluation
+    ? (out.sections && out.sections.length > 0
+        ? out.sections.map(s => ({ label: s.label || s.key || '', score: s.score ?? null }))
+        : SCORE_DIMENSIONS.map(d => ({ label: d.label, score: evaluation.scores?.[d.key] ?? null })))
+    : []
+  const talkUp = ((out.talks_up && out.talks_up.length ? out.talks_up : evaluation?.strengths) ?? []).slice(0, 3)
+  const leaks = ((out.kills_it && out.kills_it.length ? out.kills_it : evaluation?.gaps) ?? []).slice(0, 3)
 
   return (
     <div className="min-h-screen w-full bg-gray-100">
@@ -435,7 +401,7 @@ export default function StartPage() {
         {(stage === 'idle' || stage === 'notext' || stage === 'error') && (
           <>
             <div className="mb-6">
-              <h1 className="text-2xl font-semibold leading-tight text-gray-900 sm:text-3xl">Welcome to Shortlist</h1>
+              <h1 className="sl-serif text-gray-900" style={{ fontSize: '2rem', lineHeight: 1.15, letterSpacing: '-0.01em' }}>Welcome to Shortlist</h1>
               <p className="mt-3 text-sm leading-relaxed text-gray-600">
                 Let&apos;s get you evaluating your first entry right away. Upload a past award entry below and we&apos;ll read it like a jury, then show you exactly where it wins and where it leaks points.
               </p>
@@ -445,35 +411,35 @@ export default function StartPage() {
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="flex w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 px-4 py-10 text-center transition-colors hover:border-green-600 hover:bg-green-50"
+                className="block w-full rounded-xl border-2 border-dashed border-gray-300 p-8 text-center transition-colors hover:border-green-600 hover:bg-green-50"
               >
-                <span className="text-base font-medium text-gray-900">Drop a PDF, DOCX, or TXT here</span>
-                <span className="text-xs text-gray-500">or tap to choose a file · max 10MB</span>
+                <span className="block text-sm font-medium text-gray-700">Drop a PDF, DOCX, or TXT here</span>
+                <span className="mt-1 block text-xs text-gray-400">or tap to choose a file · max 10MB</span>
               </button>
               <input ref={fileInputRef} type="file" accept=".pdf,.docx,.txt" className="hidden"
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) void startFromFile(f) }} />
 
               {stage === 'notext' && (
                 <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                  We couldn&apos;t read any text from that file. Try a text-based PDF or a DOCX, or score the sample below.
+                  We couldn&apos;t read any text from that file. Try a text-based PDF or a DOCX, or test the sample below.
                 </div>
               )}
               {error && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
 
               <div className="mt-5 text-center">
                 <button type="button" onClick={() => void runSample()} className="text-sm font-medium text-green-700 underline underline-offset-2 hover:text-green-800">
-                  Don&apos;t have one to hand? Score a sample entry
+                  Don&apos;t have one on hand? Test a sample entry for a quick check of how this all works.
                 </button>
               </div>
             </div>
 
-            {/* skip straight into the full platform / agency profile setup */}
-            <div className="mt-5 rounded-xl border border-gray-200 bg-white px-5 py-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-gray-600">Rather dive straight in? Head into the full platform and set up your agency profile.</p>
-              <button type="button" onClick={skipToPlatform} className="shrink-0 text-sm font-medium text-green-700 hover:text-green-800">
-                Go to the platform →
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={skipToPlatform}
+              className="mt-4 block w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-center text-sm font-medium text-gray-700 transition-colors hover:border-green-600 hover:text-green-700"
+            >
+              Or head into the full platform and set up your agency profile →
+            </button>
           </>
         )}
 
@@ -482,11 +448,11 @@ export default function StartPage() {
           <div className="w-full rounded-xl border border-gray-200 bg-white p-8 text-center">
             <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-green-700" />
             <p className="text-sm font-medium text-gray-700">{progress || 'Working…'}</p>
-            <p className="mt-1 text-xs text-gray-400">This usually takes under a minute.</p>
+            <p className="mt-1 text-xs text-gray-400">{showIsAoy ? 'Agency of the Year runs two passes and can take up to about three minutes. Keep this tab open.' : 'This usually takes under a minute.'}</p>
           </div>
         )}
 
-        {/* confirm — same ShowCombobox + category taxonomy as the main workflow */}
+        {/* confirm */}
         {stage === 'confirm' && (
           <div className="w-full rounded-xl border border-gray-200 bg-white p-6 sm:p-8">
             <h2 className="text-base font-semibold text-gray-900">Which show is this entry for?</h2>
@@ -500,11 +466,7 @@ export default function StartPage() {
                 <label className="mb-1.5 block text-xs text-gray-500">Award Show</label>
                 <ShowCombobox
                   value={show}
-                  onChange={v => {
-                    setShow(v)
-                    setCategory(showHasNoCategoryConcept(v) ? NO_CATEGORY_PLACEHOLDER : '')
-                    setDetected(false)
-                  }}
+                  onChange={v => { setShow(v); setCategory(showHasNoCategoryConcept(v) ? NO_CATEGORY_PLACEHOLDER : ''); setDetected(false) }}
                   options={CANONICAL_SHOWS}
                   placeholder="e.g. Cannes Lions, Spikes Asia, Effie APAC…"
                 />
@@ -512,12 +474,11 @@ export default function StartPage() {
 
               <div>
                 <label className="mb-1.5 block text-xs text-gray-500">
-                  Category{showHasNoCategoryList(show) ? ' (optional)' : ''}
+                  Category{!showIsAoy && showHasNoCategoryList(show) ? ' (optional)' : ''}
                 </label>
                 {showIsAoy ? (
-                  <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500">
-                    Agency of the Year entries open in the full workspace, which has the guided category picker.
-                  </p>
+                  /* Campaign AOY: market-scoped canonical picker, same as the workspace. */
+                  <AoyEntryPicker key={`start-${show}`} compact onChange={v => setCategory(v)} />
                 ) : showNoCat ? (
                   <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500">
                     This show has one uniform nomination form — no category to choose.
@@ -525,9 +486,7 @@ export default function StartPage() {
                 ) : (
                   <>
                     <input
-                      type="text"
-                      list="start-categories"
-                      value={category}
+                      type="text" list="start-categories" value={category}
                       onChange={e => { setCategory(e.target.value); setDetected(false) }}
                       placeholder={catOptions.length > 0 ? 'e.g. Creative Effectiveness, Film Craft…' : 'Type a category if you know it (optional)'}
                       className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-green-600 focus:outline-none"
@@ -544,7 +503,7 @@ export default function StartPage() {
 
             <div className="mt-5 flex flex-col gap-2 sm:flex-row">
               <button type="button" onClick={() => void scoreIt()} className="rounded bg-green-800 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-green-700 sm:flex-1">
-                {showIsAoy ? 'Open the workspace' : 'Score it'}
+                Score it
               </button>
               <button type="button" onClick={reset} className="rounded px-4 py-2.5 text-sm text-gray-500 transition-colors hover:text-gray-900">
                 Use a different file
@@ -553,63 +512,62 @@ export default function StartPage() {
           </div>
         )}
 
-        {/* handoff */}
-        {stage === 'handoff' && (
-          <div className="w-full rounded-xl border border-gray-200 bg-white p-6 sm:p-8">
-            <p className="text-sm leading-relaxed text-gray-700">{handoffReason}</p>
-            <p className="mt-2 text-sm text-gray-500">Your entry is uploaded and ready. Open the workspace to run the jury read.</p>
-            <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-              <button type="button" onClick={() => goToProject('handoff_open_workspace')} className="rounded bg-green-800 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-green-700 sm:flex-1">
-                Open the workspace
-              </button>
-              <button type="button" onClick={reset} className="rounded px-4 py-2.5 text-sm text-gray-500 transition-colors hover:text-gray-900">
-                Score a different entry
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* scored — inline jury read (standard path) */}
+        {/* scored — brief, app-styled jury read */}
         {stage === 'scored' && evaluation && (
           <>
-            <div className="w-full overflow-hidden rounded-xl border border-gray-200 bg-white px-5 pb-5">
-              <EvalSummaryBar
-                overallScore={evaluation.overall_score ?? null}
-                verdict={verdict}
-                sections={summarySections}
-                strengths={evaluation.strengths}
-                unattributedGaps={evaluation.gaps}
-              />
+            <div className="w-full rounded-xl border border-gray-200 bg-white p-6">
+              <div className="flex items-baseline gap-2">
+                <span className={`text-3xl font-semibold tabular-nums ${overallColor(evaluation.overall_score)}`}>{evaluation.overall_score?.toFixed(1) ?? '—'}</span>
+                <span className="text-sm text-gray-400">/ 10</span>
+                <span className="ml-auto text-xs font-medium uppercase tracking-wide text-gray-400">Jury read</span>
+              </div>
 
-              {(evaluation.output?.talks_up?.length ?? 0) > 0 && (
-                <div className="mt-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">What the jury rates</p>
-                  <ul className="mt-2 grid grid-cols-1 gap-1.5">
-                    {evaluation.output!.talks_up!.map((s, i) => (<li key={i} className="text-sm leading-snug text-gray-700">• {s}</li>))}
-                  </ul>
+              {chips.length > 0 && (
+                <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {chips.map((c, i) => (
+                    <div key={i} className={`rounded-lg border px-3 py-2 ${chipClasses(c.score)}`}>
+                      <p className="text-[11px] font-medium leading-tight opacity-80">{c.label}</p>
+                      <p className="mt-0.5 text-lg font-semibold tabular-nums">{c.score ?? '—'}</p>
+                    </div>
+                  ))}
                 </div>
               )}
 
-              {(fixList?.length ?? 0) > 0 && (
-                <div className="mt-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Where it leaks points</p>
-                  <ul className="mt-2 grid grid-cols-1 gap-1.5">
-                    {fixList!.map((g, i) => (<li key={i} className="text-sm leading-snug text-gray-700">• {g}</li>))}
-                  </ul>
+              {talkUp.length > 0 && (
+                <div className="mt-6">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-green-700">What Jurors Will Talk Up</p>
+                  <div className="space-y-2">
+                    {talkUp.map((s, i) => (
+                      <div key={i} className="rounded-r-lg border-l-4 border-green-500 bg-green-50 px-4 py-3">
+                        <p className="text-sm italic leading-relaxed text-gray-800">&ldquo;{s}&rdquo;</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
+
+              {leaks.length > 0 && (
+                <div className="mt-5">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-red-600">Where Jurors Will Kill Your Entry</p>
+                  <div className="space-y-2">
+                    {leaks.map((g, i) => (
+                      <div key={i} className="rounded-r-lg border-l-4 border-red-400 bg-red-50 px-4 py-3">
+                        <p className="text-sm italic leading-relaxed text-gray-800">&ldquo;{g}&rdquo;</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <p className="mt-5 text-xs text-gray-400">Open the full breakdown for the complete jury read, section-by-section coaching, and fixes.</p>
             </div>
 
             <div className="mt-4 w-full rounded-xl border border-gray-200 bg-white p-6">
               <p className="text-sm font-semibold text-gray-900">Save this as a project</p>
-              <p className="mt-1 text-sm text-gray-600">Name it, then open the full breakdown to edit the entry, see section-by-section coaching, and re-run the jury.</p>
+              <p className="mt-1 text-sm text-gray-600">Name it, then open the full breakdown to edit the entry, see coaching, and re-run the jury.</p>
               <div className="mt-4 grid grid-cols-1 gap-3">
-                <input
-                  value={projectName}
-                  onChange={(e) => setProjectName(e.target.value)}
-                  placeholder="Project name"
-                  className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm transition-colors focus:border-green-600 focus:outline-none"
-                />
+                <input value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="Project name"
+                  className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm transition-colors focus:border-green-600 focus:outline-none" />
                 <button type="button" disabled={savingName} onClick={() => void saveNameAndOpen()} className="w-full rounded bg-green-800 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-60">
                   {savingName ? 'Saving…' : 'Save & open full breakdown'}
                 </button>
