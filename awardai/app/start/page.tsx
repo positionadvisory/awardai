@@ -18,7 +18,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
 import { useEngagement } from '@/lib/useEngagement'
-import { isAoyShow } from '@/lib/aoy-taxonomy'
+import { isAoyShow, AOY_SHOW_NAME } from '@/lib/aoy-taxonomy'
 import { resolveEntryForm } from '@/lib/entry-form'
 import {
   CANONICAL_SHOWS, categoriesForShow, showHasNoCategoryConcept,
@@ -57,6 +57,19 @@ const SCORE_DIMENSIONS: { key: keyof EvaluationScores; label: string }[] = [
 function nameFromFile(fileName: string): string {
   const stem = fileName.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim()
   return stem || 'Untitled entry'
+}
+
+// AOY safety net: detect-entry-context sometimes returns a non-canonical AOY name
+// (e.g. 'Campaign Agency of the Year' without 'Asia', or an AOY CATEGORY like
+// 'PR Agency of the Year'), which isAoyShow (needs the literal 'campaign asia')
+// misses — so the entry would wrongly score through the standard 6-dim path
+// instead of the AOY section rubric. Every Campaign AOY track is literally
+// '... Agency of the Year', so that phrase in the show OR category is a reliable
+// AOY signal. On a hit we hand off to the project page (AoyEntryPicker + the AOY
+// segmenter live there).
+function looksLikeAoy(show?: string | null, category?: string | null): boolean {
+  const re = /agency of the year/i
+  return isAoyShow(show ?? '') || re.test(show ?? '') || re.test(category ?? '')
 }
 
 type Stage = 'idle' | 'working' | 'confirm' | 'scored' | 'handoff' | 'notext' | 'error'
@@ -225,12 +238,16 @@ export default function StartPage() {
         }
       } catch (err) { console.warn('detect-entry-context failed', err) }
 
-      setShow(detShow)
-      setCategory(detAoy ? '' : (showHasNoCategoryConcept(detShow) ? NO_CATEGORY_PLACEHOLDER : detCat))
-      setDetected(!!detShow || !!detCat)
+      const aoy = detAoy || looksLikeAoy(detShow, detCat)
+      setShow(aoy ? '' : detShow)
+      setCategory(aoy ? '' : (showHasNoCategoryConcept(detShow) ? NO_CATEGORY_PLACEHOLDER : detCat))
+      setDetected(!aoy && (!!detShow || !!detCat))
 
-      if (detAoy || isAoyShow(detShow)) {
-        setHandoffReason('This looks like an Agency of the Year entry, which uses a guided category picker in the full workspace.')
+      if (aoy) {
+        // Tag the project as the canonical AOY show so the project page recognises
+        // it immediately (projectIsAoy keys off target_shows) and opens the AOY UI.
+        await supabase.from('projects').update({ target_shows: [AOY_SHOW_NAME] }).eq('id', pid)
+        setHandoffReason('This looks like an Agency of the Year entry. It is scored against the AOY rubric section by section, using the guided category picker in the full workspace.')
         setStage('handoff')
         runningRef.current = false
         return
@@ -262,8 +279,9 @@ export default function StartPage() {
 
       // config-mode / SMARTIES / AOY → structured section scoring; hand off to the
       // project page's Quick Eval, which renders those natively.
-      if (isAoyShow(showT)) {
-        setHandoffReason('Agency of the Year entries use a guided category picker in the full workspace.')
+      if (looksLikeAoy(showT, category)) {
+        await supabase.from('projects').update({ target_shows: [AOY_SHOW_NAME] }).eq('id', projectId)
+        setHandoffReason('Agency of the Year entries are scored against the AOY rubric section by section, using the guided category picker in the full workspace.')
         setStage('handoff'); runningRef.current = false; return
       }
       const smarties = isSmartiesShow(showT)
