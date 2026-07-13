@@ -3186,6 +3186,10 @@ export default function ProjectPage() {
       }
       if (data.coaching) {
         setAoyCoaching(prev => ({ ...prev, [directionId]: data.coaching as AoyCoaching }))
+        // S160b: the result renders under the eval rail's Coach Review tab —
+        // switch to it and expand the rail so the fresh advice is visible.
+        setEvalDisplayMode(prev => ({ ...prev, [directionId]: 'coach' }))
+        setEvalPanelExpanded(prev => ({ ...prev, [directionId]: true }))
       }
     } catch (err) {
       setCoachingError(formatError({ message: 'Network error. Check your connection and try again.', retryable: true, code: 'COACH-NET' }))
@@ -3230,6 +3234,9 @@ export default function ProjectPage() {
       }
       if (data.coaching) {
         setConfigCoaching(prev => ({ ...prev, [directionId]: data.coaching as ConfigCoaching }))
+        // S160b: same reveal as the AOY coach above.
+        setEvalDisplayMode(prev => ({ ...prev, [directionId]: 'coach' }))
+        setEvalPanelExpanded(prev => ({ ...prev, [directionId]: true }))
       }
     } catch (err) {
       setCoachingError(formatError({ message: 'Network error. Check your connection and try again.', retryable: true, code: 'ENTRYCOACH-NET' }))
@@ -5932,13 +5939,18 @@ export default function ProjectPage() {
                     const evalBoth = evaluations[dirId] ?? {}
                     const hasJudge = !!evalBoth.judge
                     const hasCoach = !!evalBoth.coach
+                    // S160b (Ben feedback): the AOY/config ADVISORY coaches are session-only
+                    // and never an evaluations row (S93/S112 — no 0-10, so they must not
+                    // enter evalBoth). They now surface under the Coach Review TAB in the
+                    // eval rail instead of a separate full-width panel above the columns.
+                    const hasAdvisoryCoach = !!(aoyCoaching[dirId] || configCoaching[dirId])
                     // Session 57: three views on the eval panel — judge / coach /
                     // the Recommended Next Steps tab. Falls back to whichever
                     // mode actually exists when the stored view does not.
                     const requestedView = evalDisplayMode[dirId] ?? (hasJudge ? 'judge' : 'coach')
                     const activeView: 'judge' | 'coach' | 'nextsteps' =
                       requestedView === 'nextsteps' ? 'nextsteps'
-                        : requestedView === 'coach' && hasCoach ? 'coach'
+                        : requestedView === 'coach' && (hasCoach || hasAdvisoryCoach) ? 'coach'
                         : requestedView === 'judge' && hasJudge ? 'judge'
                         : hasJudge ? 'judge' : 'coach'
                     const activeMode: 'judge' | 'coach' = activeView === 'coach' ? 'coach' : 'judge'
@@ -6570,7 +6582,7 @@ export default function ProjectPage() {
                     const sxsEvalTop = (
                       <>
                         {/* Evaluation panel */}
-                        {(hasJudge || hasCoach) && (
+                        {(hasJudge || hasCoach || hasAdvisoryCoach) && (
                           <div className="border-b border-gray-200 bg-gray-50">
                             {/* Collapsed summary strip (S152). Default collapsed: the
                                 per-section jury reads now render inline in the edit surface
@@ -6604,7 +6616,7 @@ export default function ProjectPage() {
                                   ⚖ Jury Evaluation
                                 </button>
                               )}
-                              {hasCoach && (
+                              {(hasCoach || hasAdvisoryCoach) && (
                                 <button
                                   onClick={() => setEvalDisplayMode(prev => ({ ...prev, [dirId]: 'coach' }))}
                                   className={`text-sm font-medium px-4 py-2 rounded-t-lg border-b-2 transition-colors -mb-px ${activeView === 'coach' ? 'border-green-700 text-green-800 bg-white' : 'border-transparent text-gray-400 hover:text-gray-700'}`}
@@ -6821,6 +6833,170 @@ export default function ProjectPage() {
                             />
                           </div>
                           ) : null}
+
+                            {/* S160b: advisory coach output (AOY / config) renders under
+                                the Coach Review tab in this rail — session-only, never an
+                                evaluations row (S93/S112), so it is NOT part of evalBoth
+                                and must never write a 0-10 anywhere. Moved here from the
+                                full-width panels that sat above the columns. */}
+                            {activeView === 'coach' && (
+                              <>
+                            {isAoyShow(d?.best_show ?? '') && aoyCoaching[dirId] && (() => {
+                              const c = aoyCoaching[dirId]
+                              // Chunk 5 staleness flag: the persisted/live coaching is
+                              // keyed to the draft_generation it was run against. If the
+                              // draft has since been regenerated (maxGen is this scope's
+                              // current-generation count, same variable the judge/coach
+                              // needsReEval check above already uses), say so plainly
+                              // instead of silently showing advice for an older draft.
+                              const coachStale = maxGen > c.draft_generation
+                              return (
+                                <div className="border-b border-gray-200 bg-green-50/40 px-5 py-4">
+                                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                    <span className="text-sm font-semibold text-gray-800">✦ AOY Coach</span>
+                                    <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full capitalize">{c.pillar} pillar</span>
+                                    <span className="text-xs text-gray-400">advisory, not a score</span>
+                                  </div>
+                                  {coachStale && (
+                                    <p className="text-xs text-amber-700 mb-2">Draft changed since this coaching. Re-run AOY Coach for advice on the current version.</p>
+                                  )}
+                                  {c.overall && <p className="text-sm text-gray-700">{c.overall}</p>}
+                                  {c.priorities.length > 0 && (
+                                    <div className="mt-2">
+                                      <p className="text-xs font-medium text-gray-600 mb-1">Highest-leverage fixes</p>
+                                      <ul className="list-disc list-inside space-y-0.5">{c.priorities.map((p, i) => <li key={i} className="text-xs text-gray-600">{p}</li>)}</ul>
+                                    </div>
+                                  )}
+                                  {(() => {
+                                    const maxWeight = c.sections.reduce((m, x) => Math.max(m, x.weight || 0), 1)
+                                    return (
+                                  <div className="mt-3 space-y-2">
+                                    {c.sections.map(sec => (
+                                      <div key={sec.key} className={`border rounded-lg px-3 py-2.5 ${sec.is_placeholder ? 'border-amber-200 bg-amber-50/40' : 'border-gray-200 bg-white'}`}>
+                                        <div className="flex items-baseline justify-between gap-2">
+                                          <p className="text-xs font-medium text-gray-800 min-w-0 flex-1">{sec.label}</p>
+                                          <span className="text-xs text-gray-400 tabular-nums flex-shrink-0">{sec.weight}% of score{sec.is_placeholder ? ' · not written' : ''}</span>
+                                        </div>
+                                        <div className="mt-1.5"><MeterBar fraction={(sec.weight || 0) / maxWeight} color={sec.is_placeholder ? '#d97706' : '#15803d'} /></div>
+                                        {sec.missing.length > 0 && <p className="text-xs text-amber-700 mt-1.5">Missing: {sec.missing.join('; ')}</p>}
+                                        {sec.suggestions.length > 0 && (
+                                          <ul className="list-disc list-inside mt-1 space-y-0.5">{sec.suggestions.map((x, i) => <li key={i} className="text-xs text-gray-600 leading-relaxed">{x}</li>)}</ul>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                    )
+                                  })()}
+                                  {/* Feedback export (S93): clean plain text bundling this
+                                      coach review + the latest jury eval, to copy into an
+                                      email/message or download. */}
+                                  {d && (() => {
+                                    const fbInput = {
+                                      kind: 'AOY' as const,
+                                      category: d.best_category ?? null,
+                                      overall: c.overall,
+                                      priorities: c.priorities,
+                                      sections: c.sections.map(s => ({ label: s.label, weight: s.weight, missing: s.missing, suggestions: s.suggestions })),
+                                    }
+                                    const copyKey = `aoy-fb-${dirId}`
+                                    return (
+                                      <div className="mt-3 flex items-center gap-2 flex-wrap">
+                                        <button
+                                          onClick={() => copyTextWithConfirm(copyKey, buildFeedbackText(d, evalBoth.judge, fbInput), setFeedbackCopied)}
+                                          className="text-xs font-medium text-green-700 hover:text-green-900 border border-green-200 hover:border-green-400 px-3 py-1.5 rounded-lg transition-colors"
+                                        >
+                                          {feedbackCopied[copyKey] ? '✓ Copied' : 'Copy feedback'}
+                                        </button>
+                                        <button
+                                          onClick={() => downloadCoachFeedback(d, evalBoth.judge, fbInput)}
+                                          className="text-xs text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors"
+                                        >
+                                          ↓ Feedback .txt
+                                        </button>
+                                      </div>
+                                    )
+                                  })()}
+                                </div>
+                              )
+                            })()}
+                            {configCoaching[dirId] && (() => {
+                              const c = configCoaching[dirId]
+                              return (
+                                <div className="border-b border-gray-200 bg-green-50/40 px-5 py-4">
+                                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                    <span className="text-lg font-semibold text-gray-800">✦ Coach</span>
+                                    {c.category_key && <span className="text-sm font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">{c.category_key}</span>}
+                                    <span className="text-sm text-gray-400">advisory, not a score</span>
+                                  </div>
+                                  {/* framing_degraded (S98 Chunk 4): Coach ran without the
+                                      show's full jury framing. Surface it so a generic pass
+                                      is visible rather than mistaken for show-calibrated advice. */}
+                                  {c.framing_degraded && (
+                                    <p className="text-sm text-amber-700 mb-2">Coaching without full show framing. Advice is general; seed this show&apos;s jury framing for show-specific guidance.</p>
+                                  )}
+                                  {c.overall && <p className="text-base text-gray-700 leading-relaxed">{c.overall}</p>}
+                                  {c.priorities.length > 0 && (
+                                    <div className="mt-2">
+                                      <p className="text-sm font-medium text-gray-600 mb-1">Highest-leverage fixes</p>
+                                      <ul className="list-disc list-inside space-y-1">{c.priorities.map((p, i) => <li key={i} className="text-base text-gray-600 leading-relaxed">{p}</li>)}</ul>
+                                    </div>
+                                  )}
+                                  <div className="mt-3 space-y-2">
+                                    {c.sections.map(sec => (
+                                      <div key={sec.key} className={`border rounded-lg px-3 py-2.5 ${sec.is_placeholder ? 'border-amber-200 bg-amber-50/40' : 'border-gray-200 bg-white'}`}>
+                                        <div className="flex items-baseline justify-between gap-2">
+                                          <p className="text-base font-medium text-gray-800 min-w-0 flex-1">{sec.label}{typeof sec.weight === 'number' ? <span className="text-gray-400 font-normal"> {sec.weight}% of score</span> : null}</p>
+                                          {sec.is_placeholder && <span className="text-sm text-gray-400 flex-shrink-0">not written</span>}
+                                        </div>
+                                        {sec.missing.length > 0 && <p className="text-base text-amber-700 mt-1.5 leading-relaxed">Missing: {sec.missing.join('; ')}</p>}
+                                        {sec.suggestions.length > 0 && (
+                                          <ul className="list-disc list-inside mt-1 space-y-1">{sec.suggestions.map((x, i) => <li key={i} className="text-base text-gray-600 leading-relaxed">{x}</li>)}</ul>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {/* Feedback export: clean plain text bundling this coach
+                                      review + the latest jury eval. Weighted -> AOY-shaped
+                                      (carries weights), qualitative -> SMARTIES-shaped. */}
+                                  {d && (() => {
+                                    const fbInput = c.scoring_mode === 'weighted'
+                                      ? {
+                                          kind: 'AOY' as const,
+                                          category: c.category_key,
+                                          overall: c.overall,
+                                          priorities: c.priorities,
+                                          sections: c.sections.map(s => ({ label: s.label, weight: s.weight ?? 0, missing: s.missing, suggestions: s.suggestions })),
+                                        }
+                                      : {
+                                          kind: 'SMARTIES' as const,
+                                          category: c.category_key,
+                                          overall: c.overall,
+                                          priorities: c.priorities,
+                                          sections: c.sections.map(s => ({ label: s.label, missing: s.missing, suggestions: s.suggestions })),
+                                        }
+                                    const copyKey = `config-fb-${dirId}`
+                                    return (
+                                      <div className="mt-3 flex items-center gap-2 flex-wrap">
+                                        <button
+                                          onClick={() => copyTextWithConfirm(copyKey, buildFeedbackText(d, evalBoth.judge, fbInput), setFeedbackCopied)}
+                                          className="text-sm font-medium text-green-700 hover:text-green-900 border border-green-200 hover:border-green-400 px-3 py-1.5 rounded-lg transition-colors"
+                                        >
+                                          {feedbackCopied[copyKey] ? '✓ Copied' : 'Copy feedback'}
+                                        </button>
+                                        <button
+                                          onClick={() => downloadCoachFeedback(d, evalBoth.judge, fbInput)}
+                                          className="text-sm text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors"
+                                        >
+                                          ↓ Feedback .txt
+                                        </button>
+                                      </div>
+                                    )
+                                  })()}
+                                </div>
+                              )
+                            })()}
+                              </>
+                            )}
                             </div>{/* /collapsible eval breakdown (S152) */}
                           </div>
                         )}
@@ -7361,176 +7537,18 @@ export default function ProjectPage() {
                           </div>
                         )}
 
-                        {/* AOY Coach — advisory per-section guidance (generate-aoy-coach,
-                            S77). AOY directions only; not an evaluations row, so it
-                            renders separately from the Jury panel. */}
+                        {/* AOY Coach error banner (the coach RESULT panel moved into the
+                            eval rail's Coach Review tab, S160b). Kept out here so a failed
+                            run stays visible even when no coaching result/tab exists. */}
                         {isAoyShow(d?.best_show ?? '') && coachingError && coachingForDirectionId === dirId && (
                           <div className="px-5 py-3 border-b border-gray-200"><ErrorBanner error={coachingError} /></div>
                         )}
-                        {isAoyShow(d?.best_show ?? '') && aoyCoaching[dirId] && (() => {
-                          const c = aoyCoaching[dirId]
-                          // Chunk 5 staleness flag: the persisted/live coaching is
-                          // keyed to the draft_generation it was run against. If the
-                          // draft has since been regenerated (maxGen is this scope's
-                          // current-generation count, same variable the judge/coach
-                          // needsReEval check above already uses), say so plainly
-                          // instead of silently showing advice for an older draft.
-                          const coachStale = maxGen > c.draft_generation
-                          return (
-                            <div className="border-b border-gray-200 bg-green-50/40 px-5 py-4">
-                              <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                <span className="text-sm font-semibold text-gray-800">✦ AOY Coach</span>
-                                <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full capitalize">{c.pillar} pillar</span>
-                                <span className="text-xs text-gray-400">advisory, not a score</span>
-                              </div>
-                              {coachStale && (
-                                <p className="text-xs text-amber-700 mb-2">Draft changed since this coaching. Re-run AOY Coach for advice on the current version.</p>
-                              )}
-                              {c.overall && <p className="text-sm text-gray-700">{c.overall}</p>}
-                              {c.priorities.length > 0 && (
-                                <div className="mt-2">
-                                  <p className="text-xs font-medium text-gray-600 mb-1">Highest-leverage fixes</p>
-                                  <ul className="list-disc list-inside space-y-0.5">{c.priorities.map((p, i) => <li key={i} className="text-xs text-gray-600">{p}</li>)}</ul>
-                                </div>
-                              )}
-                              {(() => {
-                                const maxWeight = c.sections.reduce((m, x) => Math.max(m, x.weight || 0), 1)
-                                return (
-                              <div className="mt-3 space-y-2">
-                                {c.sections.map(sec => (
-                                  <div key={sec.key} className={`border rounded-lg px-3 py-2.5 ${sec.is_placeholder ? 'border-amber-200 bg-amber-50/40' : 'border-gray-200 bg-white'}`}>
-                                    <div className="flex items-baseline justify-between gap-2">
-                                      <p className="text-xs font-medium text-gray-800 min-w-0 flex-1">{sec.label}</p>
-                                      <span className="text-xs text-gray-400 tabular-nums flex-shrink-0">{sec.weight}% of score{sec.is_placeholder ? ' · not written' : ''}</span>
-                                    </div>
-                                    <div className="mt-1.5"><MeterBar fraction={(sec.weight || 0) / maxWeight} color={sec.is_placeholder ? '#d97706' : '#15803d'} /></div>
-                                    {sec.missing.length > 0 && <p className="text-xs text-amber-700 mt-1.5">Missing: {sec.missing.join('; ')}</p>}
-                                    {sec.suggestions.length > 0 && (
-                                      <ul className="list-disc list-inside mt-1 space-y-0.5">{sec.suggestions.map((x, i) => <li key={i} className="text-xs text-gray-600 leading-relaxed">{x}</li>)}</ul>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                                )
-                              })()}
-                              {/* Feedback export (S93): clean plain text bundling this
-                                  coach review + the latest jury eval, to copy into an
-                                  email/message or download. */}
-                              {d && (() => {
-                                const fbInput = {
-                                  kind: 'AOY' as const,
-                                  category: d.best_category ?? null,
-                                  overall: c.overall,
-                                  priorities: c.priorities,
-                                  sections: c.sections.map(s => ({ label: s.label, weight: s.weight, missing: s.missing, suggestions: s.suggestions })),
-                                }
-                                const copyKey = `aoy-fb-${dirId}`
-                                return (
-                                  <div className="mt-3 flex items-center gap-2 flex-wrap">
-                                    <button
-                                      onClick={() => copyTextWithConfirm(copyKey, buildFeedbackText(d, evalBoth.judge, fbInput), setFeedbackCopied)}
-                                      className="text-xs font-medium text-green-700 hover:text-green-900 border border-green-200 hover:border-green-400 px-3 py-1.5 rounded-lg transition-colors"
-                                    >
-                                      {feedbackCopied[copyKey] ? '✓ Copied' : 'Copy feedback'}
-                                    </button>
-                                    <button
-                                      onClick={() => downloadCoachFeedback(d, evalBoth.judge, fbInput)}
-                                      className="text-xs text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors"
-                                    >
-                                      ↓ Feedback .txt
-                                    </button>
-                                  </div>
-                                )
-                              })()}
-                            </div>
-                          )
-                        })()}
 
-                        {/* Config Coach — advisory per-section guidance
-                            (generate-entry-coach-config, S98 Chunk 5). Non-AOY config
-                            directions (weighted or qualitative, e.g. SMARTIES); not an
-                            evaluations row, so it renders separately from the Jury
-                            panel. Replaces the dedicated SMARTIES coach panel (S93).
-                            Reuses the shared coaching error state. */}
+                        {/* Config Coach error banner — same posture as the AOY one above
+                            (result panel lives in the eval rail's Coach Review tab, S160b). */}
                         {configModeFor(dirId, d?.best_show) && coachingError && coachingForDirectionId === dirId && (
                           <div className="px-5 py-3 border-b border-gray-200"><ErrorBanner error={coachingError} /></div>
                         )}
-                        {configCoaching[dirId] && (() => {
-                          const c = configCoaching[dirId]
-                          return (
-                            <div className="border-b border-gray-200 bg-green-50/40 px-5 py-4">
-                              <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                <span className="text-lg font-semibold text-gray-800">✦ Coach</span>
-                                {c.category_key && <span className="text-sm font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">{c.category_key}</span>}
-                                <span className="text-sm text-gray-400">advisory, not a score</span>
-                              </div>
-                              {/* framing_degraded (S98 Chunk 4): Coach ran without the
-                                  show's full jury framing. Surface it so a generic pass
-                                  is visible rather than mistaken for show-calibrated advice. */}
-                              {c.framing_degraded && (
-                                <p className="text-sm text-amber-700 mb-2">Coaching without full show framing. Advice is general; seed this show&apos;s jury framing for show-specific guidance.</p>
-                              )}
-                              {c.overall && <p className="text-base text-gray-700 leading-relaxed">{c.overall}</p>}
-                              {c.priorities.length > 0 && (
-                                <div className="mt-2">
-                                  <p className="text-sm font-medium text-gray-600 mb-1">Highest-leverage fixes</p>
-                                  <ul className="list-disc list-inside space-y-1">{c.priorities.map((p, i) => <li key={i} className="text-base text-gray-600 leading-relaxed">{p}</li>)}</ul>
-                                </div>
-                              )}
-                              <div className="mt-3 space-y-2">
-                                {c.sections.map(sec => (
-                                  <div key={sec.key} className={`border rounded-lg px-3 py-2.5 ${sec.is_placeholder ? 'border-amber-200 bg-amber-50/40' : 'border-gray-200 bg-white'}`}>
-                                    <div className="flex items-baseline justify-between gap-2">
-                                      <p className="text-base font-medium text-gray-800 min-w-0 flex-1">{sec.label}{typeof sec.weight === 'number' ? <span className="text-gray-400 font-normal"> {sec.weight}% of score</span> : null}</p>
-                                      {sec.is_placeholder && <span className="text-sm text-gray-400 flex-shrink-0">not written</span>}
-                                    </div>
-                                    {sec.missing.length > 0 && <p className="text-base text-amber-700 mt-1.5 leading-relaxed">Missing: {sec.missing.join('; ')}</p>}
-                                    {sec.suggestions.length > 0 && (
-                                      <ul className="list-disc list-inside mt-1 space-y-1">{sec.suggestions.map((x, i) => <li key={i} className="text-base text-gray-600 leading-relaxed">{x}</li>)}</ul>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                              {/* Feedback export: clean plain text bundling this coach
-                                  review + the latest jury eval. Weighted -> AOY-shaped
-                                  (carries weights), qualitative -> SMARTIES-shaped. */}
-                              {d && (() => {
-                                const fbInput = c.scoring_mode === 'weighted'
-                                  ? {
-                                      kind: 'AOY' as const,
-                                      category: c.category_key,
-                                      overall: c.overall,
-                                      priorities: c.priorities,
-                                      sections: c.sections.map(s => ({ label: s.label, weight: s.weight ?? 0, missing: s.missing, suggestions: s.suggestions })),
-                                    }
-                                  : {
-                                      kind: 'SMARTIES' as const,
-                                      category: c.category_key,
-                                      overall: c.overall,
-                                      priorities: c.priorities,
-                                      sections: c.sections.map(s => ({ label: s.label, missing: s.missing, suggestions: s.suggestions })),
-                                    }
-                                const copyKey = `config-fb-${dirId}`
-                                return (
-                                  <div className="mt-3 flex items-center gap-2 flex-wrap">
-                                    <button
-                                      onClick={() => copyTextWithConfirm(copyKey, buildFeedbackText(d, evalBoth.judge, fbInput), setFeedbackCopied)}
-                                      className="text-sm font-medium text-green-700 hover:text-green-900 border border-green-200 hover:border-green-400 px-3 py-1.5 rounded-lg transition-colors"
-                                    >
-                                      {feedbackCopied[copyKey] ? '✓ Copied' : 'Copy feedback'}
-                                    </button>
-                                    <button
-                                      onClick={() => downloadCoachFeedback(d, evalBoth.judge, fbInput)}
-                                      className="text-sm text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-colors"
-                                    >
-                                      ↓ Feedback .txt
-                                    </button>
-                                  </div>
-                                )
-                              })()}
-                            </div>
-                          )
-                        })()}
                         {sideBySidePreview ? (
                           <>
                             <div className="flex flex-col lg:flex-row lg:gap-6 lg:items-start">
