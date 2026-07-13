@@ -17,7 +17,10 @@
 
 import { supabase } from '@/lib/supabase'
 import type { Direction, Project, Collaborator, EntryDraft, OrgPressProfile, PressKitExtra } from '@/app/projects/[id]/page'
-import { COLLAB_TYPE_LABELS } from '@/app/projects/[id]/page'
+// COLLAB_TYPE_LABELS moved to lib/project-page-shared.ts (build fix,
+// refactor-r1r2-tabs-2026-07-13): page.tsx may only export default + the
+// Next.js page-export allowlist, and it was a runtime value export there.
+import { COLLAB_TYPE_LABELS } from '@/lib/project-page-shared'
 
 // Display name for the submitting org (press-kit-only; moved wholesale —
 // not used anywhere else on the page).

@@ -32,8 +32,13 @@ import { supabase } from '@/lib/supabase'
 import { formatError, appErrorFromResponse } from '@/lib/errorMessages'
 import { categoriesForShow } from '@/lib/show-taxonomy'
 import GeneratingBar from '@/components/GeneratingBar'
+// ErrorBanner, materialWordCount, buildAnalysisText moved to
+// components/ErrorBanner.tsx / lib/project-page-shared.ts (build fix,
+// refactor-r1r2-tabs-2026-07-13): page.tsx may only export default + the
+// Next.js page-export allowlist, and these were runtime value exports there.
+import { ErrorBanner } from '@/components/ErrorBanner'
+import { materialWordCount, buildAnalysisText } from '@/lib/project-page-shared'
 import {
-  ErrorBanner, materialWordCount, buildAnalysisText,
   type Tab, type Project, type Direction, type Material, type EntryDraft, type ChatMessage, type Evaluation,
   type ScriptAnalysis, type CategorySuggestion, type TonalBrief,
 } from '@/app/projects/[id]/page'

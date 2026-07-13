@@ -63,7 +63,7 @@ function AvatarMenu({ email, onSignOut }: { email: string; onSignOut: () => void
 }
 import ShowsDrawer from '@/components/shows/ShowsDrawer'
 import { MATERIALS_EVAL_STATEMENTS, JURY_EVAL_STATEMENTS, COACH_REVIEW_STATEMENTS } from '@/lib/generatingStatements'
-import { appErrorFromResponse, formatError, parseErrorString } from '@/lib/errorMessages'
+import { appErrorFromResponse, formatError } from '@/lib/errorMessages'
 import { computeRoiIndex, normaliseKbShow, DEADLINES_2026 } from '@/lib/shows-data'
 import { isAoyShow, AOY_SHOW_NAME, aoyResolveStored, aoyTrackById, buildAoyBestCategory, pillarForKey, normalizeAoyCategory, type AoyPillar } from '@/lib/aoy-taxonomy'
 // Workbench P2 Chunk 1 (S138): source-agnostic section-workbench surface. Rendered
@@ -93,40 +93,16 @@ import EndorsementsChecklist, { ENDORSEMENT_ITEMS, EndorsementItemKey } from '@/
 import JuryProfilePanel, { JuryCell, RegionalUplift } from '@/components/JuryProfilePanel'
 import PressKitTab from '@/components/tabs/PressKitTab'
 import VideoScriptTab from '@/components/tabs/VideoScriptTab'
-
-// ── ErrorBanner — renders a friendly message with a small diagnostic code ────
-// Expects error strings in "message [CODE]" format from formatError().
-// Falls back gracefully for plain strings.
-export function ErrorBanner({ error }: { error: string }) {
-  const { message, code } = parseErrorString(error)
-  return (
-    <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
-      <p className="text-red-600 text-sm">{message}</p>
-      {code && (
-        <p className="text-red-300 text-xs font-mono mt-1 select-all">{code}</p>
-      )}
-    </div>
-  )
-}
+import { ErrorBanner } from '@/components/ErrorBanner'
+import { COLLAB_TYPE_LABELS, materialWordCount, buildAnalysisText, type CollabType } from '@/lib/project-page-shared'
 
 // ── TonalBrief — structured production brief returned by generate-tonal-brief ─
 export type ColorSwatch = { hex: string; name: string; role: string }
 
 // ── Collaborator ──────────────────────────────────────────────────────────────
-type CollabType =
-  | 'lead_agency' | 'creative_agency' | 'media_agency'
-  | 'production_company' | 'pr_agency' | 'brand_team' | 'tech_partner' | 'other'
-
-export const COLLAB_TYPE_LABELS: Record<CollabType, string> = {
-  lead_agency:        'Lead Agency',
-  creative_agency:    'Creative Agency',
-  media_agency:       'Media Agency',
-  production_company: 'Production Company',
-  pr_agency:          'PR Agency',
-  brand_team:         'Brand / Client Team',
-  tech_partner:       'Technology Partner',
-  other:              'Other',
-}
+// CollabType + COLLAB_TYPE_LABELS moved to lib/project-page-shared.ts (build fix,
+// refactor-r1r2-tabs-2026-07-13): page.tsx may only export default + the Next.js
+// page-export allowlist, and COLLAB_TYPE_LABELS was a runtime value export.
 
 export type Collaborator = {
   id: number
@@ -320,10 +296,9 @@ export type Material = {
 // still carry extracted_text in memory. ALWAYS use these helpers instead of
 // checking m.extracted_text directly for gating/badges/word counts.
 const materialHasText = (m: Material): boolean => !!m.extracted_text || !!m.has_text
-export const materialWordCount = (m: Material): number =>
-  typeof m.text_words === 'number'
-    ? m.text_words
-    : (m.extracted_text || '').trim().split(/\s+/).filter(Boolean).length
+// materialWordCount moved to lib/project-page-shared.ts (build fix,
+// refactor-r1r2-tabs-2026-07-13): page.tsx may only export default + the
+// Next.js page-export allowlist, and it was a runtime value export.
 
 type ScriptChange = {
   section: string
@@ -539,43 +514,9 @@ export type Tab = 'brief' | 'materials' | 'entries' | 'script' | 'directions' | 
 // hidden until the field was cleared). Free text is still allowed (unknown shows
 // route to the request flow). Chevron toggles the list; typing filters it;
 // clicking outside closes it.
-export function buildAnalysisText(
-  analysis: ScriptAnalysis,
-  campaignName: string,
-  show: string,
-  category: string
-): string {
-  const lines = [
-    'SCRIPT ANALYSIS REPORT',
-    '================================',
-    `Project:  ${campaignName}`,
-    ...(show ? [`Show:     ${show}`] : []),
-    ...(category ? [`Category: ${category}`] : []),
-    '',
-    'OVERALL ASSESSMENT',
-    '================================',
-    analysis.summary,
-    '',
-  ]
-  if (analysis.key_improvements.length > 0) {
-    lines.push('KEY IMPROVEMENTS', '================================')
-    analysis.key_improvements.forEach((item, i) => {
-      lines.push(`${i + 1}. ${item}`)
-    })
-    lines.push('')
-  }
-  if (analysis.changes.length > 0) {
-    lines.push('SCENE-BY-SCENE CHANGES', '================================')
-    analysis.changes.forEach((change, i) => {
-      lines.push(`\n[${i + 1}] ${change.section}`)
-      if (change.original) lines.push(`Original: "${change.original}"`)
-      lines.push(`Rationale: ${change.reason}`)
-    })
-    lines.push('')
-  }
-  lines.push('---', 'Generated by Shortlist · shortlist.app')
-  return lines.join('\n')
-}
+// buildAnalysisText moved to lib/project-page-shared.ts (build fix,
+// refactor-r1r2-tabs-2026-07-13): page.tsx may only export default + the
+// Next.js page-export allowlist, and it was a runtime value export.
 
 export default function ProjectPage() {
   const { user, loading } = useAuth()
