@@ -6379,7 +6379,11 @@ export default function ProjectPage() {
                             const wordCount = liveContent ? countWords(liveContent) : 0
                             const overLimit = !!(field.word_limit && wordCount > field.word_limit)
                             const isUploadedDoc = field.field_key === 'entry'
-                            const isExpanded = expandedEntryFields[field.id] ?? false
+                            // S158: uploaded entries default EXPANDED so the imported
+                            // content is visible on load (an empty collapsed column read
+                            // as 'nothing was extracted'). Section fields keep the S154
+                            // default-collapsed behaviour.
+                            const isExpanded = expandedEntryFields[field.id] ?? isUploadedDoc
                             // Workbench P2 Chunk 4: this same section already has a
                             // SectionWorkbench card above (with History replacing the
                             // chips) whenever the workbench preview is on for an AOY
