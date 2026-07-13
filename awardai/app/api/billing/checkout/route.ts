@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
         message: 'I agree to the [Terms of Use](https://gotshortlisted.com/terms) and [Privacy Policy](https://gotshortlisted.com/privacy).',
       },
     },
-    success_url: `${process.env.NEXT_PUBLIC_APP_URL}/settings/billing?upgraded=1`,
+    success_url: `${process.env.NEXT_PUBLIC_APP_URL}/start`,  // trial first-run activation route (was /settings/billing)
     cancel_url:  `${process.env.NEXT_PUBLIC_APP_URL}/settings/billing`,
   })
 
