@@ -46,6 +46,12 @@ export type EngagementEventName =
   | 'guidance_disabled'
   | 'guidance_enabled'
   | 'tour_restarted'
+  // Trial first-run activation flow (/start) — see engagement CHECK constraint
+  | 'first_run_landed'
+  | 'first_run_upload_started'
+  | 'first_run_score_shown'
+  | 'first_run_sample_used'
+  | 'first_run_nextstep_selected'
 
 // Context stays slim: IDs, section keys, score bands, show names. Never put
 // entry text or any user-authored content in here.
