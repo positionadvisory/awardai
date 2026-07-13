@@ -24,45 +24,11 @@ import {
 import ShowCombobox from '@/components/ShowCombobox'
 import AoyEntryPicker from '@/components/AoyEntryPicker'
 import { extractEntryText, safeFileName, fileExt } from '@/lib/extract-entry-text'
-
-// ── eval shape (loose union of the standard 6-dim judge + section-keyed evals) ─
-type EvalSection = { key?: string; label?: string; score?: number | null; rationale?: string | null }
-type EvalOutput = {
-  talks_up?: string[]; kills_it?: string[]; recommendations?: string
-  sections?: EvalSection[]; verdict?: string
-}
-type Evaluation = {
-  id: number
-  overall_score: number
-  scores?: Record<string, number> | null
-  strengths?: string[] | null
-  gaps?: string[] | null
-  evaluation_mode?: 'judge' | 'coach'
-  output?: EvalOutput | null
-}
-
-const SCORE_DIMENSIONS: { key: string; label: string }[] = [
-  { key: 'strategic_clarity', label: 'Strategic Clarity' },
-  { key: 'insight', label: 'Insight' },
-  { key: 'idea', label: 'Idea' },
-  { key: 'execution', label: 'Execution' },
-  { key: 'results', label: 'Results' },
-  { key: 'jury_fit', label: 'Jury Fit' },
-]
-
-// App score-colour thresholds (>=8 green, >=6 amber, else red) — matches scoreBg/scoreColor.
-function chipClasses(score?: number | null): string {
-  if (score == null) return 'bg-gray-50 border-gray-200 text-gray-400'
-  if (score >= 8) return 'bg-green-50 border-green-200 text-green-700'
-  if (score >= 6) return 'bg-amber-50 border-amber-200 text-amber-700'
-  return 'bg-red-50 border-red-200 text-red-600'
-}
-function overallColor(score?: number | null): string {
-  if (score == null) return 'text-gray-500'
-  if (score >= 8) return 'text-green-700'
-  if (score >= 6) return 'text-amber-700'
-  return 'text-red-600'
-}
+// S160 refactor: the jury-read render (score line, chips, talk-up/kill quote
+// cards) is the shared EvalBreakdown component in compact mode — one render,
+// one shape-normalization, shared with the project page. The eval type moved
+// there too (EvalDisplayData).
+import EvalBreakdown, { type EvalDisplayData } from '@/components/EvalBreakdown'
 
 // AOY safety net: detect-entry-context can return a non-canonical AOY name
 // ('Campaign Agency of the Year' without 'Asia') or an AOY category
@@ -117,7 +83,7 @@ export default function StartPage() {
   const [category, setCategory] = useState('')
   const [detected, setDetected] = useState(false)
 
-  const [evaluation, setEvaluation] = useState<Evaluation | null>(null)
+  const [evaluation, setEvaluation] = useState<EvalDisplayData | null>(null)
   const [projectName, setProjectName] = useState('')
   const [savingName, setSavingName] = useState(false)
 
@@ -321,7 +287,7 @@ export default function StartPage() {
       if (!res.ok || data.error) { setError(data.error || `Evaluation error (${res.status}).`); setStage('confirm'); runningRef.current = false; return }
       if (!data.evaluation) { setError('The jury read did not come back. Please try again.'); setStage('confirm'); runningRef.current = false; return }
 
-      const ev = data.evaluation as Evaluation
+      const ev = data.evaluation as EvalDisplayData
       setEvaluation(ev)
       track('first_run_score_shown', { project_id: projectId, direction_id: dir.id, show: showT })
       track('quick_eval_used', { project_id: projectId, direction_id: dir.id, show: showT })
@@ -381,16 +347,6 @@ export default function StartPage() {
   const showIsAoy = isAoyShow(show)
   const showNoCat = showHasNoCategoryConcept(show)
   const catOptions = categoriesForShow(show)
-
-  // normalize the eval into brief, consistent render data
-  const out = evaluation?.output ?? {}
-  const chips = evaluation
-    ? (out.sections && out.sections.length > 0
-        ? out.sections.map(s => ({ label: s.label || s.key || '', score: s.score ?? null }))
-        : SCORE_DIMENSIONS.map(d => ({ label: d.label, score: evaluation.scores?.[d.key] ?? null })))
-    : []
-  const talkUp = ((out.talks_up && out.talks_up.length ? out.talks_up : evaluation?.strengths) ?? []).slice(0, 3)
-  const leaks = ((out.kills_it && out.kills_it.length ? out.kills_it : evaluation?.gaps) ?? []).slice(0, 3)
 
   return (
     <div className="min-h-screen w-full bg-gray-100">
@@ -516,49 +472,7 @@ export default function StartPage() {
         {stage === 'scored' && evaluation && (
           <>
             <div className="w-full rounded-xl border border-gray-200 bg-white p-6">
-              <div className="flex items-baseline gap-2">
-                <span className={`text-3xl font-semibold tabular-nums ${overallColor(evaluation.overall_score)}`}>{evaluation.overall_score?.toFixed(1) ?? '—'}</span>
-                <span className="text-sm text-gray-400">/ 10</span>
-                <span className="ml-auto text-xs font-medium uppercase tracking-wide text-gray-400">Jury read</span>
-              </div>
-
-              {chips.length > 0 && (
-                <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {chips.map((c, i) => (
-                    <div key={i} className={`rounded-lg border px-3 py-2 ${chipClasses(c.score)}`}>
-                      <p className="text-[11px] font-medium leading-tight opacity-80">{c.label}</p>
-                      <p className="mt-0.5 text-lg font-semibold tabular-nums">{c.score ?? '—'}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {talkUp.length > 0 && (
-                <div className="mt-6">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-green-700">What Jurors Will Talk Up</p>
-                  <div className="space-y-2">
-                    {talkUp.map((s, i) => (
-                      <div key={i} className="rounded-r-lg border-l-4 border-green-500 bg-green-50 px-4 py-3">
-                        <p className="text-sm italic leading-relaxed text-gray-800">&ldquo;{s}&rdquo;</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {leaks.length > 0 && (
-                <div className="mt-5">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-red-600">Where Jurors Will Kill Your Entry</p>
-                  <div className="space-y-2">
-                    {leaks.map((g, i) => (
-                      <div key={i} className="rounded-r-lg border-l-4 border-red-400 bg-red-50 px-4 py-3">
-                        <p className="text-sm italic leading-relaxed text-gray-800">&ldquo;{g}&rdquo;</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
+              <EvalBreakdown evaluation={evaluation} compact />
               <p className="mt-5 text-xs text-gray-400">Open the full breakdown for the complete jury read, section-by-section coaching, and fixes.</p>
             </div>
 
