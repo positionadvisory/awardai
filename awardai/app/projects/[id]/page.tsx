@@ -70,6 +70,11 @@ import { isAoyShow, AOY_SHOW_NAME, aoyResolveStored, aoyTrackById, buildAoyBestC
 // read-only behind ?workbench=1 this phase; the write-path cutover is P2 Chunk 4.
 import SectionWorkbench, { type SectionRevision } from '@/components/SectionWorkbench'
 import EvalSummaryBar from '@/components/EvalSummaryBar'
+import EvalBreakdown, {
+  MeterBar, SCORE_DIMENSIONS, scoreColor, scoreBg, coachScoreColor,
+  type EvaluationScores, type JudgeOutput, type CoachOutput, type EvaluationOutput,
+} from '@/components/EvalBreakdown'
+import { extractEntryText, safeFileName } from '@/lib/extract-entry-text'
 // Workbench P4 (S147): the chatSlot mount point — Discuss/Apply on one thread.
 import SectionChat, { type ChatTurn } from '@/components/SectionChat'
 import { mapAoyEvaluation, type StoredEvalSection } from '@/lib/aoy-eval-map'
@@ -506,33 +511,6 @@ type EntryDraft = {
   created_at?: string
 }
 
-type EvaluationScores = {
-  strategic_clarity: number
-  insight: number
-  idea: number
-  execution: number
-  results: number
-  jury_fit: number
-  brief_alignment?: number  // coach mode only
-}
-
-// v3 evaluation output types (stored in output jsonb column)
-type JudgeOutput = {
-  talks_up: string[]
-  kills_it: string[]
-  recommendations: string
-  campaign_name_note?: string
-  // Build 2 (Session 55): present only on evals run with candidates supplied.
-  // [] is a valid "no stronger placements" answer; absent = pre-Build-2 eval.
-  next_opportunities?: { show: string; category: string; rationale: string }[]
-}
-type PriorityFix = { fix: string; why: string; action: string }
-type CoachOutput = {
-  focus_point: string
-  priority_fixes: PriorityFix[]
-  cuts: string[]
-}
-type EvaluationOutput = JudgeOutput | CoachOutput
 
 type Evaluation = {
   id: number
@@ -556,48 +534,6 @@ type Evaluation = {
 
 type Tab = 'brief' | 'materials' | 'entries' | 'script' | 'directions' | 'facts' | 'endorsements' | 'presskit'
 
-const SCORE_DIMENSIONS: { key: keyof EvaluationScores; label: string }[] = [
-  { key: 'strategic_clarity', label: 'Strategic Clarity' },
-  { key: 'insight', label: 'Insight' },
-  { key: 'idea', label: 'Idea' },
-  { key: 'execution', label: 'Execution' },
-  { key: 'results', label: 'Results' },
-  { key: 'jury_fit', label: 'Jury Fit' },
-]
-
-function scoreColor(score: number): string {
-  if (score >= 8) return 'text-green-700'
-  if (score >= 6) return 'text-amber-700'
-  return 'text-red-600'
-}
-
-function scoreBg(score: number): string {
-  if (score >= 8) return 'bg-green-50 border-green-200'
-  if (score >= 6) return 'bg-amber-50 border-amber-200'
-  return 'bg-red-50 border-red-200'
-}
-
-// Coach mode shows UNTAPPED potential (10 - raw score). Lower = better.
-function coachScoreColor(untapped: number): string {
-  if (untapped <= 2) return 'text-green-700'   // <=2 pts gap, most potential captured
-  if (untapped <= 5) return 'text-amber-700'   // moderate gap
-  return 'text-red-600'                         // significant potential not yet in draft
-}
-
-// Thin proportional meter bar shared by the AOY panels (weight share, fit score).
-// Width/colors are INLINE styles, not Tailwind arbitrary values: the purge drops
-// arbitrary values in dynamic spots here (the GeneratingBar / gold-accent gotcha).
-// Presentational only; the fraction is always computed from code-authoritative
-// numbers (persisted section_weight, parsed rubric weight, model fit 0-10).
-function MeterBar({ fraction, color = '#15803d', track = '#e5e7eb', height = 4 }:
-  { fraction: number; color?: string; track?: string; height?: number }) {
-  const pct = Math.max(0, Math.min(1, Number.isFinite(fraction) ? fraction : 0)) * 100
-  return (
-    <div className="w-full rounded-full overflow-hidden" style={{ height, backgroundColor: track }}>
-      <div style={{ width: `${pct}%`, height: '100%', backgroundColor: color, borderRadius: 9999 }} />
-    </div>
-  )
-}
 
 // Always-openable show picker (S78 bug fix, replaces the datalist whose list was
 // hidden until the field was cleared). Free text is still allowed (unknown shows
@@ -2694,12 +2630,7 @@ export default function ProjectPage() {
     // upload with "Invalid key", silently ('No files uploaded yet') -- looked
     // like a broken uploader. Sanitize only the STORAGE KEY's filename portion;
     // the display name above (Material.name) keeps the original file.name.
-    const safeFileName = file.name
-      .normalize('NFKD')
-      .replace(/[^a-zA-Z0-9.\-_]+/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-+|-+$/g, '') || 'file'
-    const path = `${project.id}/${Date.now()}-${safeFileName}`
+    const path = `${project.id}/${Date.now()}-${safeFileName(file.name)}`
     const { error: uploadErr } = await supabase.storage.from('project-materials').upload(path, file)
     if (uploadErr) {
       setUploadError(uploadErr.message)
@@ -2709,93 +2640,17 @@ export default function ProjectPage() {
       return
     }
 
-    const arrayBuffer = await file.arrayBuffer()
-    let extractedText = ''
+    // S160 refactor: extraction goes through the shared lib/extract-entry-text.ts
+    // (the S158 module /start already uses), so the two copies cannot drift.
+    // The lib is storage-agnostic and returns rendered chart-page blobs;
+    // uploading them stays here (the storage key needs this page's project id).
+    const { text: extractedText, chartBlobs } = await extractEntryText(file, setUploadProgress)
     const chartImagePaths: string[] = []
-
-    if (ext === 'txt') {
-      extractedText = new TextDecoder().decode(arrayBuffer).slice(0, 50000)
-    } else if (ext === 'docx') {
-      try {
-        setUploadProgress('Extracting text from document…')
-        const mammoth = (await import('mammoth')).default
-        const result = await mammoth.extractRawText({ arrayBuffer })
-        extractedText = result.value.slice(0, 50000)
-      } catch (err) { console.warn('DOCX extraction failed:', err) }
-    } else if (ext === 'pdf') {
-      try {
-        setUploadProgress('Reading PDF…')
-        const pdfjsLib = await import('pdfjs-dist')
-        pdfjsLib.GlobalWorkerOptions.workerSrc =
-          `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`
-        const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise
-        const textParts: string[] = []
-        const chartPageNums: number[] = []
-        // AcroForm field values — keyed by fieldName to deduplicate across pages
-        const formFields: Map<string, string> = new Map()
-
-        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-          const page = await pdf.getPage(pageNum)
-
-          // 1. Extract AcroForm field values (fillable PDF forms)
-          try {
-            const annotations = await page.getAnnotations()
-            for (const ann of annotations as Array<{
-              subtype?: string; annotationType?: number;
-              fieldName?: string; fullName?: string;
-              fieldValue?: unknown; currentValue?: unknown; defaultFieldValue?: unknown;
-            }>) {
-              // Widget annotations = form fields. Check both string subtype and numeric type (20).
-              const isWidget = ann.subtype === 'Widget' || ann.annotationType === 20
-              const name = ann.fieldName || ann.fullName
-              if (!isWidget || !name) continue
-              // Try fieldValue first, then currentValue, then defaultFieldValue
-              const raw = ann.fieldValue ?? ann.currentValue ?? ann.defaultFieldValue
-              if (typeof raw === 'string' && raw.trim() && !formFields.has(name)) {
-                formFields.set(name, raw.trim())
-              }
-            }
-          } catch { /* annotations optional */ }
-
-          // 2. Extract text content stream
-          const textContent = await page.getTextContent()
-          const pageText = (textContent.items as Array<{ str?: string }>)
-            .filter(item => typeof item.str === 'string')
-            .map(item => item.str as string)
-            .join(' ').trim()
-          if (pageText.length > 80) { textParts.push(pageText) }
-          else { chartPageNums.push(pageNum) }
-        }
-
-        // Prepend form fields block so it appears in the first chars read by detection
-        const formFieldsBlock = formFields.size > 0
-          ? `=== Form Fields ===\n${Array.from(formFields.entries()).map(([k, v]) => `${k}: ${v}`).join('\n')}\n=== End Form Fields ===\n\n`
-          : ''
-        extractedText = (formFieldsBlock + textParts.join('\n\n')).slice(0, 50000)
-
-        if (chartPageNums.length > 0) {
-          setUploadProgress(`Processing ${Math.min(chartPageNums.length, 8)} chart pages…`)
-          for (const pageNum of chartPageNums.slice(0, 8)) {
-            try {
-              const page = await pdf.getPage(pageNum)
-              const viewport = page.getViewport({ scale: 1.5 })
-              const canvas = document.createElement('canvas')
-              canvas.width = viewport.width
-              canvas.height = viewport.height
-              const ctx = canvas.getContext('2d')
-              if (!ctx) continue
-              await page.render({ canvasContext: ctx, viewport }).promise
-              const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8))
-              if (blob) {
-                const chartPath = `${project.id}/charts/${Date.now()}-page-${pageNum}.jpg`
-                const { error: chartErr } = await supabase.storage
-                  .from('project-materials').upload(chartPath, blob, { contentType: 'image/jpeg' })
-                if (!chartErr) chartImagePaths.push(chartPath)
-              }
-            } catch (err) { console.warn(`Chart render failed for page ${pageNum}:`, err) }
-          }
-        }
-      } catch (err) { console.warn('PDF processing failed:', err) }
+    for (const cb of chartBlobs) {
+      const chartPath = `${project.id}/charts/${Date.now()}-page-${cb.pageNum}.jpg`
+      const { error: chartErr } = await supabase.storage
+        .from('project-materials').upload(chartPath, cb.blob, { contentType: 'image/jpeg' })
+      if (!chartErr) chartImagePaths.push(chartPath)
     }
 
     setUploadProgress('Saving…')
@@ -6850,543 +6705,120 @@ export default function ProjectPage() {
                           </div>
                           ) : evaluation ? (
                           <div className="px-5 py-5">
-                            {(() => {
-                              const isCoach = evaluation.evaluation_mode === 'coach'
-                              const untapped = parseFloat((10 - evaluation.overall_score).toFixed(1))
-                              const displayScore = isCoach ? untapped : evaluation.overall_score
-                              return (
-                            <div className="flex items-start justify-between mb-4">
-                              <div>
-                                <div className="flex items-baseline gap-2 flex-wrap">
-                                  <span
-                                    className={`font-bold tabular-nums ${isCoach ? coachScoreColor(displayScore) : scoreColor(displayScore)}`}
-                                    style={{ fontFamily: '"Instrument Serif", "Times New Roman", serif', fontSize: '2.8rem', lineHeight: 1, letterSpacing: '-0.02em' }}
-                                  >
-                                    {displayScore.toFixed(1)}
-                                  </span>
-                                  <span className="text-gray-400" style={{ fontFamily: '"Instrument Serif", "Times New Roman", serif', fontSize: '1.25rem' }}>/10</span>
-                                  {/* Overall delta badge — shown as raw score change regardless of mode */}
-                                  {deltas?.['overall'] !== undefined && deltas['overall'] !== 0 && (
-                                    <span className={`text-sm font-bold tabular-nums px-2 py-0.5 rounded-full ${deltas['overall'] > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
-                                      {deltas['overall'] > 0 ? `↑ +${deltas['overall']}` : `↓ ${deltas['overall']}`}
-                                    </span>
-                                  )}
-                                  {deltas?.['overall'] === 0 && (
-                                    <span className="text-sm text-gray-400 px-2 py-0.5 rounded-full bg-gray-100">— No change</span>
-                                  )}
-                                  {/* Mode badge */}
-                                  {isCoach ? (
-                                    <span className="text-xs font-medium bg-green-100 text-green-800 border border-green-200 px-2 py-0.5 rounded-full">✦ Coach Review</span>
-                                  ) : (
-                                    <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">⚖ Jury Evaluation</span>
-                                  )}
-                                </div>
-                                {/* Coach: label the inverted score, then explain what it measures */}
-                                {isCoach && (
-                                  <p className="text-xs font-semibold text-gray-500 mt-1">untapped potential <span className="font-normal text-gray-400">— lower is better</span></p>
-                                )}
-                                <p className="text-xs text-gray-400 mt-0.5">
-                                  {isCoach
-                                    ? 'Estimated gap between this draft and your campaign\'s full potential'
-                                    : 'Scored on entry as written'}
-                                </p>
-                              </div>
-                              <p className="text-xs text-gray-400">
-                                {new Date(evaluation.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                              </p>
-                            </div>
-                              )
-                            })()}
-
-                            {/* Coach mode: explain that dimension scores still read higher = more covered */}
-                            {evaluation.evaluation_mode === 'coach' && (
-                              <p className="text-xs text-gray-400 italic mb-3">
-                                Dimension scores show how fully each aspect of your campaign&apos;s available material is represented in this draft. Higher = stronger coverage; lower = more to unlock in that area.
-                              </p>
-                            )}
-
-                            {/* AOY weight-aware jury (S75): per-section scores x section_weight.
-                                Replaces the fixed 6-dimension campaign grid for AOY entries. */}
-                            {(() => {
-                              const aoyOut = evaluation.output as unknown as {
-                                aoy?: boolean; pillar?: string; category_key?: string; weight_warning?: string | null;
-                                sections?: { key: string; label: string; weight: number; score: number; weighted_contribution: number; rationale: string; is_placeholder: boolean }[]
-                              } | null
-                              if (!aoyOut?.aoy) return null
-                              const secs = Array.isArray(aoyOut.sections) ? aoyOut.sections : []
-                              return (
-                                <div className="mb-5">
-                                  <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                    <span className="text-xs font-semibold text-gray-600">Weighted rubric: {aoyOut.category_key}</span>
-                                    {aoyOut.pillar && <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full capitalize">{aoyOut.pillar} pillar</span>}
-                                  </div>
-                                  {aoyOut.weight_warning && <p className="text-xs text-amber-600 mb-2">{aoyOut.weight_warning}</p>}
-                                  {(() => {
-                                    const maxWeight = secs.reduce((m, x) => Math.max(m, x.weight || 0), 1)
-                                    return (
-                                  <div className="space-y-2">
-                                    {secs.map(s => {
-                                      const sDelta = deltas?.[s.key]
-                                      return (
-                                        <div key={s.key} className={`border rounded-lg px-3 py-2.5 ${scoreBg(s.score)}`}>
-                                          <div className="flex items-baseline justify-between gap-2">
-                                            <p className="text-xs text-gray-700 font-medium min-w-0 flex-1">{s.label} <span className="text-gray-400 font-normal">{s.weight}% of score</span></p>
-                                            <div className="flex items-baseline gap-1.5 flex-shrink-0">
-                                              <p className={`text-lg font-bold tabular-nums ${scoreColor(s.score)}`}>{s.score}<span className="text-xs text-gray-400">/10</span></p>
-                                              {sDelta !== undefined && sDelta !== 0 && (
-                                                <span className={`text-xs font-semibold tabular-nums ${sDelta > 0 ? 'text-green-600' : 'text-red-500'}`}>{sDelta > 0 ? `↑+${sDelta}` : `↓${sDelta}`}</span>
-                                              )}
-                                            </div>
-                                          </div>
-                                          <div className="mt-1.5"><MeterBar fraction={(s.weight || 0) / maxWeight} /></div>
-                                          <p className="text-xs text-gray-400 mt-1 tabular-nums">Adds {s.weighted_contribution} to the weighted total{s.is_placeholder ? ' · section not written' : ''}</p>
-                                          {s.rationale && <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">{s.rationale}</p>}
-                                        </div>
-                                      )
-                                    })}
-                                  </div>
-                                    )
-                                  })()}
-                                </div>
-                              )
-                            })()}
-
-                            {/* SMARTIES qualitative jury (S92): per-section scores
-                                plus a holistic overall. SMARTIES publishes no section
-                                weighting, so there is no weighted total. Replaces the
-                                fixed campaign grid for SMARTIES entries. */}
-                            {(() => {
-                              const smOut = evaluation.output as unknown as {
-                                smarties?: boolean; category?: string | null;
-                                sections?: { field_key: string; label: string; score: number; rationale: string; is_placeholder: boolean }[]
-                              } | null
-                              if (!smOut?.smarties) return null
-                              const secs = Array.isArray(smOut.sections) ? smOut.sections : []
-                              return (
-                                <div className="mb-5">
-                                  <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                    <span className="text-xs font-semibold text-gray-600">SMARTIES case study{smOut.category ? `: ${smOut.category}` : ''}</span>
-                                    <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">holistic score, no published section weighting</span>
-                                  </div>
-                                  <div className="space-y-2">
-                                    {secs.map(s => {
-                                      const sDelta = deltas?.[s.field_key]
-                                      return (
-                                        <div key={s.field_key} className={`border rounded-lg px-3 py-2.5 ${scoreBg(s.score)}`}>
-                                          <div className="flex items-baseline justify-between gap-2">
-                                            <p className="text-xs text-gray-700 font-medium min-w-0 flex-1">{s.label}</p>
-                                            <div className="flex items-baseline gap-1.5 flex-shrink-0">
-                                              <p className={`text-lg font-bold tabular-nums ${scoreColor(s.score)}`}>{s.score}<span className="text-xs text-gray-400">/10</span></p>
-                                              {sDelta !== undefined && sDelta !== 0 && (
-                                                <span className={`text-xs font-semibold tabular-nums ${sDelta > 0 ? 'text-green-600' : 'text-red-500'}`}>{sDelta > 0 ? `↑+${sDelta}` : `↓${sDelta}`}</span>
-                                              )}
-                                            </div>
-                                          </div>
-                                          {s.is_placeholder && <p className="text-xs text-gray-400 mt-1">Section not written</p>}
-                                          {s.rationale && <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">{s.rationale}</p>}
-                                        </div>
-                                      )
-                                    })}
-                                  </div>
-                                </div>
-                              )
-                            })()}
-
-                            {/* Config jury (S98 Chunk 5): per-section breakdown from
-                                evaluate-entry-config, branching ONCE on scoring_mode.
-                                Weighted mirrors the AOY weighted panel (score x weight,
-                                weighted contribution, MeterBar); qualitative mirrors the
-                                SMARTIES panel (per-section 0-10, holistic overall shown
-                                in the header). This is the from-spec render that replaces
-                                per-show SMARTIES JSX. */}
-                            {(() => {
-                              const cfgOut = evaluation.output as unknown as {
-                                config?: boolean; scoring_mode?: 'weighted' | 'qualitative'
-                                category_key?: string | null; category?: string | null; weight_warning?: string | null
-                                sections?: { key?: string; field_key?: string; label: string; weight?: number; score: number; weighted_contribution?: number; rationale: string; is_placeholder: boolean }[]
-                              } | null
-                              if (!cfgOut?.config) return null
-                              const secs = Array.isArray(cfgOut.sections) ? cfgOut.sections : []
-                              const isWeighted = cfgOut.scoring_mode === 'weighted'
-                              const cat = cfgOut.category_key ?? cfgOut.category ?? null
-                              const maxWeight = isWeighted ? secs.reduce((m, x) => Math.max(m, x.weight || 0), 1) : 1
-                              return (
-                                <div className="mb-5">
-                                  <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                    <span className="text-xs font-semibold text-gray-600">{isWeighted ? 'Weighted rubric' : 'Case study'}{cat ? `: ${cat}` : ''}</span>
-                                    <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">{isWeighted ? 'config jury' : 'holistic score, no published section weighting'}</span>
-                                  </div>
-                                  {isWeighted && cfgOut.weight_warning && <p className="text-xs text-amber-600 mb-2">{cfgOut.weight_warning}</p>}
-                                  <div className="space-y-2">
-                                    {secs.map((s, i) => {
-                                      const sKey = s.key ?? s.field_key ?? String(i)
-                                      const sDelta = deltas?.[sKey]
-                                      return (
-                                        <div key={sKey} className={`border rounded-lg px-3 py-2.5 ${scoreBg(s.score)}`}>
-                                          <div className="flex items-baseline justify-between gap-2">
-                                            <p className="text-xs text-gray-700 font-medium min-w-0 flex-1">{s.label}{isWeighted && typeof s.weight === 'number' ? <span className="text-gray-400 font-normal"> {s.weight}% of score</span> : null}</p>
-                                            <div className="flex items-baseline gap-1.5 flex-shrink-0">
-                                              <p className={`text-lg font-bold tabular-nums ${scoreColor(s.score)}`}>{s.score}<span className="text-xs text-gray-400">/10</span></p>
-                                              {sDelta !== undefined && sDelta !== 0 && (
-                                                <span className={`text-xs font-semibold tabular-nums ${sDelta > 0 ? 'text-green-600' : 'text-red-500'}`}>{sDelta > 0 ? `↑+${sDelta}` : `↓${sDelta}`}</span>
-                                              )}
-                                            </div>
-                                          </div>
-                                          {isWeighted && <div className="mt-1.5"><MeterBar fraction={(s.weight || 0) / maxWeight} /></div>}
-                                          {isWeighted && typeof s.weighted_contribution === 'number' && <p className="text-xs text-gray-400 mt-1 tabular-nums">Adds {s.weighted_contribution} to the weighted total{s.is_placeholder ? ' · section not written' : ''}</p>}
-                                          {!isWeighted && s.is_placeholder && <p className="text-xs text-gray-400 mt-1">Section not written</p>}
-                                          {s.rationale && <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">{s.rationale}</p>}
-                                        </div>
-                                      )
-                                    })}
-                                  </div>
-                                </div>
-                              )
-                            })()}
-
-                            {/* AOY market-context modifier (S85, Phase 3, Option B):
-                                a bounded, source-cited adjustment shown ALONGSIDE the
-                                calibrated raw score. The raw score never changes; every
-                                nonzero delta names the sourced market fact behind it. */}
-                            {(() => {
-                              const isAoyJudge = !!(evaluation.output as unknown as { aoy?: boolean } | null)?.aoy && evaluation.evaluation_mode === 'judge'
-                              if (!isAoyJudge) return null
-                              const adj = aoyMarketAdj[dirId]
-                              const showAdj = !!adj && adj.evaluation_id === evaluation.id
-                              const busy = marketAdjusting === dirId
-                              const err = marketAdjustError[dirId]
-                              const mc = showAdj ? adj.market_context : null
-                              return (
-                                <div className="mb-5 border border-gray-200 rounded-lg px-3 py-3 bg-gray-50">
-                                  <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
-                                    <span className="text-xs font-semibold text-gray-600">Market context</span>
-                                    {!showAdj && (
-                                      <button
-                                        onClick={() => applyAoyMarket(dirId, evaluation.id)}
-                                        disabled={busy}
-                                        className="text-xs font-medium bg-green-800 hover:bg-green-700 text-white px-2.5 py-1 rounded-full disabled:opacity-50"
-                                      >
-                                        {busy ? 'Adjusting...' : 'Apply market context'}
-                                      </button>
+                            {/* S160 refactor: the eval payoff render (score header, AOY/
+                                SMARTIES/config section breakdowns, 6-dim grid, jury-read /
+                                coach output, legacy fallback, changes analysis, fix-this
+                                chips) now lives in the reusable EvalBreakdown component.
+                                Page-coupled pieces ride in as slots/props below. */}
+                            <EvalBreakdown
+                              evaluation={evaluation}
+                              deltas={deltas}
+                              fixChips={{
+                                open: fixChipsOpen[dirId] ?? false,
+                                selected: draftFocusItems[dirId] || [],
+                                onToggleOpen: () => setFixChipsOpen(prev => ({ ...prev, [dirId]: !(prev[dirId] ?? false) })),
+                                onToggleItem: (item) => toggleFocusItem(dirId, item),
+                              }}
+                              marketContextSlot={(() => {
+                                /* AOY market-context modifier (S85, Phase 3, Option B):
+                                   a bounded, source-cited adjustment shown ALONGSIDE the
+                                   calibrated raw score. The raw score never changes; every
+                                   nonzero delta names the sourced market fact behind it. */
+                                const isAoyJudge = !!(evaluation.output as unknown as { aoy?: boolean } | null)?.aoy && evaluation.evaluation_mode === 'judge'
+                                if (!isAoyJudge) return null
+                                const adj = aoyMarketAdj[dirId]
+                                const showAdj = !!adj && adj.evaluation_id === evaluation.id
+                                const busy = marketAdjusting === dirId
+                                const err = marketAdjustError[dirId]
+                                const mc = showAdj ? adj.market_context : null
+                                return (
+                                  <div className="mb-5 border border-gray-200 rounded-lg px-3 py-3 bg-gray-50">
+                                    <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+                                      <span className="text-xs font-semibold text-gray-600">Market context</span>
+                                      {!showAdj && (
+                                        <button
+                                          onClick={() => applyAoyMarket(dirId, evaluation.id)}
+                                          disabled={busy}
+                                          className="text-xs font-medium bg-green-800 hover:bg-green-700 text-white px-2.5 py-1 rounded-full disabled:opacity-50"
+                                        >
+                                          {busy ? 'Adjusting...' : 'Apply market context'}
+                                        </button>
+                                      )}
+                                    </div>
+                                    <p className="text-xs text-gray-400 mb-2">A bounded, sourced adjustment (max ±{adj?.cap ?? 0.5} per section) on top of the calibrated score. The raw score is never altered.</p>
+                                    {err && <p className="text-xs text-red-600 mb-2">{err}</p>}
+                                    {showAdj && adj.no_baseline && (
+                                      <p className="text-xs text-gray-500">No verified market baseline on file for this market and cycle. The raw score stands.</p>
                                     )}
-                                  </div>
-                                  <p className="text-xs text-gray-400 mb-2">A bounded, sourced adjustment (max ±{adj?.cap ?? 0.5} per section) on top of the calibrated score. The raw score is never altered.</p>
-                                  {err && <p className="text-xs text-red-600 mb-2">{err}</p>}
-                                  {showAdj && adj.no_baseline && (
-                                    <p className="text-xs text-gray-500">No verified market baseline on file for this market and cycle. The raw score stands.</p>
-                                  )}
-                                  {showAdj && !adj.no_baseline && (
-                                    <>
-                                      <div className="flex items-baseline gap-3 flex-wrap mb-2">
-                                        <span className="text-xs text-gray-500">Raw <span className="font-bold tabular-nums text-gray-700">{adj.raw_overall.toFixed(1)}</span><span className="text-gray-400">/10</span></span>
-                                        <span className="text-xs text-gray-500">Market-adjusted{' '}
-                                          <span className={`font-bold tabular-nums ${adj.overall_delta > 0 ? 'text-green-700' : adj.overall_delta < 0 ? 'text-red-600' : 'text-gray-700'}`}>{adj.adjusted_overall.toFixed(1)}</span><span className="text-gray-400">/10</span>
-                                          {adj.overall_delta !== 0 && <span className={`ml-1 font-semibold ${adj.overall_delta > 0 ? 'text-green-600' : 'text-red-500'}`}>{adj.overall_delta > 0 ? `+${adj.overall_delta}` : adj.overall_delta}</span>}
-                                        </span>
-                                        {mc && (
-                                          <span className="text-xs font-medium bg-white text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">
-                                            {mc.market}{mc.fallback_to_all ? ' (all-market)' : ` (${mc.discipline})`} · {mc.window_start} to {mc.window_end}
+                                    {showAdj && !adj.no_baseline && (
+                                      <>
+                                        <div className="flex items-baseline gap-3 flex-wrap mb-2">
+                                          <span className="text-xs text-gray-500">Raw <span className="font-bold tabular-nums text-gray-700">{adj.raw_overall.toFixed(1)}</span><span className="text-gray-400">/10</span></span>
+                                          <span className="text-xs text-gray-500">Market-adjusted{' '}
+                                            <span className={`font-bold tabular-nums ${adj.overall_delta > 0 ? 'text-green-700' : adj.overall_delta < 0 ? 'text-red-600' : 'text-gray-700'}`}>{adj.adjusted_overall.toFixed(1)}</span><span className="text-gray-400">/10</span>
+                                            {adj.overall_delta !== 0 && <span className={`ml-1 font-semibold ${adj.overall_delta > 0 ? 'text-green-600' : 'text-red-500'}`}>{adj.overall_delta > 0 ? `+${adj.overall_delta}` : adj.overall_delta}</span>}
                                           </span>
-                                        )}
-                                      </div>
-                                      {adj.note && <p className="text-xs text-gray-500 mb-2 leading-relaxed">{adj.note}</p>}
-                                      <div className="space-y-1">
-                                        {adj.sections.filter(s => s.delta !== 0).map(s => (
-                                          <div key={s.key} className="text-xs text-gray-600 leading-relaxed">
-                                            <span className="font-medium">{s.label}</span>{' '}
-                                            <span className={`font-semibold tabular-nums ${s.delta > 0 ? 'text-green-600' : 'text-red-500'}`}>{s.delta > 0 ? `+${s.delta}` : s.delta}</span>{' '}
-                                            <span className="text-gray-400 tabular-nums">({s.raw_score} to {s.adjusted_score})</span>
-                                            {s.rationale && <span className="text-gray-500"> · {s.rationale}</span>}
-                                          </div>
-                                        ))}
-                                        {adj.sections.every(s => s.delta === 0) && (
-                                          <p className="text-xs text-gray-400">No section moved: the market did not materially change how this entry reads.</p>
-                                        )}
-                                      </div>
-                                      {mc && mc.figures.length > 0 && (
-                                        <div className="mt-2 pt-2 border-t border-gray-200">
-                                          <p className="text-xs text-gray-400 mb-1">Sourced market figures</p>
-                                          <ul className="space-y-0.5">
-                                            {mc.figures.map((f, i) => (
-                                              <li key={i} className="text-xs text-gray-500">
-                                                {f.figure}: {f.value}{f.scope ? ` [${f.scope}]` : ''}
-                                                {f.url && <> · <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-green-700 underline">source</a></>}
-                                              </li>
-                                            ))}
-                                          </ul>
+                                          {mc && (
+                                            <span className="text-xs font-medium bg-white text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">
+                                              {mc.market}{mc.fallback_to_all ? ' (all-market)' : ` (${mc.discipline})`} · {mc.window_start} to {mc.window_end}
+                                            </span>
+                                          )}
                                         </div>
-                                      )}
-                                    </>
-                                  )}
-                                </div>
-                              )
-                            })()}
-
-                            {!((evaluation.output as unknown as { aoy?: boolean } | null)?.aoy) && !((evaluation.output as unknown as { smarties?: boolean } | null)?.smarties) && !((evaluation.output as unknown as { config?: boolean } | null)?.config) && (
-                            <div className="grid grid-cols-3 gap-2 mb-5">
-                              {SCORE_DIMENSIONS.map(dim => {
-                                const score = evaluation.scores[dim.key] ?? 0
-                                const delta = deltas?.[dim.key]
-                                return (
-                                  <div key={dim.key} className={`border rounded-lg px-3 py-2.5 ${scoreBg(score)}`}>
-                                    <p className="text-xs text-gray-500 mb-1">{dim.label}</p>
-                                    <div className="flex items-baseline gap-1.5">
-                                      <p className={`text-xl font-bold tabular-nums ${scoreColor(score)}`}>{score}</p>
-                                      {delta !== undefined && delta !== 0 && (
-                                        <span className={`text-xs font-semibold tabular-nums ${delta > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                                          {delta > 0 ? `↑+${delta}` : `↓${delta}`}
-                                        </span>
-                                      )}
-                                      {delta === 0 && (
-                                        <span className="text-xs text-gray-400">—</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                )
-                              })}
-                              {/* Brief Alignment — coach mode only */}
-                              {evaluation.scores.brief_alignment !== undefined && (() => {
-                                const baScore = evaluation.scores.brief_alignment
-                                const baDelta = deltas?.['brief_alignment']
-                                return (
-                                  <div className={`border-2 border-dashed rounded-lg px-3 py-2.5 ${scoreBg(baScore)}`}>
-                                    <p className="text-xs text-gray-500 mb-1">Brief Alignment</p>
-                                    <div className="flex items-baseline gap-1.5">
-                                      <p className={`text-xl font-bold tabular-nums ${scoreColor(baScore)}`}>{baScore}</p>
-                                      {baDelta !== undefined && baDelta !== 0 && (
-                                        <span className={`text-xs font-semibold tabular-nums ${baDelta > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                                          {baDelta > 0 ? `↑+${baDelta}` : `↓${baDelta}`}
-                                        </span>
-                                      )}
-                                      {baDelta === 0 && (
-                                        <span className="text-xs text-gray-400">—</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                )
-                              })()}
-                            </div>
-                            )}
-
-                            {/* ── v3 output: mode-specific display ─────────────────────── */}
-                            {evaluation.output ? (
-                              <>
-                                {evaluation.evaluation_mode === 'judge' ? (
-                                  /* ── Judge mode: talks_up / kills_it / recommendations ── */
-                                  (() => {
-                                    const o = evaluation.output as JudgeOutput
-                                    return (
-                                      <>
-                                        {/* What Jurors Will Talk Up */}
-                                        {o.talks_up && o.talks_up.length > 0 && (
-                                          <div className="mb-5">
-                                            <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-3">What Jurors Will Talk Up</p>
-                                            <div className="space-y-2.5">
-                                              {o.talks_up.map((s, i) => (
-                                                <div key={i} className="bg-green-50 border-l-4 border-green-500 rounded-r-lg px-4 py-3">
-                                                  <p className="text-sm text-gray-800 leading-relaxed italic">&ldquo;{s}&rdquo;</p>
-                                                </div>
-                                              ))}
+                                        {adj.note && <p className="text-xs text-gray-500 mb-2 leading-relaxed">{adj.note}</p>}
+                                        <div className="space-y-1">
+                                          {adj.sections.filter(s => s.delta !== 0).map(s => (
+                                            <div key={s.key} className="text-xs text-gray-600 leading-relaxed">
+                                              <span className="font-medium">{s.label}</span>{' '}
+                                              <span className={`font-semibold tabular-nums ${s.delta > 0 ? 'text-green-600' : 'text-red-500'}`}>{s.delta > 0 ? `+${s.delta}` : s.delta}</span>{' '}
+                                              <span className="text-gray-400 tabular-nums">({s.raw_score} to {s.adjusted_score})</span>
+                                              {s.rationale && <span className="text-gray-500"> · {s.rationale}</span>}
                                             </div>
-                                          </div>
-                                        )}
-
-                                        {/* Where Jurors Will Kill Your Entry */}
-                                        {o.kills_it && o.kills_it.length > 0 && (
-                                          <div className="mb-5">
-                                            <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-3">Where Jurors Will Kill Your Entry</p>
-                                            <div className="space-y-2.5">
-                                              {o.kills_it.map((g, i) => (
-                                                <div key={i} className="bg-red-50 border-l-4 border-red-400 rounded-r-lg px-4 py-3">
-                                                  <p className="text-sm text-gray-800 leading-relaxed italic">&ldquo;{g}&rdquo;</p>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          </div>
-                                        )}
-
-                                        {/* Recommendations */}
-                                        {o.recommendations && (
-                                          <div className="mb-5">
-                                            <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">Recommendations to Help Your Chances</p>
-                                            <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{o.recommendations}</p>
-                                          </div>
-                                        )}
-
-                                        {/* Campaign name note */}
-                                        {o.campaign_name_note && (
-                                          <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
-                                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">On the Campaign Name</p>
-                                            <p className="text-sm text-gray-700 leading-relaxed">{o.campaign_name_note}</p>
-                                          </div>
-                                        )}
-
-                                        {/* Session 57: the Next Step card moved from here into the
-                                            "✦ Recommended Next Steps" tab on the eval view strip
-                                            (activeView === 'nextsteps'). Do not reintroduce it inline. */}
-                                      </>
-                                    )
-                                  })()
-                                ) : (
-                                  /* ── Coach mode: focus_point / priority_fixes / cuts ── */
-                                  (() => {
-                                    const o = evaluation.output as CoachOutput
-                                    return (
-                                      <>
-                                        {/* Strongest Asset */}
-                                        {o.focus_point && (
-                                          <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-5">
-                                            <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-2">✦ Your Entry&apos;s Strongest Asset</p>
-                                            <p className="text-sm text-gray-800 leading-relaxed">{o.focus_point}</p>
-                                          </div>
-                                        )}
-
-                                        {/* Priority Fixes */}
-                                        {o.priority_fixes && o.priority_fixes.length > 0 && (
-                                          <div className="mb-5">
-                                            <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">Priority Fixes — Biggest Impact First</p>
-                                            <div className="space-y-3">
-                                              {o.priority_fixes.map((pf, i) => (
-                                                <div key={i} className="border border-gray-200 rounded-xl p-4">
-                                                  <p className="text-sm font-semibold text-gray-900 mb-1.5">{i + 1}. {pf.fix}</p>
-                                                  <p className="text-xs text-gray-600 mb-1"><span className="font-medium">Why: </span>{pf.why}</p>
-                                                  <p className="text-xs text-green-700"><span className="font-medium">How: </span>{pf.action}</p>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          </div>
-                                        )}
-
-                                        {/* What to Cut */}
-                                        {o.cuts && o.cuts.length > 0 && (
-                                          <div>
-                                            <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-3">What to Cut</p>
-                                            <ul className="space-y-2.5">
-                                              {o.cuts.map((c, i) => (
-                                                <li key={i} className="text-sm text-gray-700 leading-relaxed flex gap-2">
-                                                  <span className="text-red-500 flex-shrink-0 mt-0.5">✗</span>
-                                                  <span>{c}</span>
+                                          ))}
+                                          {adj.sections.every(s => s.delta === 0) && (
+                                            <p className="text-xs text-gray-400">No section moved: the market did not materially change how this entry reads.</p>
+                                          )}
+                                        </div>
+                                        {mc && mc.figures.length > 0 && (
+                                          <div className="mt-2 pt-2 border-t border-gray-200">
+                                            <p className="text-xs text-gray-400 mb-1">Sourced market figures</p>
+                                            <ul className="space-y-0.5">
+                                              {mc.figures.map((f, i) => (
+                                                <li key={i} className="text-xs text-gray-500">
+                                                  {f.figure}: {f.value}{f.scope ? ` [${f.scope}]` : ''}
+                                                  {f.url && <> · <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-green-700 underline">source</a></>}
                                                 </li>
                                               ))}
                                             </ul>
                                           </div>
                                         )}
                                       </>
-                                    )
-                                  })()
-                                )}
-                              </>
-                            ) : (
-                              /* ── Legacy display (v1/v2 evaluations — strengths/gaps/recommendations) ── */
-                              <>
-                                <div className="grid grid-cols-2 gap-5 mb-5">
-                                  <div>
-                                    <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-3">Strengths</p>
-                                    <ul className="space-y-2.5">
-                                      {evaluation.strengths.map((s, i) => (
-                                        <li key={i} className="text-sm text-gray-700 leading-relaxed flex gap-2">
-                                          <span className="text-green-700 flex-shrink-0 mt-0.5">✓</span>
-                                          <span>{s}</span>
-                                        </li>
-                                      ))}
-                                    </ul>
+                                    )}
                                   </div>
-                                  <div>
-                                    <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-3">Gaps</p>
-                                    <ul className="space-y-2.5">
-                                      {evaluation.gaps.map((g, i) => (
-                                        <li key={i} className="text-sm text-gray-700 leading-relaxed flex gap-2">
-                                          <span className="text-red-600 flex-shrink-0 mt-0.5">✗</span>
-                                          <span>{g}</span>
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                </div>
-                                <div>
-                                  <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">Recommendations</p>
-                                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{evaluation.recommendations}</p>
-                                </div>
-                              </>
-                            )}
-
-                            {/* Notable changes — shown when a changes_analysis is present (comparison re-evaluation) */}
-                            {evaluation.changes_analysis && (
-                              <div className="mt-5 pt-4 border-t border-gray-200">
-                                <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-2">Notable Changes</p>
-                                <p className="text-sm text-gray-700 leading-relaxed">{evaluation.changes_analysis}</p>
-                              </div>
-                            )}
-
-                            {/* Fix-this chips — user selects which issues to prioritise */}
-                            {(() => {
-                              const o = evaluation.output as EvaluationOutput | null
-                              const judgeOutput = evaluation.evaluation_mode === 'judge' ? o as JudgeOutput | null : null
-                              const coachOutput = evaluation.evaluation_mode === 'coach' ? o as CoachOutput | null : null
-                              const chipItems: string[] =
-                                judgeOutput?.kills_it?.length ? judgeOutput.kills_it :
-                                coachOutput?.priority_fixes?.length ? coachOutput.priority_fixes.map(pf => pf.fix) :
-                                evaluation.gaps?.length ? evaluation.gaps : []
-                              if (chipItems.length === 0) return null
-                              const selected = draftFocusItems[dirId] || []
-                              return (
+                                )
+                              })()}
+                              improveCtaSlot={
+                                /* Generate Improved Draft — prominent CTA anchored to this evaluation */
                                 <div className="mt-5 pt-4 border-t border-gray-200">
                                   <button
-                                    type="button"
-                                    onClick={() => setFixChipsOpen(prev => ({ ...prev, [dirId]: !(prev[dirId] ?? false) }))}
-                                    className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 hover:text-gray-700 transition-colors"
+                                    onClick={() => generateDraft(dirId, evaluation.id)}
+                                    disabled={generatingDraft || evaluating}
+                                    className="w-full bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-5 py-3 rounded transition-colors flex items-center justify-center gap-2"
                                   >
-                                    Focus the next draft on…
-                                    <span className="text-gray-400">{(fixChipsOpen[dirId] ?? false) ? '▲' : '▼'}</span>
+                                    {isGeneratingThis ? (
+                                      <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Writing improved draft…</>
+                                    ) : (
+                                      <>✦ Generate Improved Draft from this {evaluation.evaluation_mode === 'coach' ? 'Coach Review' : 'Jury Evaluation'}</>
+                                    )}
                                   </button>
-                                  {(fixChipsOpen[dirId] ?? false) && (<>
-                                  <div className="flex flex-wrap gap-2">
-                                    {chipItems.map((item, i) => {
-                                      const active = selected.includes(item)
-                                      return (
-                                        <button
-                                          key={i}
-                                          type="button"
-                                          onClick={() => toggleFocusItem(dirId, item)}
-                                          className={`text-xs px-3 py-1.5 rounded-full border transition-colors text-left ${
-                                            active
-                                              ? 'bg-green-800 text-white border-green-800'
-                                              : 'bg-white text-gray-600 border-gray-300 hover:border-green-600 hover:text-green-700'
-                                          }`}
-                                        >
-                                          {active ? '✓ ' : ''}{item.length > 60 ? item.slice(0, 57) + '…' : item}
-                                        </button>
-                                      )
-                                    })}
-                                  </div>
-                                  {selected.length > 0 && (
-                                    <p className="text-xs text-green-700 mt-2">{selected.length} issue{selected.length > 1 ? 's' : ''} selected — the draft will prioritise these above all others.</p>
+                                  <p className="text-xs text-gray-400 text-center mt-2">
+                                    The new draft will directly address every gap and recommendation above. Previous drafts are kept for comparison.
+                                  </p>
+                                  {generateDraftError && generateDraftErrorDirId === dirId && (
+                                    <div className="mt-3"><ErrorBanner error={generateDraftError} /></div>
                                   )}
-                                  </>)}
                                 </div>
-                              )
-                            })()}
-
-                            {/* Generate Improved Draft — prominent CTA anchored to this evaluation */}
-                            <div className="mt-5 pt-4 border-t border-gray-200">
-                              <button
-                                onClick={() => generateDraft(dirId, evaluation.id)}
-                                disabled={generatingDraft || evaluating}
-                                className="w-full bg-green-800 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-5 py-3 rounded transition-colors flex items-center justify-center gap-2"
-                              >
-                                {isGeneratingThis ? (
-                                  <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Writing improved draft…</>
-                                ) : (
-                                  <>✦ Generate Improved Draft from this {evaluation.evaluation_mode === 'coach' ? 'Coach Review' : 'Jury Evaluation'}</>
-                                )}
-                              </button>
-                              <p className="text-xs text-gray-400 text-center mt-2">
-                                The new draft will directly address every gap and recommendation above. Previous drafts are kept for comparison.
-                              </p>
-                              {generateDraftError && generateDraftErrorDirId === dirId && (
-                                <div className="mt-3"><ErrorBanner error={generateDraftError} /></div>
-                              )}
-                            </div>
+                              }
+                            />
                           </div>
                           ) : null}
                             </div>{/* /collapsible eval breakdown (S152) */}

@@ -12,10 +12,12 @@
 // upload them (the storage key needs a project id the caller owns). It performs
 // NO network or Supabase calls.
 //
-// NOTE (S158): the project page still has its own inline copy of this logic.
-// This module is not yet wired back into that page — that consolidation belongs
-// to the planned projects/[id] refactor session, not the /start build. Until
-// then, if the page's extraction changes, mirror it here.
+// S160: the project page's Materials-tab handleFileUpload is now wired to this
+// module (the S158 inline copy was removed), so this is the ONLY extraction
+// path. The Video Script tab's handleScriptFileUpload keeps its own simpler
+// extractor DELIBERATELY (no AcroForm pass, no chart rendering, 10-char page
+// threshold vs 80): scripts are prose documents, not entry PDFs. Do not
+// "unify" it here without deciding those behavior changes explicitly.
 
 export type ChartBlob = { pageNum: number; blob: Blob }
 export type ExtractResult = {
