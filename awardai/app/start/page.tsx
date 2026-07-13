@@ -229,7 +229,14 @@ export default function StartPage() {
       const orgId = await resolveMyOrgId()
 
       const quickIsSmarties = isSmartiesShow(showT)
-      const configMode = (quickIsAoy || quickIsSmarties) ? null : await resolveConfigMode(showT, category.trim())
+      // SMARTIES resolves to a config (qualitative) entry_form, so it MUST route
+      // through segment-entry-config (which writes the structured field_values the
+      // ConfigEntryCanvas reads), exactly like the project-page Quick Eval — NOT be
+      // force-nulled onto the legacy segment-smarties-entry pair (version_a only, no
+      // field_values), which made the project page show every section as the
+      // "predates the structured form" fallback. The dedicated smarties pair stays the
+      // fallback in the ternaries below for when the form does not resolve.
+      const configMode = quickIsAoy ? null : await resolveConfigMode(showT, category.trim())
       const sectionPath = quickIsAoy || quickIsSmarties || !!configMode
 
       setProgress('Setting up the evaluation…')
