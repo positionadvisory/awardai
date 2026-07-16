@@ -49,21 +49,9 @@ const BudgetPlanner = dynamic(
   }
 )
 
-const RoiRanking = dynamic(
-  () => import('@/components/shows/RoiRanking'),
-  {
-    ssr: false,
-    loading: () => (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '8rem' }}>
-        <span style={{ fontSize: '0.875rem', color: '#9ca3af' }}>Loading ROI rankings…</span>
-      </div>
-    ),
-  }
-)
-
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-type DrawerTab = 'calendar' | 'budget' | 'roi'
+type DrawerTab = 'calendar' | 'budget'
 
 type Direction = {
   id: number
@@ -177,7 +165,6 @@ export default function ShowsDrawer({
           {([
             { key: 'calendar' as DrawerTab, label: 'Timeline',       icon: '📅' },
             { key: 'budget'   as DrawerTab, label: 'Budget Planner',  icon: '📋' },
-            { key: 'roi'      as DrawerTab, label: 'ROI Index',       icon: '📊' },
           ] as { key: DrawerTab; label: string; icon: string }[]).map(t => (
             <button
               key={t.key}
@@ -226,7 +213,6 @@ export default function ShowsDrawer({
               prefilledShow={prefilledShow}
             />
           )}
-          {tab === 'roi' && <RoiRanking />}
         </div>
 
         {/* Footer */}
