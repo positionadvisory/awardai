@@ -30,10 +30,10 @@ const WRITABLE_FIELDS = [
   'logo_url',
 ] as const
 
-// Resolves the caller to their org_id, or returns an error response.
+// Resolves the caller to their org_id + identity, or returns an error response.
 async function resolveCallerOrg(
   req: NextRequest
-): Promise<{ orgId: number } | { errorResponse: NextResponse }> {
+): Promise<{ orgId: number; callerId: string; callerEmail: string | null } | { errorResponse: NextResponse }> {
   const authHeader = req.headers.get('Authorization') ?? ''
   const jwt = authHeader.replace('Bearer ', '')
   if (!jwt) {
@@ -56,12 +56,13 @@ async function resolveCallerOrg(
     return { errorResponse: NextResponse.json({ error: 'No organization found' }, { status: 403 }) }
   }
 
-  return { orgId: profile.org_id }
+  return { orgId: profile.org_id, callerId: user.id, callerEmail: user.email ?? null }
 }
 
-// ── PATCH /api/agency-profile — update contact / logo fields ────────────────
+// ── PATCH /api/agency-profile — update contact / logo / prefs fields ────────
 // Headers: Authorization: Bearer <session access token>
-// Body: any subset of WRITABLE_FIELDS. Returns the updated row.
+// Body: any subset of WRITABLE_FIELDS, cost_defaults, or planner_prefs. Returns
+// the updated row.
 export async function PATCH(req: NextRequest) {
   try {
     const caller = await resolveCallerOrg(req)
@@ -85,6 +86,21 @@ export async function PATCH(req: NextRequest) {
         updates.cost_defaults = cd
       } else {
         return NextResponse.json({ error: 'cost_defaults must be an object' }, { status: 400 })
+      }
+    }
+    // planner_prefs is a jsonb object set by the Portfolio Planner v2 page
+    // (Planner-v2-SPEC-2026-07.md). Same rule as cost_defaults: agency_profiles
+    // has zero client direct writes, so the planner saves through here. Validate
+    // it is a plain object, and STAMP updated_by server-side from the
+    // authenticated caller — never trust a client-supplied updated_by (spoofable).
+    if ('planner_prefs' in body) {
+      const pp = body.planner_prefs
+      if (pp === null) {
+        updates.planner_prefs = null
+      } else if (typeof pp === 'object' && !Array.isArray(pp)) {
+        updates.planner_prefs = { ...pp, updated_by: caller.callerEmail ?? caller.callerId }
+      } else {
+        return NextResponse.json({ error: 'planner_prefs must be an object' }, { status: 400 })
       }
     }
     if (Object.keys(updates).length === 0) {
