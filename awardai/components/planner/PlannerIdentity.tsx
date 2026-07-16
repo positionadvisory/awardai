@@ -4,14 +4,17 @@
  * =============================================================================
  * Planner-v2-SPEC-2026-07.md USER MODEL & FLOW v2 §Step 0. Pre-filled from
  * agency_profiles (org_type + agency_city/office_locations), always
- * user-confirmable. Captures the NEW first-class input Part 2 was missing:
- * discipline (media / creative / PR / mobile-performance / full-service),
- * stored user-owned in planner_prefs. Suggested maturity tier is DERIVED from
- * project history and shown as a suggestion — never auto-set silently (spec).
+ * user-confirmable.
+ *
+ * P2.1 #6: "Home market / region" is now a SELECT over the PlannerRegion enum,
+ * not a free-text box. The region gate in derivePlan is only reliable if the
+ * region is one of the known buckets; the page seeds the default by running the
+ * derived city through normalizeUserRegion (lib/planner-facets.ts), and the user
+ * confirms/changes it here. A free-text city could not be matched deterministically
+ * against show regions — that was the mechanism behind the wrong-market bug.
  *
  * Controlled/presentational: no fetch, no derivation. The page owns the input
- * state and the derivation (lib/planner-engine.ts). A `compact` layout lets
- * this same control render inline on the result screen (edit-in-place).
+ * state and the derivation. A `compact` layout renders inline on the result screen.
  * =============================================================================
  */
 
@@ -20,6 +23,7 @@ import type {
   PlannerMaturity,
   PlannerOrgType,
 } from '@/lib/planner-engine'
+import type { PlannerRegion } from '@/lib/planner-facets'
 
 type IdentityValue = {
   discipline: PlannerAgencyDiscipline
@@ -52,6 +56,17 @@ const ORG_TYPE_OPTIONS: { value: PlannerOrgType; label: string }[] = [
   { value: 'brand', label: 'In-house brand team' },
 ]
 
+/** The PlannerRegion enum, with plain-language labels for the picker (P2.1 #6). */
+const REGION_OPTIONS: { value: PlannerRegion; label: string }[] = [
+  { value: 'APAC', label: 'Asia-Pacific (APAC)' },
+  { value: 'China', label: 'China' },
+  { value: 'Australia', label: 'Australia / New Zealand' },
+  { value: 'Europe', label: 'Europe (incl. UK)' },
+  { value: 'MENA', label: 'Middle East & Africa (MENA)' },
+  { value: 'North America', label: 'North America (US & Canada)' },
+  { value: 'Global', label: 'Global / multi-market' },
+]
+
 const MATURITY_OPTIONS: { value: PlannerMaturity; label: string }[] = [
   { value: 'beginner', label: 'Beginner' },
   { value: 'intermediate', label: 'Intermediate' },
@@ -63,6 +78,10 @@ const selectClass =
 const labelClass = 'block text-xs font-semibold text-gray-500 mb-1'
 
 export default function PlannerIdentity({ value, onChange, suggestedMaturity, compact }: Props) {
+  // The region value should be one of the enum options; if a legacy free-text
+  // value slips through, the select falls back to showing 'Global'.
+  const regionValue = REGION_OPTIONS.some(o => o.value === value.region) ? value.region : 'Global'
+
   return (
     <div className={compact ? 'grid grid-cols-1 sm:grid-cols-2 gap-3' : 'grid grid-cols-1 sm:grid-cols-2 gap-4'}>
       <div>
@@ -79,7 +98,7 @@ export default function PlannerIdentity({ value, onChange, suggestedMaturity, co
         </select>
         {!compact && (
           <p className="text-xs text-gray-400 mt-1">
-            Filters the show universe. Full-service sees every discipline.
+            Leans the plan toward your discipline&apos;s shows. Full-service leans on none.
           </p>
         )}
       </div>
@@ -105,14 +124,21 @@ export default function PlannerIdentity({ value, onChange, suggestedMaturity, co
 
       <div>
         <label className={labelClass} htmlFor="planner-region">Home market / region</label>
-        <input
+        <select
           id="planner-region"
-          type="text"
           className={selectClass}
-          value={value.region}
-          placeholder="e.g. Singapore, APAC"
+          value={regionValue}
           onChange={e => onChange({ region: e.target.value })}
-        />
+        >
+          {REGION_OPTIONS.map(o => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        {!compact && (
+          <p className="text-xs text-gray-400 mt-1">
+            Filters shows to the ones you can actually enter. Global shows always show.
+          </p>
+        )}
       </div>
 
       <div>

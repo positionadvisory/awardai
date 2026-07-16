@@ -3,7 +3,7 @@
  * app/planner/page.tsx — Portfolio Planner v2, the five-step flow.
  * =============================================================================
  * Planner-v2-SPEC-2026-07.md Part 2 as amended by the PRE-BUILD DELTA + USER
- * MODEL & FLOW v2 sections (the amendments win). Build session P2.
+ * MODEL & FLOW v2 sections (the amendments win). Build session P2; revised P2.1.
  *
  * The page owns the input STATE and calls lib/planner-engine.ts's derivePlan
  * for ALL allocation — it computes nothing of its own. Odds render only via
@@ -11,16 +11,16 @@
  * agency_profiles has ZERO client writes by rule (Gotchas): planner_prefs is
  * saved only through the existing /api/agency-profile PATCH, on explicit action.
  *
+ * P2.1: campaignsReady is now part of PlannerInput (persisted, feeds the engine)
+ * — the old UI-only "capacity" page state is gone. The home-market region is
+ * normalised to a PlannerRegion enum (normalizeUserRegion) so the region gate is
+ * deterministic.
+ *
  * FLAG: PLANNER_V2_DEFAULT=false. Enable with ?planner_v2=1 (persisted to
- * localStorage, cleared with ?planner_v2=0), matching the workbenchPreview /
- * sideBySidePreview pattern. Soft gate: the page reads only the caller's own
- * org-scoped profile + sourced static data, so there is no privileged data
- * behind the flag. Query params are read via window.location.search in an
- * effect, NEVER useSearchParams (that needs a Suspense boundary or the Vercel
- * build fails — Gotchas).
+ * localStorage, cleared with ?planner_v2=0). Query params read via
+ * window.location.search in an effect, NEVER useSearchParams (Gotchas).
  *
  * Next page-export-shape rule (Gotchas S161): this file exports ONLY a default.
- * No component/const/helper is exported off page.tsx (that fails `next build`).
  * =============================================================================
  */
 
@@ -28,7 +28,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
-import { fetchPlannerFacets, type PlannerFacet } from '@/lib/planner-facets'
+import { fetchPlannerFacets, normalizeUserRegion, type PlannerFacet } from '@/lib/planner-facets'
 import { fetchRateFacts, type RateFact } from '@/lib/rate-facts'
 import {
   derivePlan,
@@ -105,7 +105,6 @@ export default function PlannerPage() {
 
   // The planner input (the thing the engine derives from).
   const [input, setInput] = useState<PlannerInput | null>(null)
-  const [capacity, setCapacity] = useState<number | null>(null)
   const [step, setStep] = useState<Step>('identity')
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
 
@@ -144,12 +143,13 @@ export default function PlannerPage() {
       setProjectCount(count)
 
       // Build the initial input: saved planner_prefs.current wins; else derive
-      // sensible defaults from the profile (region from city/offices, org type
-      // from org_type, maturity suggested from project history).
+      // sensible defaults from the profile. Region is normalised to a
+      // PlannerRegion enum (P2.1 #6) from whatever we have (a saved enum value,
+      // or the derived city) so the region gate is deterministic.
       const prefs = (agencyProfile?.planner_prefs as PlannerPrefs | null) ?? null
       const cur = prefs?.current ?? null
       const offices = (agencyProfile?.office_locations as string[] | null) ?? null
-      const derivedRegion =
+      const derivedRegionRaw =
         (agencyProfile?.agency_city as string | null) || (offices && offices.length > 0 ? offices[0] : '') || ''
       const rawOrgType = agencyProfile?.org_type as string | undefined
       const orgType: PlannerOrgType =
@@ -158,9 +158,10 @@ export default function PlannerPage() {
       const initial: PlannerInput = {
         discipline: cur?.discipline ?? DEFAULT_DISCIPLINE,
         maturity: cur?.maturity ?? suggestMaturity(count),
-        region: cur?.region ?? derivedRegion,
+        region: normalizeUserRegion(cur?.region ?? derivedRegionRaw),
         budget: cur?.budget ?? DEFAULT_BUDGET,
         budgetCurrency: isCurrency(cur?.budget_currency) ? cur!.budget_currency! : DEFAULT_CURRENCY,
+        campaignsReady: cur?.campaigns_ready ?? null,
         targetTitle: cur?.target_title ?? undefined,
         pins: cur?.pins ?? [],
         excludes: cur?.excludes ?? [],
@@ -208,6 +209,7 @@ export default function PlannerPage() {
           region: input.region,
           budget: input.budget,
           budget_currency: input.budgetCurrency,
+          campaigns_ready: input.campaignsReady,
           target_title: input.targetTitle ?? null,
           pins: input.pins,
           excludes: input.excludes,
@@ -306,13 +308,12 @@ export default function PlannerPage() {
       )}
 
       {step === 'envelope' && (
-        <Card title="Your envelope" blurb="Budget and the currency everything displays in.">
+        <Card title="Your realistic scope" blurb="What you can spend on entry fees, and how many campaigns you have ready.">
           <PlannerEnvelope
             budget={input.budget}
             budgetCurrency={input.budgetCurrency as CurrencyCode}
-            capacity={capacity}
+            campaignsReady={input.campaignsReady}
             onChange={patchInput}
-            onCapacityChange={setCapacity}
           />
           <NextBack onNext={goNext} onBack={goBack} nextLabel="See my plan" />
         </Card>
@@ -324,10 +325,8 @@ export default function PlannerPage() {
           input={input}
           facets={facets}
           rateFacts={rateFacts}
-          capacity={capacity}
           suggestedMaturity={suggestedMaturity}
           onInputChange={patchInput}
-          onCapacityChange={setCapacity}
           onSave={savePrefs}
           saveStatus={saveStatus}
           onRequestCoverage={() => { /* P3 wires the show_requests POST (source:'planner') */ }}
@@ -358,7 +357,7 @@ function Card({ title, blurb, children }: { title: string; blurb?: string; child
 }
 
 function StepDots({ index }: { index: number }) {
-  const labels = ['You', 'Target', 'Envelope']
+  const labels = ['You', 'Target', 'Scope']
   return (
     <div className="flex items-center gap-2 mb-4">
       {labels.map((l, i) => (

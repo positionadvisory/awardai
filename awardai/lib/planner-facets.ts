@@ -1,16 +1,18 @@
 /**
  * planner-facets.ts — typed reader for Portfolio Planner v2's editorial facet
  * mapping, stored on `show_profiles.planner_facets` and `dynamic_shows.planner_facets`
- * (both jsonb, added in migrations/planner-facets-migration-2026-07-16.sql).
+ * (both jsonb, added in migrations/planner-facets-migration-2026-07-16.sql;
+ * the `region` field added in migrations/planner-facets-region-2026-07-16.sql).
  * =============================================================================
  * Planner-v2-SPEC-2026-07.md Part 2 as amended by the PRE-BUILD DELTA + USER
- * MODEL & FLOW v2 sections. Build session P1 (data + engine layer).
+ * MODEL & FLOW v2 sections. Build session P1 (data + engine layer); the region
+ * field + gate added in P2.1 (revision #6 — the geographically-wrong-shows bug).
  *
- * planner_facets is EDITORIAL reference data (which axis/discipline/geo_scope a
- * show sits in), grounded in each show's own judging_philosophy text. It is
- * NEVER a per-agency value and NEVER carries a rate/odds/win-likelihood field —
- * odds render only through lib/rate-facts.ts + <GatedNumber/>, already live.
- * This module reads facets only; it does not touch show_rate_facts at all.
+ * planner_facets is EDITORIAL reference data (which axis/discipline/geo_scope/
+ * region a show sits in), grounded in each show's own judging_philosophy text.
+ * It is NEVER a per-agency value and NEVER carries a rate/odds/win-likelihood
+ * field — odds render only through lib/rate-facts.ts + <GatedNumber/>, already
+ * live. This module reads facets only; it does not touch show_rate_facts at all.
  *
  * Show names are free text everywhere in this codebase (Gotchas): matching
  * uses the existing `sameShow`/`normaliseKbShow` machinery, never `===`.
@@ -45,12 +47,34 @@ export type PlannerShowDiscipline =
 
 export type PlannerGeoScope = 'national' | 'regional' | 'global'
 
+/**
+ * Structured region, mirroring lib/shows-data.ts's ShowDeadline.region enum so
+ * the two vocabularies are one. This is the AUTHORITATIVE editorial region for
+ * planner eligibility, corrected where DEADLINES_2026.region is wrong for this
+ * purpose (e.g. PRCA UK is tagged 'Global' in DEADLINES but is a UK-national
+ * show — seeded here as 'Europe'). Global-scope shows carry 'Global'.
+ */
+export type PlannerRegion = 'Global' | 'APAC' | 'MENA' | 'China' | 'Europe' | 'Australia' | 'North America'
+
 /** Raw shape stored in the jsonb column. Every field but `kind` is optional. */
 export type PlannerFacetData = {
   kind: PlannerFacetKind
   axis?: PlannerAxis
   discipline?: PlannerShowDiscipline
   geo_scope?: PlannerGeoScope
+  /**
+   * The show's home region (see PlannerRegion). Present on national/regional
+   * shows; global shows carry 'Global'. Used by regionAdmits() to gate the
+   * work/titles/people lanes by the user's market (P2.1 #6).
+   */
+  region?: PlannerRegion
+  /**
+   * Reserved, optional finer market for national shows (e.g. 'UK', 'US'). NOT
+   * seeded or read in v1 — v1 gates at the coarse PlannerRegion level. This is
+   * the extension seam for a later sub-market pass; leave it here so adding it
+   * is a seed-only change, not a schema change.
+   */
+  market?: string
   /** Present only on shows that cannot be entered directly (e.g. Global SABRE). */
   excluded?: string
   discipline_note?: string
@@ -134,10 +158,15 @@ export function isExcludedFacet(facet: PlannerFacetData | null | undefined): boo
 /**
  * Does this show's own discipline (if any) admit the agency's declared/derived
  * discipline? Discipline-agnostic cases (no discipline on the facet at all, or
- * a non-work kind, or a full-service agency) always admit — this is the
- * "discipline FILTER (facet match + discipline-agnostic shows)" rule from the
- * spec's engine step. See lib/planner-engine.ts for the agency-side discipline
- * enum and the mapping between the two.
+ * a non-work kind, or a full-service agency) always admit.
+ *
+ * NOTE (P2.1 #5): discipline is no longer a hard UNIVERSE filter in the work
+ * lane — it became a TILT (an ordering nudge, so on-discipline shows lead)
+ * because region + discipline hard-gated together collapsed a media agency's
+ * lane to a single show. This predicate is still the source of truth for
+ * "is this show on the agency's discipline" — the engine now uses it as a sort
+ * key and the target picker (lib/planner-display.ts) still uses it to focus the
+ * title list — but it no longer removes a show from the plan by itself.
  */
 export function facetAdmitsDiscipline(
   facet: PlannerFacetData,
@@ -147,4 +176,81 @@ export function facetAdmitsDiscipline(
   if (!facet.discipline) return true // discipline-agnostic work show
   if (agencyShowDiscipline === null) return true // full-service: sees everything
   return facet.discipline === agencyShowDiscipline
+}
+
+// ── Region gate (P2.1 #6) ────────────────────────────────────────────────────
+
+/**
+ * Which show regions a user in a given home market may enter. Global-scope
+ * shows are ALWAYS eligible (handled in regionAdmits by geo_scope, not here),
+ * so this map only governs national/regional shows. The containment reflects
+ * real geographic eligibility: a China agency competes in China-national shows
+ * AND the wider APAC regional shows; an Australia agency likewise. Coarse
+ * markets (a German agency reads as 'Europe' and so may see UK-national shows)
+ * are an accepted v1 limitation — the finer `market` field is the later fix.
+ * 'Global' as a user home market means "no market constraint" (match all).
+ */
+export const REGION_ELIGIBILITY: Record<PlannerRegion, PlannerRegion[]> = {
+  Global: ['Global', 'APAC', 'MENA', 'China', 'Europe', 'Australia', 'North America'],
+  APAC: ['Global', 'APAC'],
+  China: ['Global', 'China', 'APAC'],
+  Australia: ['Global', 'Australia', 'APAC'],
+  Europe: ['Global', 'Europe'],
+  MENA: ['Global', 'MENA'],
+  'North America': ['Global', 'North America'],
+}
+
+const REGION_ENUM: PlannerRegion[] = ['Global', 'APAC', 'MENA', 'China', 'Europe', 'Australia', 'North America']
+
+/**
+ * City/country keyword → PlannerRegion. Keyed to the major agency hubs. This is
+ * used BOTH to normalise a free-text saved/derived region (the old field was a
+ * city like "Shanghai") AND to seed the default selection in the region picker.
+ * Unrecognised input falls back to 'Global' (match-all) — we would rather
+ * over-include than wrongly hide, and the region picker lets the user correct
+ * it. Order matters: more specific buckets (China, Australia) are checked
+ * before the broad APAC bucket.
+ */
+const REGION_KEYWORDS: { region: PlannerRegion; needles: string[] }[] = [
+  { region: 'China', needles: ['china', 'prc', 'shanghai', 'beijing', 'guangzhou', 'shenzhen', 'chengdu', 'hangzhou', 'hong kong', 'hongkong', 'taiwan', 'taipei'] },
+  { region: 'Australia', needles: ['australia', 'sydney', 'melbourne', 'brisbane', 'perth', 'adelaide', 'new zealand', 'auckland', 'wellington'] },
+  { region: 'North America', needles: ['north america', 'united states', 'u.s.', 'usa', ' us ', 'america', 'new york', 'nyc', 'chicago', 'los angeles', 'san francisco', 'boston', 'seattle', 'atlanta', 'canada', 'toronto', 'vancouver'] },
+  { region: 'Europe', needles: ['europe', 'united kingdom', 'u.k.', ' uk ', 'britain', 'england', 'london', 'manchester', 'scotland', 'ireland', 'dublin', 'france', 'paris', 'germany', 'berlin', 'munich', 'hamburg', 'spain', 'madrid', 'barcelona', 'italy', 'milan', 'rome', 'netherlands', 'amsterdam', 'sweden', 'stockholm', 'denmark', 'copenhagen', 'norway', 'oslo', 'finland', 'helsinki', 'poland', 'warsaw', 'portugal', 'lisbon', 'switzerland', 'zurich', 'geneva', 'belgium', 'brussels', 'austria', 'vienna'] },
+  { region: 'MENA', needles: ['mena', 'middle east', 'dubai', 'uae', 'u.a.e', 'abu dhabi', 'saudi', 'riyadh', 'jeddah', 'qatar', 'doha', 'kuwait', 'bahrain', 'oman', 'egypt', 'cairo', 'turkiye', 'türkiye', 'turkey', 'istanbul', 'africa', 'johannesburg', 'cape town', 'nairobi', 'lagos'] },
+  { region: 'APAC', needles: ['apac', 'asia pacific', 'asia-pacific', 'asean', 'asia', 'singapore', 'bangkok', 'thailand', 'tokyo', 'japan', 'osaka', 'seoul', 'korea', 'india', 'mumbai', 'delhi', 'bengaluru', 'bangalore', 'jakarta', 'indonesia', 'manila', 'philippines', 'vietnam', 'hanoi', 'ho chi minh', 'saigon', 'kuala lumpur', 'malaysia', 'pacific'] },
+]
+
+/**
+ * Normalise a free-text home market / region to a PlannerRegion. Accepts an
+ * enum value verbatim (the region picker stores these), a city, or a country.
+ * Deterministic and pure. Falls back to 'Global' (match-all) on no match.
+ */
+export function normalizeUserRegion(raw: string | null | undefined): PlannerRegion {
+  const s = (raw ?? '').trim()
+  if (!s) return 'Global'
+  // Exact enum match first (the picker stores these).
+  const exact = REGION_ENUM.find(r => r.toLowerCase() === s.toLowerCase())
+  if (exact) return exact
+  // Pad so word-boundary needles like ' us ' / ' uk ' match at edges too.
+  const hay = ` ${s.toLowerCase()} `
+  for (const { region, needles } of REGION_KEYWORDS) {
+    if (needles.some(n => hay.includes(n))) return region
+  }
+  return 'Global'
+}
+
+/**
+ * Region gate (P2.1 #6): may a user in `userRegion` enter this show? Global
+ * shows are always eligible. National/regional shows must have their region in
+ * the user's eligibility set. A national/regional show with NO seeded region
+ * fails OPEN (stays visible) rather than being hidden — an unseeded region is a
+ * data gap, and hiding a show on missing data is worse than showing it; such
+ * shows should be caught and seeded, not silently dropped.
+ */
+export function regionAdmits(userRegion: PlannerRegion, facet: PlannerFacetData): boolean {
+  const geo = facet.geo_scope ?? 'global'
+  if (geo === 'global') return true
+  if (!facet.region) return true // fail-open on an unseeded region (data gap)
+  const eligible = REGION_ELIGIBILITY[userRegion] ?? REGION_ELIGIBILITY.Global
+  return eligible.includes(facet.region)
 }
