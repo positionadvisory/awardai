@@ -64,7 +64,7 @@ function AvatarMenu({ email, onSignOut }: { email: string; onSignOut: () => void
 import ShowsDrawer from '@/components/shows/ShowsDrawer'
 import { MATERIALS_EVAL_STATEMENTS, JURY_EVAL_STATEMENTS, COACH_REVIEW_STATEMENTS } from '@/lib/generatingStatements'
 import { appErrorFromResponse, formatError } from '@/lib/errorMessages'
-import { computeRoiIndex, normaliseKbShow, DEADLINES_2026 } from '@/lib/shows-data'
+import { normaliseKbShow, DEADLINES_2026 } from '@/lib/shows-data'
 import { isAoyShow, AOY_SHOW_NAME, aoyResolveStored, aoyTrackById, buildAoyBestCategory, pillarForKey, normalizeAoyCategory, type AoyPillar } from '@/lib/aoy-taxonomy'
 // Workbench P2 Chunk 1 (S138): source-agnostic section-workbench surface. Rendered
 // read-only behind ?workbench=1 this phase; the write-path cutover is P2 Chunk 4.
@@ -146,7 +146,6 @@ type ShowProfile = {
   language_guidance: string | null
   common_mistakes: string | null
   jury_composition_notes: string | null
-  base_win_rate: number | null
 }
 
 // ── Press Kit Draft — persisted AI copy with up to 3 versions ────────────────
@@ -755,7 +754,7 @@ export default function ProjectPage() {
   const [dirSourceMaterialIdx, setDirSourceMaterialIdx] = useState<number>(-1)
   const [dirSourceEntryDirectionId, setDirSourceEntryDirectionId] = useState<number>(-1)
   // Directions tab: sort key
-  const [dirSortKey, setDirSortKey] = useState<'default' | 'category_fit' | 'medal_chance' | 'roi'>('default')
+  const [dirSortKey, setDirSortKey] = useState<'default' | 'category_fit' | 'medal_chance'>('default')
 
   // Festival / jury intelligence — show_profiles rows keyed by directionId
   const [showProfiles, setShowProfiles] = useState<Record<number, ShowProfile | null>>({})
@@ -1136,7 +1135,7 @@ export default function ProjectPage() {
           : 'category_pattern.is.null'
         const { data } = await supabase
           .from('show_profiles')
-          .select('show_name, judging_philosophy, scoring_emphasis, language_guidance, common_mistakes, jury_composition_notes, base_win_rate')
+          .select('show_name, judging_philosophy, scoring_emphasis, language_guidance, common_mistakes, jury_composition_notes')
           .eq('show_name', d.best_show!)
           .or(orFilter)
           .order('category_pattern', { ascending: true, nullsFirst: false })
@@ -4473,7 +4472,7 @@ export default function ProjectPage() {
                 {directions.length > 1 && (
                   <div className="flex items-center gap-2 mb-4">
                     <span className="text-xs text-gray-400 flex-shrink-0">Sort by:</span>
-                    {(['default', 'category_fit', 'medal_chance', 'roi'] as const).map(key => (
+                    {(['default', 'category_fit', 'medal_chance'] as const).map(key => (
                       <button
                         key={key}
                         onClick={() => setDirSortKey(key)}
@@ -4483,7 +4482,7 @@ export default function ProjectPage() {
                             : 'bg-white border-gray-300 text-gray-500 hover:border-gray-400 hover:text-gray-700'
                         }`}
                       >
-                        {key === 'default' ? 'Default' : key === 'category_fit' ? 'Category Fit ↓' : key === 'medal_chance' ? 'Medal Chance ↓' : 'ROI ↓'}
+                        {key === 'default' ? 'Default' : key === 'category_fit' ? 'Category Fit ↓' : 'Medal Chance ↓'}
                       </button>
                     ))}
                   </div>
@@ -4499,11 +4498,6 @@ export default function ProjectPage() {
                     const aChance = calculateWinLikelihood(a.best_show, aEval?.overall_score)
                     const bChance = calculateWinLikelihood(b.best_show, bEval?.overall_score)
                     return bChance - aChance
-                  }
-                  if (dirSortKey === 'roi') {
-                    const aRoi = computeRoiIndex(a.best_show, a.win_likelihood ?? undefined)
-                    const bRoi = computeRoiIndex(b.best_show, b.win_likelihood ?? undefined)
-                    return bRoi - aRoi
                   }
                   return 0
                 }).map((d, idx, arr) => {
@@ -4682,30 +4676,6 @@ export default function ProjectPage() {
                               <p className={`text-2xl font-bold tabular-nums ${d.win_likelihood >= 70 ? 'text-green-700' : d.win_likelihood >= 45 ? 'text-amber-700' : 'text-red-600'}`}>{d.win_likelihood}%</p>
                               <p className="text-gray-400 text-xs">category fit</p>
                             </div>
-                            {/* Win Likelihood */}
-                            <div>
-                              {(() => {
-                                const evalScore = (evaluations[d.id]?.judge ?? evaluations[d.id]?.coach)?.overall_score
-                                const winPct = calculateWinLikelihood(d.best_show, evalScore)
-                                return (
-                                  <>
-                                    <p className={`text-base font-semibold tabular-nums ${winPct >= 20 ? 'text-green-700' : winPct >= 10 ? 'text-amber-700' : 'text-red-600'}`}>~{winPct}%</p>
-                                    <p className="text-gray-400 text-xs">chance of medal{!evalScore ? '*' : ''}</p>
-                                  </>
-                                )
-                              })()}
-                            </div>
-                            {/* ROI Index — category-fit adjusted */}
-                            {(() => {
-                              const roiIdx = computeRoiIndex(d.best_show, d.win_likelihood ?? undefined)
-                              if (!roiIdx) return null
-                              return (
-                                <div>
-                                  <p className={`text-base font-semibold tabular-nums ${roiIdx >= 70 ? 'text-green-700' : roiIdx >= 40 ? 'text-amber-700' : 'text-gray-500'}`}>{roiIdx}<span className="text-xs font-normal text-gray-400">/100</span></p>
-                                  <p className="text-gray-400 text-xs">ROI index</p>
-                                </div>
-                              )
-                            })()}
                           </div>
                         )}
                       </div>
@@ -4715,9 +4685,6 @@ export default function ProjectPage() {
                 })}
               </div>
               </>
-            )}
-            {directions.some(d => d.win_likelihood !== null && !(evaluations[d.id]?.judge ?? evaluations[d.id]?.coach)) && (
-              <p className="text-xs text-gray-400 mt-4">* Chance of Medal based on show base rate only — evaluate an entry to factor in content quality.</p>
             )}
           </div>
         )}
@@ -6022,72 +5989,6 @@ export default function ProjectPage() {
                         )}
                       </>
                     )
-                    const sxsRoi = (
-                      <>
-                        {/* ── ROI Estimation ─────────────────────────────────────────
-                             Shows after jury eval, updates when coach review also exists.
-                             Jury-only:   quality = juryScore × 10
-                             Combined:    quality = (juryScore + untappedPotential) × 10
-                             Both capped at 100 before passing to computeRoiIndex. */}
-                        {(hasJudge || hasCoach) && dirShow && (() => {
-                          const juryScore  = evalBoth.judge?.overall_score
-                          const coachScore = evalBoth.coach?.overall_score
-                          const untapped   = coachScore !== undefined
-                            ? parseFloat((10 - coachScore).toFixed(1))
-                            : undefined
-                          // Jury-only quality: score × 10, capped at 100
-                          const juryQuality = juryScore !== undefined
-                            ? Math.min(100, juryScore * 10)
-                            : undefined
-                          // Combined quality: (juryScore + untapped) × 10, capped at 100
-                          const combinedQuality = juryScore !== undefined && untapped !== undefined
-                            ? Math.min(100, (juryScore + untapped) * 10)
-                            : undefined
-                          const baseRoi     = computeRoiIndex(dirShow)
-                          const juryRoi     = juryQuality !== undefined  ? computeRoiIndex(dirShow, juryQuality)     : undefined
-                          const combinedRoi = combinedQuality !== undefined ? computeRoiIndex(dirShow, combinedQuality) : undefined
-                          if (!baseRoi) return null
-                          const roiColor = (v: number) => v >= 70 ? 'text-green-700' : v >= 40 ? 'text-amber-700' : 'text-gray-500'
-                          const roiBg    = (v: number) => v >= 70 ? 'bg-green-50 border-green-200' : v >= 40 ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-200'
-                          return (
-                            <div className="px-5 py-4 border-b border-gray-200 bg-white">
-                              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">ROI Estimation</p>
-                              <div className="flex flex-wrap gap-2">
-                                {/* Base — no quality adjustment */}
-                                <div className={`flex-1 min-w-[100px] border rounded-lg px-3 py-2.5 ${roiBg(baseRoi)}`}>
-                                  <p className={`text-xl font-bold tabular-nums ${roiColor(baseRoi)}`}>
-                                    {baseRoi}<span className="text-xs font-normal text-gray-400">/100</span>
-                                  </p>
-                                  <p className="text-xs text-gray-400 mt-0.5">Base</p>
-                                </div>
-                                {/* Jury-adjusted */}
-                                {juryRoi !== undefined && (
-                                  <div className={`flex-1 min-w-[100px] border rounded-lg px-3 py-2.5 ${roiBg(juryRoi)}`}>
-                                    <p className={`text-xl font-bold tabular-nums ${roiColor(juryRoi)}`}>
-                                      {juryRoi}<span className="text-xs font-normal text-gray-400">/100</span>
-                                    </p>
-                                    <p className="text-xs text-gray-400 mt-0.5">Jury score adjusted</p>
-                                  </div>
-                                )}
-                                {/* Combined potential — jury + coach untapped */}
-                                {combinedRoi !== undefined && (
-                                  <div className={`flex-1 min-w-[100px] border-2 rounded-lg px-3 py-2.5 ${roiBg(combinedRoi)}`}>
-                                    <p className={`text-xl font-bold tabular-nums ${roiColor(combinedRoi)}`}>
-                                      {combinedRoi}<span className="text-xs font-normal text-gray-400">/100</span>
-                                    </p>
-                                    <p className="text-xs text-gray-400 mt-0.5">Maximum potential</p>
-                                    <p className="text-xs text-gray-400">({juryScore?.toFixed(1)} + {untapped?.toFixed(1)} untapped)</p>
-                                  </div>
-                                )}
-                              </div>
-                              <p className="text-xs text-gray-400 mt-2.5 leading-relaxed">
-                                Prestige × Base Medal Chance Rate % ÷ entry fee, quality-adjusted. Index normalized to 100.
-                              </p>
-                            </div>
-                          )
-                        })()}
-                      </>
-                    )
                     return (
                       <div key={dirId} id={`aoy-dir-${dirId}`} className={`bg-white border rounded-xl overflow-hidden transition-shadow ${justScoredDirId === dirId ? 'border-green-500 ring-2 ring-green-500' : 'border-gray-200'}`}>
 
@@ -6410,12 +6311,10 @@ export default function ProjectPage() {
                                 {sxsEvalChat}
                               </div>
                             </div>
-                            {sxsRoi}
                           </>
                         ) : (
                           <>
                             {sxsEvalTop}
-                            {sxsRoi}
                             {sxsEvalChat}
                             {sxsEditSurface}
                           </>

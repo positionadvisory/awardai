@@ -30,7 +30,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
-  WIN_RATES,
   ENTRY_FEES,
   resolveWinRateKey,
   getDeadlineUrgency,
@@ -92,7 +91,7 @@ function fmt(n: number, currency: string): string {
 function getEntryFee(showName: string | null | undefined): number | null {
   if (!showName) return null
   const key = resolveWinRateKey(showName)
-  if (key && WIN_RATES[key]?.fee) return WIN_RATES[key].fee
+  if (key && ENTRY_FEES[key]?.base) return ENTRY_FEES[key].base
   if (ENTRY_FEES[showName]?.base) return ENTRY_FEES[showName].base
   return null
 }

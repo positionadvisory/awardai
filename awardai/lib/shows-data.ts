@@ -29,24 +29,9 @@ export type ShowDeadline = {
   standard: string
   final: string
   ceremony: string
-  prValue: number         // Prestige score 0–100 (for sorting/weighting)
   note: string            // Practical notes for the entry team
   confidence: ShowConfidence  // Agent gate: only 'verified' shows proceed in Full Prep
   lastVerified: string    // ISO date this row was last confirmed against official source
-}
-
-export type WinRateData = {
-  shortlist: number       // % of entries receiving a shortlist
-  metal: number           // % of entries winning any metal
-  gold: number            // % of entries winning gold equivalent
-  grandprix: number       // % of entries winning Grand Prix / top prize
-  pr: {
-    shortlist: number     // Estimated earned media value (USD) at shortlist level
-    metal: number
-    gold: number
-    grandprix: number
-  }
-  fee: number             // Canonical entry fee used in ROI calculations (USD)
 }
 
 export type EntryFeeData = {
@@ -73,7 +58,7 @@ export type PrepPhase = {
 // ── Agent gate result ─────────────────────────────────────────────────────────
 
 export type ShowGateResult =
-  | { ok: true; show: ShowDeadline; fees: EntryFeeData | null; rates: WinRateData | null }
+  | { ok: true; show: ShowDeadline; fees: EntryFeeData | null }
   | { ok: false; showName: string; reason: 'partial' | 'needs_check' | 'not_found' | 'deadline_passed'; message: string }
 
 /**
@@ -136,7 +121,6 @@ export function getShowDataWithConfidence(showName: string): ShowGateResult {
     ok: true,
     show: found,
     fees: ENTRY_FEES[found.show] ?? null,
-    rates: WIN_RATES[found.show] ?? null,
   }
 }
 
@@ -175,7 +159,6 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'Cannes Lions', region: 'Global',
     finalDate: '2026-04-09', juryDate: '2026-06-15', ceremonyDate: '2026-06-22',
     earlyBird: 'Feb 2026', standard: 'Mar 2026', final: '9 Apr 2026', ceremony: '22–26 Jun 2026',
-    prValue: 80,
     note: 'EUR pricing: Early Bird €690/€1,150 (single/campaign), Standard €1,100/€1,830, Late €1,695/€2,825. Late-fee tiers after 5 Mar, 19 Mar, 2 Apr; final 9 Apr. AI/source disclosure and CEO/CMO sign-off are official entry requirements. NEW for 2026: "proof of impact" required -- any stats/results claimed in an entry must be backed by verifiable third-party evidence (analytics, press coverage, certified measurement, client confirmation), part of the Global Integrity Standards introduced after the 2025 DM9 Grand Prix revocation (AI-doctored proof footage, 3 campaigns/12 awards pulled). Entries reportedly fell ~25% in 2026 under the tightened rules. Festival runs 22–26 Jun 2026. 2027 festival dates confirmed 21-25 Jun 2027; entry-open date not yet announced (site offers "register your interest" only, checked 8 Jul 2026).',
     confidence: 'verified', lastVerified: '2026-07-08',
   },
@@ -183,7 +166,6 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'D&AD', region: 'Global',
     finalDate: '2026-03-26', juryDate: '2026-04-24', ceremonyDate: '2026-05-14',
     earlyBird: 'Jan 2026', standard: 'Feb 2026', final: '26 Mar 2026', ceremony: 'May 2026',
-    prValue: 50,
     note: 'GBP fees: Design £25–£250, Advertising £290–£390, Crafts campaigns up to £980 (VAT excluded). Payment deadline 19 Mar; finalise-submission deadline 26 Mar; physical shipment due 8 Apr. Craft categories: execution judged before idea.',
     confidence: 'verified', lastVerified: '2026-04-26',
   },
@@ -191,7 +173,6 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'One Show', region: 'Global',
     finalDate: '2026-02-20', juryDate: '2026-04-16', ceremonyDate: '2026-05-15',
     earlyBird: 'Oct 2025', standard: 'Jan 2026', final: '20 Feb 2026', ceremony: '15 May 2026 (NYC)',
-    prValue: 45,
     note: 'Official 2026 schedule: super early 31 Oct 2025, early 12 Dec, regular 23 Jan, extended 6 Feb, final 20 Feb. Finalists announced 16 Apr. Ceremony 15 May NYC. Fees $400–$1,500 by category/deadline, excl. processing.',
     confidence: 'verified', lastVerified: '2026-04-26',
   },
@@ -199,7 +180,6 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'Clio Awards', region: 'Global',
     finalDate: '2026-02-06', juryDate: '2026-04-09', ceremonyDate: '2026-05-12',
     earlyBird: 'Dec 2025', standard: 'Jan 2026', final: '6 Feb 2026', ceremony: '12 May 2026 (NYC)',
-    prValue: 35,
     note: 'Official final deadline 6 Feb 2026. Shortlist 9 Apr; Bronze/Silver/Gold 20 Apr; Grand and Of The Year at ceremony 12 May at Cipriani 25 Broadway, NYC. Fees $525–$1,400 by category/deadline; student $50–$75; Google AI specialty free.',
     confidence: 'verified', lastVerified: '2026-04-26',
   },
@@ -207,7 +187,6 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'Effie APAC', region: 'APAC',
     finalDate: '2026-03-09', juryDate: '2026-04-01', ceremonyDate: '2026-09-25',
     earlyBird: 'Jan 2026', standard: 'Feb 2026', final: '9 Mar 2026', ceremony: '25 Sep 2026',
-    prValue: 40,
     note: 'Last-chance deadline 9 Mar 2026. Round 1 judging Apr, Round 2 judging May. Awards Gala 25 Sep 2026, Singapore (corrected from 12 Sep; source: apaceffie.com calendar widget, checked 8 Jul 2026). Fees SGD 1,090–2,690. Most rigorous data requirements of any show — allow 4–6 weeks for entry writing. 2026 Heads of Jury named (Kenneth Lim, STB; Natalie Lockwood, NAB); full roster still rolling out.',
     confidence: 'verified', lastVerified: '2026-07-08',
   },
@@ -215,7 +194,6 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'Festival of Media APAC', region: 'APAC',
     finalDate: '2026-01-30', juryDate: '2026-03-19', ceremonyDate: '2026-05-07',
     earlyBird: 'Dec 2025', standard: 'Jan 2026', final: '30 Jan 2026', ceremony: '7 May 2026',
-    prValue: 30,
     note: 'Asia-Pacific Media Campaign Awards (C Squared / Festival of Media). 2026 cycle CLOSED: open 7 Nov 2025; early 5 Dec £349; standard 2 Jan £389; extended/final 30 Jan £440 (per entry per category, GBP). Shortlist 19 Mar; ceremony 7 May 2026 (virtual). Jury ~80–85% client-side brand marketers. Next (2027) cycle expected to open ~Nov 2026. Verified festivalofmedia.com 23 Jun 2026.',
     confidence: 'verified', lastVerified: '2026-06-23',
   },
@@ -223,7 +201,6 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'Campaign Asia Women Leading Change', region: 'APAC',
     finalDate: '2026-03-25', juryDate: '2026-04-27', ceremonyDate: '2026-05-19',
     earlyBird: 'Feb 2026', standard: 'Mar 2026', final: '25 Mar 2026', ceremony: '19 May 2026',
-    prValue: 30,
     note: 'Campaign Asia 2026 schedule: early 13 Feb, standard 12 Mar, final 25 Mar (6pm HKT). Shortlist 27 Apr, winners 19 May. Fees HKD 2,990/3,300/3,950 per entry by tier. Individual and company categories.',
     confidence: 'verified', lastVerified: '2026-04-26',
   },
@@ -231,7 +208,6 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'MMA Smarties APAC', region: 'APAC',
     finalDate: '2026-07-21', juryDate: '2026-08-21', ceremonyDate: '2026-11-20',
     earlyBird: '25 May 2026', standard: '9 Jul 2026', final: '21 Jul 2026', ceremony: '20 Nov 2026 (JW Marriott Singapore South Beach)',
-    prValue: 28,
     note: 'APAC per-entry fees USD: member $365 / $405 / $480, non-member $410 / $450 / $525 (early bird 25 May / on-time 9 Jul / extended 21 Jul). Country programs cheaper (Vietnam/Indonesia/Philippines/Thailand/India ~$240–$350; Cambodia $140–$240). Volume discounts 5–20%. Online screening jury 1–21 Aug; gala 20 Nov, Singapore. APAC and Global cycles are distinct. Verified mmaglobal.com 23 Jun 2026.',
     confidence: 'verified', lastVerified: '2026-06-23',
   },
@@ -239,7 +215,6 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'MMA Smarties Global', region: 'Global',
     finalDate: '2026-08-06', juryDate: '2026-09-01', ceremonyDate: '',
     earlyBird: '22 May 2026', standard: '23 Jul 2026', final: '6 Aug 2026', ceremony: 'TBC 2026 (2025 was online, 18 Dec)',
-    prValue: 30,
     note: 'SMARTIES X Global per-entry fees USD: member $435 / $495 / $570, non-member $490 / $550 / $625 (early bird 22 May / on-time 23 Jul / extended 6 Aug). Online screening jury 1 Aug–1 Sep. 2026 ceremony date not yet published (2025 was online, 18 Dec). Distinct from APAC regional; separate submission required. Verified mmaglobal.com / 2026 submission guide 23 Jun 2026.',
     confidence: 'verified', lastVerified: '2026-06-23',
   },
@@ -250,7 +225,6 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'Clio Entertainment', region: 'Global',
     finalDate: '2026-08-07', juryDate: '2026-09-01', ceremonyDate: '',
     earlyBird: 'Apr 2026', standard: 'Jun 2026', final: '7 Aug 2026', ceremony: 'TBC',
-    prValue: 30,
     note: 'Entries open 15 Apr; first deadline 12 Jun; second 10 Jul; final 7 Aug 2026. Results release and ceremony dates listed as "coming soon" — do not schedule against ceremony until confirmed. Fees $400–$1,300 by category/deadline; student $50.',
     confidence: 'partial', lastVerified: '2026-04-26',
   },
@@ -258,7 +232,6 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'Clio Sports', region: 'Global',
     finalDate: '2026-09-04', juryDate: '2026-11-15', ceremonyDate: '2026-12-08',
     earlyBird: 'Jun 2026', standard: 'Jul 2026', final: '4 Sep 2026', ceremony: '8 Dec 2026 (NYC)',
-    prValue: 28,
     note: 'Entry opened 21 Apr 2026. First deadline 5 Jun, second 17 Jul, third 14 Aug, final 4 Sep. Gold/Silver/Bronze/Shortlist mid-Nov. Ceremony 8 Dec at Edison Ballroom NYC. Fees $300–$1,075 by category; student $50–$75. Fee page carries older date labels — recheck before budget lock.',
     confidence: 'partial', lastVerified: '2026-04-26',
   },
@@ -266,7 +239,6 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'Clio Creators', region: 'Global',
     finalDate: '2026-08-21', juryDate: '2026-10-01', ceremonyDate: '2026-11-01',
     earlyBird: 'May 2026', standard: 'Jul 2026', final: '21 Aug 2026', ceremony: 'Nov 2026 (LA)',
-    prValue: 22,
     note: 'Inaugural 2026 program. Call for entries 26 Mar; 1st deadline 29 May; 2nd 17 Jul; final 21 Aug. Winners Oct, awards show Nov in LA. Fees $100–$600 by medium/deadline. Fee page has a conflicting earlier deadline table — verify before committing budget. Creator Track $100, Brand Track $500, Student free.',
     confidence: 'partial', lastVerified: '2026-04-26',
   },
@@ -274,31 +246,27 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'ANDY Awards', region: 'Global',
     finalDate: '2026-03-17', juryDate: '2026-04-20', ceremonyDate: '2026-05-20',
     earlyBird: 'Feb 2026', standard: 'Mar 2026', final: '17 Mar 2026', ceremony: '20 May 2026 (NYC)',
-    prValue: 40,
-    note: 'Opened 1 Dec 2025; early deadline 11 Feb; final deadline 17 Mar. Winners announced 20 Apr. Best in Show/special recognition celebration 20 May 2026 NYC. Fees $1,250–$2,000+ by fee type/distinction; +8% processing. Categories: IDEA, CRAFT, BRAVERY, RESET, PSA/SOCIAL GOOD, STUDENT. 2025 GRANDY (Best in Show): "Meet Marina Prieto" by DAVID Madrid for JCDecaux. ⚠️ Win rate benchmarks NOT AVAILABLE — ANDY Awards does not publish aggregate entry totals, shortlist counts, or win rates on any official channel. Benchmarks in WIN_RATES are estimates only — do not use in client-facing materials without caveat.',
+    note: 'Opened 1 Dec 2025; early deadline 11 Feb; final deadline 17 Mar. Winners announced 20 Apr. Best in Show/special recognition celebration 20 May 2026 NYC. Fees $1,250–$2,000+ by fee type/distinction; +8% processing. Categories: IDEA, CRAFT, BRAVERY, RESET, PSA/SOCIAL GOOD, STUDENT. 2025 GRANDY (Best in Show): "Meet Marina Prieto" by DAVID Madrid for JCDecaux. ⚠️ Win rate benchmarks NOT AVAILABLE — ANDY Awards does not publish aggregate entry totals, shortlist counts, or win rates on any official channel. Win-rate benchmarks are estimates only — do not use in client-facing materials without caveat.',
     confidence: 'partial', lastVerified: '2026-06-03',
   },
   {
     show: 'New York Festivals Advertising Awards', region: 'Global',
     finalDate: '2026-05-08', juryDate: '2026-06-08', ceremonyDate: '2026-06-15',
     earlyBird: 'Feb 2026', standard: 'Apr 2026', final: '8 May 2026', ceremony: '15 Jun 2026',
-    prValue: 38,
-    note: 'Live URL: nyfadvertising.com (newyorkfestivals.com/advertising returns 404 — do not use). Entries open 13 Jan; early 27 Feb; official 23 Apr; final 8 May; last extended 15 May. Shortlists 8 Jun, winners 15 Jun 2026. Single/Single Plus/Campaign fees $600–$1,500. Jury: 350+ members (Shortlist + Executive + specialty juries). 2025 trophy counts: 1 Best of Show, 8 Grand Awards, 57 Gold, 68 Silver, 114 Bronze (248 total). Geographic reach: 40+ countries shortlisted in 2025; Germany top, then USA, Canada, South Korea. NYF Cristal Village Award runs as a sub-category within NYFA (2026 status unconfirmed — verify with NYF). ⚠️ Entry totals not published — win rate benchmarks in WIN_RATES are estimates; do not use in client-facing materials without caveat.',
+    note: 'Live URL: nyfadvertising.com (newyorkfestivals.com/advertising returns 404 — do not use). Entries open 13 Jan; early 27 Feb; official 23 Apr; final 8 May; last extended 15 May. Shortlists 8 Jun, winners 15 Jun 2026. Single/Single Plus/Campaign fees $600–$1,500. Jury: 350+ members (Shortlist + Executive + specialty juries). 2025 trophy counts: 1 Best of Show, 8 Grand Awards, 57 Gold, 68 Silver, 114 Bronze (248 total). Geographic reach: 40+ countries shortlisted in 2025; Germany top, then USA, Canada, South Korea. NYF Cristal Village Award runs as a sub-category within NYFA (2026 status unconfirmed — verify with NYF). ⚠️ Entry totals not published — win-rate benchmarks are estimates; do not use in client-facing materials without caveat.',
     confidence: 'partial', lastVerified: '2026-06-03',
   },
   {
     show: 'Dubai Lynx', region: 'MENA',
     finalDate: '2026-01-22', juryDate: '2026-10-07', ceremonyDate: '2026-10-08',
     earlyBird: 'Dec 2025', standard: 'Jan 2026', final: '22 Jan 2026', ceremony: '8 Oct 2026, Emirates Golf Club, Dubai',
-    prValue: 38,
-    note: 'MENA\'s premier show; Cannes Lions affiliate (Lions by Informa). Entries opened 9 Oct 2025; late fee after 11 Dec; second fee tier after 15 Jan; final deadline 22 Jan. ⚠️ CEREMONY DATE CORRECTED: original Apr 1 date was wrong — ceremony officially moved to 8 Oct 2026, Emirates Golf Club, Dubai (announced 28 Apr 2026; source: communicateonline.me + dubailynx.com homepage). ⚠️ JURY DATE CORRECTED (checked 8 Jul 2026): no source supports a 1 Sep judging date; the official key-dates page lists only the 8 Oct ceremony, with a global jury dinner 7 Oct and Young Creatives competition 4-6 Oct — juryDate set to 7 Oct (week-of-ceremony) as the closest supportable date. No 2026 winner statistics exist yet — awards have not happened. ⚠️ Re-pull all win rate benchmarks after 8 Oct 2026. Fees $575–$1,170 by Lynx/category/deadline. Jury 2026: 10 of 11 category-group Jury Presidents publicly named as of 26 Nov 2025 (Judy John, Marco Venturelli, Josefina Casellas, Yasuharu Sasaki, Guilherme Machado, Laurence Thomson, Zia Mandviwalla, Tash Beecher, Chrissie Hanson, Lerato Songelwa); the 11th (Luxury Lynx) does not appear on the official site — leave unconfirmed, do not use the secondary-press name. First-time representation from Costa Rica, Uganda, Uzbekistan; 20+ markets total. Prior year benchmarks: 2024: 1,676 entries → 361 shortlisted (~21.6%); 2023: 1,862 entries → 404 shortlisted (~21.7%). WIN_RATES.shortlist of 22% aligns with prior year data.',
+    note: 'MENA\'s premier show; Cannes Lions affiliate (Lions by Informa). Entries opened 9 Oct 2025; late fee after 11 Dec; second fee tier after 15 Jan; final deadline 22 Jan. ⚠️ CEREMONY DATE CORRECTED: original Apr 1 date was wrong — ceremony officially moved to 8 Oct 2026, Emirates Golf Club, Dubai (announced 28 Apr 2026; source: communicateonline.me + dubailynx.com homepage). ⚠️ JURY DATE CORRECTED (checked 8 Jul 2026): no source supports a 1 Sep judging date; the official key-dates page lists only the 8 Oct ceremony, with a global jury dinner 7 Oct and Young Creatives competition 4-6 Oct — juryDate set to 7 Oct (week-of-ceremony) as the closest supportable date. No 2026 winner statistics exist yet — awards have not happened. ⚠️ Re-pull all win rate benchmarks after 8 Oct 2026. Fees $575–$1,170 by Lynx/category/deadline. Jury 2026: 10 of 11 category-group Jury Presidents publicly named as of 26 Nov 2025 (Judy John, Marco Venturelli, Josefina Casellas, Yasuharu Sasaki, Guilherme Machado, Laurence Thomson, Zia Mandviwalla, Tash Beecher, Chrissie Hanson, Lerato Songelwa); the 11th (Luxury Lynx) does not appear on the official site — leave unconfirmed, do not use the secondary-press name. First-time representation from Costa Rica, Uganda, Uzbekistan; 20+ markets total. Prior year benchmarks: 2024: 1,676 entries → 361 shortlisted (~21.6%); 2023: 1,862 entries → 404 shortlisted (~21.7%). The ~22% shortlist estimate aligns with prior year data.',
     confidence: 'partial', lastVerified: '2026-07-08',
   },
   {
     show: 'Gerety Awards', region: 'Global',
     finalDate: '2026-05-15', juryDate: '2026-06-16', ceremonyDate: '',
     earlyBird: 'Mar 2026', standard: 'Apr 2026', final: '15 May 2026', ceremony: 'Sep 2026, Paris (exact date TBC)',
-    prValue: 35,
     note: 'Full 2026 key dates: open 5 Jan; early bird 13 Mar; standard 17 Apr; final 15 May. Shortlist announced 16 Jun 2026. Winners cocktail September 2026, Paris — exact date TBC (revisit Jul/Aug 2026). Single/campaign fees €340–€750 by deadline. Judged exclusively by female-identifying jury (all 2026 Grand Jury members are women — founding premise of award). Official organiser name: The Gerety Awards (registered: 13 rue Ernest Lefevre, 75020 Paris, France). Win rates and PR values require benchmarking.',
     confidence: 'partial', lastVerified: '2026-06-03',
   },
@@ -309,7 +277,6 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'PRCA UK Awards', region: 'Global',
     finalDate: '', juryDate: '', ceremonyDate: '',
     earlyBird: 'Typically ~16 Jun (based on 2025)', standard: 'Typically ~14 Jul', final: 'Typically ~14 Jul — 2026 date not yet published', ceremony: 'Typically ~Nov (London); 2026 date TBC',
-    prValue: 25,
     note: 'PRCA UK Awards (National Awards) — flagship programme of the Public Relations and Communications Association, the world\'s largest PR professional body. 2026 entries confirmed open May 2026; specific deadlines and ceremony not yet published. 2025 pattern: early bird 16 Jun, final 14 Jul, finalists 22 Sep, individual interviews 27 Sep, ceremony 15 Nov (London). Entry fees not published on official pages — DARE regional proxy ~£150-285+VAT is directional only; UK flagship likely higher. Verify fees at prca.global before budgeting. ~26 categories (2025): campaign awards (19) + individual + team/consultancy (banded by fee income: Small 2m or under, Medium 2.01-7.5m, Large over 7.5m). PRCA runs a portfolio of programmes — also see PRCA APAC Awards, Digital Awards, DARE (regional), Public Affairs Awards, Platinum Awards.',
     confidence: 'needs_check', lastVerified: '2026-06-04',
   },
@@ -317,7 +284,6 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'SABRE Awards Asia-Pacific', region: 'APAC',
     finalDate: '', juryDate: '', ceremonyDate: '',
     earlyBird: 'Closed — was 8 May 2026 (2026 cycle)', standard: '', final: 'Closed — late deadline was 1 Jun 2026 (2026 cycle)', ceremony: 'APAC ceremony date/city not confirmed; 2027 dates TBC',
-    prValue: 35,
     note: 'SABRE Awards Asia-Pacific — APAC regional edition of the SABRE Awards (Superior Achievement in Branding, Reputation & Engagement), run by PRovoke Media (formerly The Holmes Report). 13th edition in 2026. Part of the global SABRE family; APAC winners are eligible for elevation to the Global SABRE (top 40 campaigns worldwide from 5,000+ total entries). 2026 cycle: CLOSED — early deadline 8 May 2026, late deadline 1 Jun 2026. 2027 dates not yet published. Entry fees: ~US$475–650+ (basic entry includes 3 category selections; each additional category US$125; late fees apply). Category architecture is matrixed: select Practice Area + Industry Sector + Geographic simultaneously. Industry Sector = client\'s sector, not campaign topic — e.g., a sustainability campaign for a tech company enters Technology. IN2 SABRE sub-competition requires a single genuine piece of earned coverage as anchor (paid content excluded). Diamond SABRE rewards long-term reputation programmes. Budget disclosure optional but valued. No membership requirement. WARC partnership: SABRE case studies published as effectiveness exemplars.',
     confidence: 'needs_check', lastVerified: '2026-06-05',
   },
@@ -325,7 +291,6 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'Global SABRE Awards', region: 'Global',
     finalDate: '', juryDate: '', ceremonyDate: '',
     earlyBird: 'No direct entry — qualify via regional SABRE (e.g., SABRE Awards Asia-Pacific)', standard: '', final: 'No direct entry deadline', ceremony: '2026 ceremony date/city TBC — 2025 was 3 Nov, Chicago (at PRovoke Global Summit)',
-    prValue: 60,
     note: 'Global SABRE Awards — worldwide capstone of the SABRE Awards programme by PRovoke Media. Honours the top 40 PR campaigns globally, selected from all regional SABRE competitions (EMEA, North America, APAC, South Asia, LatAm, Africa). No direct entry — qualification is via regional competition performance; PRovoke editorial leadership selects the global 40. 5,000+ total regional entries in 2025 produced 40 Global SABRE winners. Widely regarded as the single most prestigious PR-campaign honour in the world. WARC partnership publishes winning case studies as effectiveness benchmarks. Ceremony held at the annual PRovoke Global Summit (city rotates; 2025 was Chicago, 3 Nov). Global Agencies of the Year also recognised. For APAC-based agencies, the pathway is: enter SABRE Awards Asia-Pacific → perform strongly → PRovoke considers elevation to Global 40.',
     confidence: 'needs_check', lastVerified: '2026-06-05',
   },
@@ -333,7 +298,6 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'SABRE Awards EMEA', region: 'Europe',
     finalDate: '', juryDate: '', ceremonyDate: '',
     earlyBird: 'Closed — was 19 Dec 2025 (midnight GMT, 2026 cycle)', standard: '', final: 'Closed — extended deadline was 20 Feb 2026 (midnight GMT, 2026 cycle)', ceremony: 'Ceremony complete — 21 May 2026, The Brewery, London; 2027 dates TBC',
-    prValue: 45,
     note: 'SABRE Awards EMEA — PRovoke Media\'s premier regional PR awards for Europe, Middle East and Africa (Superior Achievement in Branding, Reputation and Engagement). The largest dedicated PR awards programme in EMEA by entry volume: 2,000+ entries, ~400 finalists (~20% shortlist rate — festival-stated). 141 categories: 22 geographic/country sub-regions, 26 industry sectors, 33 practice areas, 6 Diamond SABRE, 54 IN2 SABRE. Paul Holmes (PRovoke Media founder) chairs the jury; 75 jurors: genuinely pan-European with strong Africa representation — approximately 20–25% UK, with Nordics, DACH, Eastern Europe, and Africa collectively outweighing UK representation. Jury announced after entries close. Entry fees: $475 basic (1 practice area + 1 industry sector + 1 international category); $125 per additional selection; $250 late surcharge. 2026 cycle CLOSED — early 19 Dec 2025, final 20 Feb 2026, ceremony 21 May 2026 (The Brewery, London). 2027 dates not yet published. Judging criteria (festival-stated): Impact, Creative Problem-Solving, Strategic Insight, Innovative Approaches, Executional Excellence. What wins: business impact first — results hierarchy runs media coverage (floor) → engagement → attitudinal change → behavioural change + commercial outcomes (ceiling). AVE and impressions-only reporting explicitly penalised. Misaligned objectives and results is the most common failure mode. Diamond SABRE (CEO, Company, Brand-Building, Measurement) and IN2 SABRE (single earned coverage anchor required) carry specific bar. WARC partnership: winning case studies published on warc.com. Independent agencies win regularly.',
     confidence: 'needs_check', lastVerified: '2026-06-14',
   },
@@ -341,7 +305,6 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'SABRE Awards North America', region: 'North America',
     finalDate: '', juryDate: '', ceremonyDate: '',
     earlyBird: 'Closed — was 19 Dec 2025 (midnight PST, 2026 cycle)', standard: '', final: 'Closed — deadline was 13 Feb 2026 (midnight PST, 2026 cycle)', ceremony: 'Ceremony complete — 5 May 2026, Cipriani 42nd Street, New York; 2027 dates TBC',
-    prValue: 48,
     note: 'SABRE Awards North America — PRovoke Media\'s flagship North American PR awards (Superior Achievement in Branding, Reputation and Engagement). Widely regarded as the de facto prestige benchmark for the US PR industry. 2,000+ entries annually. 67 categories: 3 international, 29 practice areas, 26 industry sectors, 6 Diamond SABRE, 4 Silver SABRE. Paul Holmes chairs; 45 jurors (~85–90% US-based): agency leaders from FleishmanHillard, Golin, Weber Shandwick, Ketchum, MSL, Burson, Praytell, Bospar, M Booth; in-house executives from Honda, Walmart, L\'Oréal, PepsiCo, JetBlue, Intuit, Mondelez, Abbott. PR Council represented. Jury published ~3 weeks before entry deadline. 2026 Best in Show: MSL for Always × Tampax ("The Flow Must Go On"). Entry fees: $525 basic (1 practice area + 1 industry sector + 1 international category); $125 per additional selection; $250 late surcharge. 2026 cycle CLOSED — early 19 Dec 2025, final 13 Feb 2026, ceremony 5 May 2026 (Cipriani 42nd Street, New York). 2027 dates not yet published. Judging framework identical to SABRE EMEA: business impact over media reach, behavioural and commercial outcomes at top of results hierarchy, AVE and impressions-only reporting discouraged. Diamond and Silver SABRE categories carry a higher bar. International categories: Global Campaign (10+ markets), Multimarket Campaign, Canadian Campaign. WARC partnership publishes winning case studies on warc.com.',
     confidence: 'needs_check', lastVerified: '2026-06-14',
   },
@@ -349,7 +312,6 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'ICCO Global Awards', region: 'Global',
     finalDate: '', juryDate: '', ceremonyDate: '',
     earlyBird: '2026 dates not yet published — 2025 pattern: early bird 25 Jul', standard: '', final: '2026 date TBC — 2025 final was 29 Aug', ceremony: 'Nov 2026 at ICCO Global Summit (city TBC); 2025 was 12 Nov Mumbai',
-    prValue: 30,
     note: 'ICCO Global Awards — annual global PR awards run by ICCO (International Communications Consultancy Organisation), the umbrella federation of 30+ national PR associations. Active since 2015. Open globally — PR consultancies, freelancers, in-house teams, digital agencies, and media owners; ICCO membership not required. Judged purely on effectiveness and results (founding charter). Ceremony held at the ICCO Global Summit (city rotates; 2025 was Mumbai). 30+ categories across campaign, specialist, industry, geographic (Europe / APAC+MEA), and consultancy-performance tracks. Entry fees (2024): €250–500 EUR depending on membership status and deadline tier (early bird €250 member / €350 non-member; final €400 / €500); 2025/2026 fees unconfirmed. Jury: ~20 senior global leaders (2025), diverse EMEA/APAC/LATAM representation. Winner patterns: independent and mid-size consultancies from non-Anglo markets dominate — Lounge Group (Europe), Gambit (AMEA), Netprofile Finland, Kurio. Holding companies do not dominate. Date volatility warning: 2025 entry window moved ~2 months earlier vs 2024 — monitor iccopr.com/global-awards/ for 2026 announcement.',
     confidence: 'needs_check', lastVerified: '2026-06-05',
   },
@@ -357,7 +319,6 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'PRCA APAC Awards', region: 'APAC',
     finalDate: '', juryDate: '', ceremonyDate: '2026-04-23',
     earlyBird: 'Early bird closed 5 Dec 2025 (2026 cycle)', standard: '', final: 'Closed — 6 Feb 2026 (2026 cycle complete)', ceremony: '~23 Apr 2026 (location unconfirmed; likely Singapore)',
-    prValue: 20,
     note: 'PRCA APAC Awards — Asia-Pacific arm of the PRCA awards portfolio. 2026 cycle: early bird closed 5 Dec 2025; entry deadline 6 Feb 2026; judging panel announced ~25 Feb 2026; ceremony ~23 Apr 2026 (inferred from winner social post — location unconfirmed). 2027 cycle dates not yet published. Entry fees not publicly available — contact PRCA APAC chapter. Category list not confirmed from primary source; approximate list in platform is based on PRCA programme structure. Small Consultancy of the Year and individual tracks confirmed. Most relevant PRCA programme for Asia-based agencies.',
     confidence: 'needs_check', lastVerified: '2026-06-04',
   },
@@ -365,7 +326,6 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'Loeries', region: 'MENA',
     finalDate: '', juryDate: '', ceremonyDate: '',
     earlyBird: 'Typically ~March (15% off)', standard: 'Through ~June', final: 'Typically early July — 2026 dates TBC', ceremony: 'Typically late Sep / early Oct (Creative Week)',
-    prValue: 35,
     note: 'The Loerie Awards — premier creative award for Africa and the Middle East (including Türkiye and island territories). Founded 1978; not-for-profit; CEO Preetesh Sewraj. Loeries 2025 completed Creative Week 5–10 Oct 2025, Cape Town (theme: "The Great Hunger"). 2,784 entries from 13 countries. Loeries 2026 entries open as of Jun 2026 — full calendar and fees NOT YET PUBLISHED here. Based on 2025 pattern: early bird (15% off) ~Mar–Apr; standard through ~Jun; late fee (+10%) through ~Jul; Creative Week late Sep / early Oct. 2025 standard fees: $294 single / $444.50 campaign / $219.50 craft (ZAR R4,700/R7,105/R3,505); R500 of each fee is annual membership. Geographic eligibility: work created FOR the Africa/MENA region (Sub-Saharan Africa, MENA, Türkiye, island territories) OR FROM regionally-based companies. Global campaigns merely airing in the region are NOT eligible. WARC Report and World Creative Ranking inclusion. Anonymous audited judging; self-promo capped at Silver. Included in independent rankings: The Odd Number #1 independent agency 2025.',
     confidence: 'needs_check', lastVerified: '2026-06-04',
   },
@@ -373,7 +333,6 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'London International Awards', region: 'Global',
     finalDate: '2026-08-31', juryDate: '2026-09-25', ceremonyDate: '',
     earlyBird: '30 Apr 2026 (PASSED — 35% off)', standard: '1 May-30 Jun 2026 (20% off)', final: '31 Aug 2026', ceremony: 'No ceremony; results announced 28 Sep–5 Oct 2026 online',
-    prValue: 45,
     note: 'LIA 2026 entries open; judging 25 Sep–3 Oct 2026, Encore @ Wynn Las Vegas. Eligibility: work released 1 Jul 2025–31 Aug 2026. Fee tiers CONFIRMED (checked 8 Jul 2026, liaawards.com/enter/entry_fees): 35% early bird through 30 Apr 2026 (PASSED), 20% discount 1 May-30 Jun 2026, full rate 1 Jul 2026 through close 31 Aug 2026. Full per-medium table live on the site (~28 categories, Package Design lowest at $325/$400/$500 through Entertainment & Content Series highest at $975/$1,200/$1,500 across the three tiers). Change fees: USD 250 per entry (credit/attribution), USD 500 per entry (material changes after lock). Results announced online in stages 28 Sep–5 Oct 2026; "Of The Year" titles ~Nov 2026. No physical gala ceremony. 33 media types for 2026 (27 established + 6 new: Sports, Gaming, Cultural Catalyst, Entertainment & Content, Business Transformation, Democracy and Human Rights). 20 Jury Presidents across categories in 2026 (source: Roastbrief; the previously-listed "180+ jurors including 35+ global CCOs" figure could not be re-verified for 2026 and has been dropped). Genuinely global show — no geographic eligibility restriction. Included in WARC Creative 100 Rankings and Drum World Creative Rankings. Independently owned; founder/president Barbara Levy, chairperson Terry Savage (ex-Cannes Lions CEO, correct title is "Chairperson" not "jury president"). LIA founded 1986 — 2026 is the 40th edition (corrected from "40th anniversary 2025-2026," which was wrong).',
     confidence: 'verified', lastVerified: '2026-07-08',
   },
@@ -381,7 +340,6 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'ADFEST', region: 'APAC',
     finalDate: '', juryDate: '', ceremonyDate: '',
     earlyBird: '', standard: '', final: 'Closed — 2027 TBC', ceremony: 'Mar 2027, Pattaya (TBC)',
-    prValue: 50,
     note: 'ADFEST 2026 ("Human+") completed 19–21 Mar 2026, PEACH, Royal Cliff Hotels, Pattaya, Thailand. 2026 entry deadlines: early bird invoice/confirmation 19 Dec 2025, payment 9 Jan 2026; regular payment + materials final deadline 23 Jan 2026. 2027 cycle dates NOT YET PUBLISHED as of Jun 2026. Based on consistent annual pattern, expect 2027 early bird ~Dec 2026 and final deadline ~Jan 2027. Geographic eligibility: Asia Pacific + MENA only — companies must be based in eligible region. Fees 2026: THB 15,500 / 17,500 / 19,500 (early/regular/late, standard 19 categories); THB 23,000 / 25,000 / 27,000 (INNOVA Lotus + Lotus Roots). ~USD 430–770 depending on tier. 21 Lotus Award categories. Grand Jury President 2026: Yasuharu Sasaki (Global CCO, dentsu). Included in WARC Creative 100 Rankings, Campaign Brief Asia Creative Rankings, Drum World Creative Rankings. Non-profit organiser. Over 1,400 entries in 2026; 56 jurors from 17 cities.',
     confidence: 'needs_check', lastVerified: '2026-06-04',
   },
@@ -389,7 +347,6 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'Spikes Asia', region: 'APAC',
     finalDate: '', juryDate: '', ceremonyDate: '2026-03-12',
     earlyBird: '', standard: '', final: 'Closed', ceremony: '12 Mar 2026 (Singapore — 2026 cycle complete)',
-    prValue: 55,
     note: '2026 cycle fully closed — gala was 12 Mar 2026, The Capitol Theatre, Singapore (India led Grand Prix tally, Leo Mumbai named APAC Agency of the Year, Uzbekistan\'s first-ever Spikes win). 2027 cycle dates NOT YET PUBLISHED as of 8 Jul 2026 (/enter still 404s). Expect 2027 call for entries ~Nov 2026 (2026 jury was announced 11-13 Nov 2025, same window historically brings the next call for entries). Organiser: Asian Advertising Festival (Spikes Asia) Pte Ltd — Lions by Informa (Informa acquired Ascential in 2024; rebrand to "Lions by Informa" is live). Contact: awards@canneslions.com. 2026 fee range was USD $655–$1,005 (standard) / $870–$1,220 (final late) across 25 categories. 2026 What\'s New: new Creative B2B Spike (standalone); Social & Influencer → Social & Creator rename; new sub-categories: Excellence in Image Description, Retail Media, Cultural Engagement. Confirmed 93 named jurors for 2026 cycle (first-ever Jury President from Pakistan, Atiya Zaidi).',
     confidence: 'verified', lastVerified: '2026-07-08',
   },
@@ -397,15 +354,13 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'Campaign Asia Agency of the Year', region: 'APAC',
     finalDate: '2026-09-04', juryDate: '2026-10-28', ceremonyDate: '2026-12-08',
     earlyBird: '30 Jun 2026', standard: '30 Jul 2026', final: '4 Sep 2026', ceremony: 'By track: Japan/Korea 25 Nov (Hilton Tokyo); Greater China 1 Dec (Shanghai, venue TBA); SE Asia + ANZ + APAC/Network 8 Dec (Fairmont Singapore)',
-    prValue: 35,
-    note: '33rd edition (launched 1994); agency-PERFORMANCE award judged by client marketers on written submissions, not a creative-craft show. 2026 live at aoyawards.com for 5 of 6 tracks; SOUTH ASIA STILL ON ITS 2025 CYCLE as of 26 Jun 2026 (do not treat SA as open until its page refreshes; SA bills INR + 18% GST, all other tracks HKD). Eligibility 1 Sep 2025–31 Aug 2026. Per-entry fees (HKD): early bird 30 Jun 3,950 people / 4,780 agency-brand; standard 30 Jul 4,750 / 5,650; final 4 Sep 5,350 / 6,250. Shortlists 28 Oct. Each category has its OWN weighted scoring rubric (loaded to show_profiles 26 Jun 2026); cross-market Network titles use a market-weighted, ownership-scaled point system (awarded Platinum; eligibility min 2 wins incl 1 Gold). Endorsement requires CEO + CFO sign-off plus a wet-signature Letter of Endorsement. 3 new categories for 2026: Agency AI Excellence, MarTech Agency, Most Innovative MarTech Team. Integrity partner: SCS-Invictus. ⚠️ Entry/shortlist/winner volumes NOT published by Campaign — WIN_RATES are estimates, not for client-facing use. Organiser: Campaign Asia-Pacific / Haymarket. Separate "AOY Globals" scheme (2020) is a distinct entry type.',
+    note: '33rd edition (launched 1994); agency-PERFORMANCE award judged by client marketers on written submissions, not a creative-craft show. 2026 live at aoyawards.com for 5 of 6 tracks; SOUTH ASIA STILL ON ITS 2025 CYCLE as of 26 Jun 2026 (do not treat SA as open until its page refreshes; SA bills INR + 18% GST, all other tracks HKD). Eligibility 1 Sep 2025–31 Aug 2026. Per-entry fees (HKD): early bird 30 Jun 3,950 people / 4,780 agency-brand; standard 30 Jul 4,750 / 5,650; final 4 Sep 5,350 / 6,250. Shortlists 28 Oct. Each category has its OWN weighted scoring rubric (loaded to show_profiles 26 Jun 2026); cross-market Network titles use a market-weighted, ownership-scaled point system (awarded Platinum; eligibility min 2 wins incl 1 Gold). Endorsement requires CEO + CFO sign-off plus a wet-signature Letter of Endorsement. 3 new categories for 2026: Agency AI Excellence, MarTech Agency, Most Innovative MarTech Team. Integrity partner: SCS-Invictus. ⚠️ Entry/shortlist/winner volumes NOT published by Campaign — win-rate figures are estimates, not for client-facing use. Organiser: Campaign Asia-Pacific / Haymarket. Separate "AOY Globals" scheme (2020) is a distinct entry type.',
     confidence: 'verified', lastVerified: '2026-06-26',
   },
   {
     show: 'ROI Festival', region: 'Global',
     finalDate: '2026-07-15', juryDate: '2026-07-26', ceremonyDate: '2026-10-16',
     earlyBird: '15 May 2026 (PASSED)', standard: '25 Jun 2026', final: '15 Jul 2026', ceremony: '16 Oct 2026, Shanghai',
-    prValue: 25,
     note: '19th edition confirmed. Entries submitted via entry.roifestival.com/en (account activated and live-checked 8 Jul 2026). Schedule: open 1 Apr; early bird 15 May (PASSED); regular 25 Jun; final 15 Jul. Judging: Round 1 (screening) 26 Jul-3 Aug eliminates the bottom 80% by average score; Round 2 8-15 Aug ranks the surviving top 20% into Gold/Silver/Bronze/Nomination; final onsite judging 15 Oct decides Grand Prix live; festival + ceremony 15-16 Oct 2026. Location: Shanghai, China. Organiser: Shanghai ROI Festival Culture Media Co., Ltd. (上海金投赏文化传媒有限公司) — fully independent Chinese organiser, NOT affiliated with Epica. Entry format: written Case (PPT, organizer template requires 6 parts -- Background, Objectives, Creativity, Execution, Result, Analysis -- live-confirmed on the 2026 portal UI, supersedes the 2025 kit\'s 5-part version) or Work (creative work only, no case). Jurors score 3 cross-cutting dimensions each 1-5: Goals & Difficulty 30%, Creativity & Execution 30%, Results 40% (source: 2025/18th-edition official kit + live English "About ROI Awards" page, stable across at least 2 cycles). ⚠️ Fee structure confirmed in RMB from the 2025/18th-edition kit, NOT yet reconfirmed for 2026: Work RMB1,200/1,500/2,300 (early/standard/late); Case non-integration RMB1,400/1,800/2,600; Case creative-integration (e.g. AI categories) RMB2,150/2,750/3,550. 50% fee discount for social-responsibility/sustainability entries. Do not treat these RMB figures as 2026-confirmed until the 2026 kit is published or a real draft entry is priced in the live portal.',
     confidence: 'partial', lastVerified: '2026-07-08',
   },
@@ -413,7 +368,6 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'Tangrams', region: 'APAC',
     finalDate: '', juryDate: '', ceremonyDate: '',
     earlyBird: '', standard: '', final: 'RETIRED', ceremony: 'N/A',
-    prValue: 20,
     note: '⚠️ RETIRED — Tangrams brand fully retired as a standalone program (last referenced ~2021). The Tangrams brand no longer appears in any Spikes Asia official communications. Effectiveness and strategy territory now covered by two distinct Spikes Asia categories: (1) Creative Effectiveness Spike (USD $1,005 standard — highest fee tier; for results-led effectiveness work) and (2) Creative Strategy Spike (USD $810 standard; for strategic planning work). Note correction: previous note referenced "Strategy & Effectiveness Spike" as a combined category — that is not an official Spikes Asia category name. Direct clients to Creative Effectiveness Spike or Creative Strategy Spike by work type.',
     confidence: 'needs_check', lastVerified: '2026-06-03',
   },
@@ -421,7 +375,6 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'Cristal Festival', region: 'Global',
     finalDate: '', juryDate: '', ceremonyDate: '',
     earlyBird: '', standard: '', final: 'DEFUNCT', ceremony: 'N/A',
-    prValue: 25,
     note: '⚠️ ORIGINAL SHOW DEFUNCT — The original European Cristal Festival (founded 2001 as Méribel Ad Festival; run by Christian Cappe / Cristal Events SA) last ran in December 2016 in Courchevel, France. No editions documented after 2016. No official closure announcement published; brand/LinkedIn went silent by 2019. Three distinct entities now exist under the "Cristal" name: (1) DEFUNCT — original European show (do not use for scheduling); (2) African Cristal Festival — independent APAC/Africa show, currently in its own entry; (3) NYF Cristal Village Award — a sub-category within New York Festivals Advertising Awards, NOT a standalone show (2026 status unconfirmed — see NYF Advertising Awards entry). These are NOT formal replacements for the original; they emerged independently.',
     confidence: 'needs_check', lastVerified: '2026-06-03',
   },
@@ -429,290 +382,15 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'Campaign Asia Women to Watch APAC', region: 'APAC',
     finalDate: '2026-07-28', juryDate: '', ceremonyDate: '2026-10-06',
     earlyBird: '8 Jun 2026', standard: '14 Jul 2026', final: '28 Jul 2026', ceremony: '6 Oct 2026',
-    prValue: 25,
     note: 'Dedicated site: campaignwomentowatch.com. ⚠️ PAID SUBMISSION — not a free nominations list. Early bird 8 Jun (HKD 3,600), standard 14 Jul (HKD 3,900), final 28 Jul (HKD 4,100). Fees are non-refundable and include one-year Campaign Asia-Pacific membership. Winners announced 6 Oct 2026. Shortlist date not published. Organiser: Campaign Asia-Pacific / Haymarket Asia (wtw@haymarket.asia). Geographic scope: Asia-Pacific; nominees must be based in APAC. ⚠️ Early bird deadline imminent — check each June for opening.',
     confidence: 'verified', lastVerified: '2026-06-03',
   },
 ]
 
-// ── WIN_RATES ─────────────────────────────────────────────────────────────────
-// Win probability percentages per award level + estimated PR values.
-// ⚠️  Rows marked with "ESTIMATE" have no festival-stated primary source — do not use in client reports.
-// ⚠️  All rates are ALL-CATEGORY, WHOLE-SHOW blended figures. No category-level breakdown is stored.
-//     Dividing a category-specific fee by these rates produces a hybrid figure, not a precise cost-per-metal.
-// Rate audit: 14 June 2026. Sources documented per-show inline below.
-
-export const WIN_RATES: Record<string, WinRateData> = {
-  // FESTIVAL-STATED. Source: canneslions.com/awards/awards-support/awards-entry-guide
-  // "Each year, only 10% of all entries make the shortlist and only 3% win an Award."
-  // Standing annual figure referencing 2026 cycle. Denominator: "all entries" (festival's word).
-  // fee: Film standard single entry €1,095 × EUR 1.1646 = $1,275 USD (verified ledger B1; canneslions.com dates-and-fees).
-  'Cannes Lions': {
-    shortlist: 10, metal: 3, gold: 2, grandprix: 0.08,
-    pr: { shortlist: 12000, metal: 60000, gold: 350000, grandprix: 1500000 },
-    fee: 1275,
-  },
-  // FESTIVAL-STATED (2020 cycle). Source: dandad.org/annual/2020/dandad2020/d-ad-in-2020/
-  // "8,656 entries … 1,019 shortlisted (11.8%) and 630 pencil winners (7.3%)"
-  // Denominator: entries (not pieces of work). Most recent clean entry-denominator cycle published.
-  // 2021 cycle (via 2022 article dandad.org): stated inline as ~6% (9,972 entries); year inferred — do not cite as definitive.
-  // 2026 press release (media.dandad.org/documents/DAD_Winners_release_-2.pdf): 573 pencils from "50,000+ pieces" —
-  //   denominator is PIECES not entries; do not derive a rate from this figure.
-  // fee: Film standard single entry £580 × GBP 1.341 = $778 USD (verified ledger B1; D&AD 2026 Entry Kit PDF).
-  //   Supersedes the £390/$523 advertising-tier figure deployed 14 Jun, which was discredited 15 Jun.
-  'D&AD': {
-    shortlist: 11.8, metal: 7.3, gold: 4, grandprix: 0.5,
-    pr: { shortlist: 10000, metal: 40000, gold: 200000, grandprix: 800000 },
-    fee: 778,
-  },
-  // FESTIVAL-STATED (raw counts, 2025 cycle). Source: oneshow.org/about/
-  // "Entries: 18,000 in 2025 … Awards Presented: 658 Pencils in 2025"
-  // Derived rate: 658 / 18,000 = 3.66% — rounded to 3.7.
-  // ⚠️ AMBIGUITY: "658 Pencils" may include Merit awards (One Show calls all award levels "Pencils").
-  //    This figure is the upper bound for any award level. Metals-only rate may be lower; festival does not break it out.
-  // Shortlist count: not published by One Show. shortlist field remains ESTIMATE.
-  // fee: Regular Deadline, Single entry, Film/OOH/Print/Social Media tier = $625 USD (verified live oneshow.org/fees/ 14 Jun 2026).
-  'One Show': {
-    shortlist: 20, metal: 3.7, gold: 5, grandprix: 0.8,
-    pr: { shortlist: 8000, metal: 35000, gold: 180000, grandprix: 700000 },
-    fee: 625,
-  },
-  // ESTIMATE — Clio Awards does not publish win rates, entry totals, or aggregate award counts.
-  // Circulating figures ("less than 3%") trace to Wikipedia / agency copy with no Clio primary source.
-  // Do not use in client-facing materials without caveat. Source check completed: 14 Jun 2026.
-  // fee: $675 USD — Film, Deadline 1 (standard) single entry; rises to $900 by Deadline 3
-  //   (verified ledger B1; clios.com entry-fees). Replaces the prior flat $750, which matched no specific tier.
-  'Clio Awards': {
-    shortlist: 22, metal: 12, gold: 4, grandprix: 0.6,
-    pr: { shortlist: 9000, metal: 35000, gold: 180000, grandprix: 650000 },
-    fee: 675,
-  },
-  'Effie APAC': {
-    shortlist: 25, metal: 15, gold: 6, grandprix: 1.5,
-    pr: { shortlist: 15000, metal: 50000, gold: 200000, grandprix: 600000 },
-    fee: 800,
-  },
-  // ESTIMATE — Festival of Media does not disclose entry/category counts ("We don't disclose category numbers", FAQ).
-  // These win-rate values are modeled, NOT festival-stated. Do not use in client-facing materials.
-  // (Verified absence of published rates: festivalofmedia.com/faqs, 23 Jun 2026.)
-  'Festival of Media APAC': {
-    shortlist: 32, metal: 18, gold: 7, grandprix: 2,
-    pr: { shortlist: 10000, metal: 35000, gold: 120000, grandprix: 400000 },
-    fee: 521,
-  },
-  'Campaign Asia Women Leading Change': {
-    shortlist: 35, metal: 20, gold: 8, grandprix: 3,
-    pr: { shortlist: 8000, metal: 25000, gold: 80000, grandprix: 200000 },
-    fee: 450,
-  },
-  // ESTIMATE — MMA does not publish APAC entry totals or shortlist counts (2025: 107 medals; 2024: 93 medals,
-  // no denominator). These win-rate values are modeled, NOT festival-stated. Do not use in client-facing materials.
-  // (Verified absence of published rates: mmaglobal.com, 23 Jun 2026.)
-  'MMA Smarties APAC': {
-    shortlist: 28, metal: 16, gold: 6, grandprix: 1.5,
-    pr: { shortlist: 8000, metal: 30000, gold: 100000, grandprix: 350000 },
-    fee: 405,
-  },
-  // ESTIMATE — MMA does not publish Global entry totals (2025: 83 medals, no denominator). Modeled, NOT
-  // festival-stated. Do not use in client-facing materials. (Verified absence: mmaglobal.com, 23 Jun 2026.)
-  'MMA Smarties Global': {
-    shortlist: 22, metal: 12, gold: 5, grandprix: 1.0,
-    pr: { shortlist: 10000, metal: 40000, gold: 140000, grandprix: 480000 },
-    fee: 495,
-  },
-  'Clio Entertainment': {
-    shortlist: 25, metal: 14, gold: 5, grandprix: 0.8,
-    pr: { shortlist: 8000, metal: 30000, gold: 150000, grandprix: 500000 },
-    fee: 550,
-  },
-  'Clio Sports': {
-    shortlist: 24, metal: 13, gold: 5, grandprix: 0.8,
-    pr: { shortlist: 8000, metal: 30000, gold: 150000, grandprix: 500000 },
-    fee: 550,
-  },
-  'Clio Creators': {
-    shortlist: 30, metal: 18, gold: 7, grandprix: 1.5,
-    pr: { shortlist: 6000, metal: 20000, gold: 80000, grandprix: 250000 },
-    fee: 250,
-  },
-  // RESTRUCTURED 8 Jul 2026 (was modeled as a standard 4-tier show; ANDY has no
-  // Gold/Silver/Bronze ladder -- every entry either earns a single "ANDY" honor or
-  // does not, judged via 3 lenses: Craft/Reset/Bravery). Confirmed the platform's
-  // existing "Medal Chance" UI label is driven by .metal (pages/projects-[id]-page.tsx
-  // medal_chance sort key, "chance of medal" caption, components/RoiRanking.tsx
-  // baseMedalChance) -- ANDY's single win maps onto .metal with no schema change.
-  // ANDY does have a second real tier: GRANDY (Best in Show, one per year -- 2025
-  // GRANDY was "Meet Marina Prieto," DAVID Madrid for JCDecaux) -- maps onto .grandprix,
-  // its intended "vanishingly rare, one-per-cycle" meaning. .shortlist and .gold have
-  // no ANDY equivalent (no separate finalist stage, no gold sub-tier under the single
-  // ANDY honor) -- set to 0 (WinRateData requires `number`, not `number | null`) rather
-  // than a fabricated tier. ESTIMATE either way -- ANDY still publishes no aggregate
-  // entry/win totals on any official channel. NOTE: projects-[id]-page.tsx also keeps
-  // its OWN separate BASE_WIN_RATES constant (line ~714, distinct from this export) --
-  // that copy must be updated in the SAME edit or the UI keeps showing the old 4-tier
-  // shape (same two-representation trap as the WIN_RATES.fee/ENTRY_FEES.base rule).
-  'ANDY Awards': {
-    shortlist: 0, metal: 10, gold: 0, grandprix: 0.5,
-    pr: { shortlist: 8000, metal: 30000, gold: 150000, grandprix: 500000 },
-    fee: 1600,
-  },
-  // ESTIMATE — win rates and PR values need Ben's benchmarking
-  'New York Festivals Advertising Awards': {
-    shortlist: 20, metal: 12, gold: 4, grandprix: 0.6,
-    pr: { shortlist: 7000, metal: 28000, gold: 130000, grandprix: 450000 },
-    fee: 1050,
-  },
-  // ESTIMATE — win rates and PR values need Ben's benchmarking
-  'Dubai Lynx': {
-    shortlist: 22, metal: 13, gold: 5, grandprix: 0.8,
-    pr: { shortlist: 9000, metal: 35000, gold: 160000, grandprix: 550000 },
-    fee: 870,
-  },
-  // ESTIMATE — win rates and PR values need Ben's benchmarking
-  'Gerety Awards': {
-    shortlist: 20, metal: 12, gold: 4.5, grandprix: 0.6,
-    pr: { shortlist: 7000, metal: 25000, gold: 120000, grandprix: 400000 },
-    fee: 545,
-  },
-  'Campaign Asia Agency of the Year': {
-    shortlist: 40, metal: 25, gold: 10, grandprix: 3,
-    pr: { shortlist: 12000, metal: 40000, gold: 150000, grandprix: 500000 },
-    fee: 724, // ESTIMATE win rates (AOY publishes no denominators); fee must equal ENTRY_FEES.base
-
-  },
-  // FESTIVAL-STATED (2025/18th-edition official kit p.47-48 + 3-edition historical table:
-  // 15th/16th/17th editions show nomination rate 19.97/20.00/20.00% and gold rate
-  // 2.04/2.04/2.07%, both remarkably stable). shortlist = nominee-or-better rate;
-  // metal = gold(2%)+silver(3.5%)+bronze(5.5%) combined, NOT a single 20% bucket like
-  // the old estimate; gold = gold only; grandprix is actually decided in ABSOLUTE count
-  // (~9 awards against ~2,855 entries in the 17th/2024 cycle) not a true rate -- 0.3%
-  // here is a derived approximation for this percentage-based schema.
-  // fee: RMB1,800 (Case, non-integration, standard tier) / 6.80 CNY-per-USD (xe.com,
-  // checked 8 Jul 2026) = ~$265 USD. Sourced from the 2025/18th-edition kit, NOT yet
-  // reconfirmed for 2026 -- see ENTRY_FEES note.
-  'ROI Festival': {
-    shortlist: 20, metal: 11, gold: 2, grandprix: 0.3,
-    pr: { shortlist: 8000, metal: 25000, gold: 90000, grandprix: 280000 },
-    fee: 265,
-  },
-  'Tangrams': {
-    shortlist: 38, metal: 22, gold: 9, grandprix: 3,
-    pr: { shortlist: 6000, metal: 20000, gold: 75000, grandprix: 220000 },
-    fee: 400,
-  },
-  // shortlist: FESTIVAL-STATED (evergreen). Source: spikes.asia/awards/awards-support/how-judging-works
-  // "Typically around twenty percent of entries will make it to this stage [the shortlist]."
-  // metal: ESTIMATE — Spikes Asia does not publish a whole-show metals win rate. Per-category rates
-  //   are calculable from the 2026 winners press release but no aggregate is stated.
-  //   B&T (third-party) reported 8.9% in 2022 (271 trophies / 3,000+ entries) — not festival-stated; not used here.
-  //   Do not use metal rate in client-facing materials without caveat.
-  // fee: Film base standard single SGD 810 × SGD 0.7787 = $631 USD (verified ledger B1; spikes.asia dates-and-fees; 2026 cycle, 2027 rates pending).
-  'Spikes Asia': {
-    shortlist: 20, metal: 9, gold: 3, grandprix: 0.3,
-    pr: { shortlist: 10000, metal: 50000, gold: 250000, grandprix: 900000 },
-    fee: 631,
-  },
-  // ESTIMATE — SABRE does not publish per-region win rates. EMEA 2026: ~20% finalist
-  // rate (400 from 2,000+ entries). APAC volume lower; rates estimated from sector comparison.
-  // Global SABRE: 40 winners from 5,000+ total entries = ~0.8% — treated as prestige capstone.
-  // Do not use in client-facing materials without caveat.
-  'SABRE Awards Asia-Pacific': {
-    shortlist: 20, metal: 10, gold: 4, grandprix: 0.5,
-    pr: { shortlist: 6000, metal: 20000, gold: 70000, grandprix: 250000 },
-    fee: 500,
-  },
-  'Global SABRE Awards': {
-    shortlist: 5, metal: 2, gold: 1, grandprix: 0.1,
-    pr: { shortlist: 50000, metal: 150000, gold: 500000, grandprix: 1500000 },
-    fee: 0,
-  },
-  // SABRE Awards EMEA shortlist: FESTIVAL-STATED (2026). Source: PRovoke Media / sabre.provokemedia.com/emea.
-  // ~400 finalists from 2,000+ entries → ~20% campaign-level shortlist rate.
-  // metal/gold/grandprix: ESTIMATE — SABRE EMEA does not publish a metals breakdown.
-  // Rates estimated from sector comparison with SABRE APAC and PR show benchmarks.
-  // Do not use in client-facing materials without caveat.
-  'SABRE Awards EMEA': {
-    shortlist: 20, metal: 10, gold: 3, grandprix: 0.5,
-    pr: { shortlist: 8000, metal: 25000, gold: 85000, grandprix: 300000 },
-    fee: 475,
-  },
-  // SABRE Awards North America shortlist: ESTIMATE (~20%, comparable entry volume to EMEA;
-  // finalist count not separately published by PRovoke NA). metal/gold/grandprix: ESTIMATE.
-  // Do not use in client-facing materials without caveat.
-  'SABRE Awards North America': {
-    shortlist: 20, metal: 10, gold: 3, grandprix: 0.5,
-    pr: { shortlist: 10000, metal: 30000, gold: 100000, grandprix: 400000 },
-    fee: 525,
-  },
-  // ESTIMATE — ICCO does not publish shortlist/metal rates. 64 shortlisted in 2024
-  // across 30+ categories; field is small and selective. Rates estimated from PR show
-  // comparisons. Do not use in client-facing materials without caveat.
-  'ICCO Global Awards': {
-    shortlist: 30, metal: 15, gold: 5, grandprix: 1,
-    pr: { shortlist: 5000, metal: 15000, gold: 50000, grandprix: 150000 },
-    fee: 300,
-  },
-  // ESTIMATE — PRCA does not publish shortlist/metal rates for any programme.
-  // Rates estimated from sector-specialist show comparison. PR shows tend to have
-  // broader recognition rates than global creative shows.
-  // Do not use in client-facing materials without caveat.
-  'PRCA UK Awards': {
-    shortlist: 30, metal: 15, gold: 5, grandprix: 1,
-    pr: { shortlist: 4000, metal: 12000, gold: 40000, grandprix: 120000 },
-    fee: 200,
-  },
-  'PRCA APAC Awards': {
-    shortlist: 30, metal: 15, gold: 5, grandprix: 1,
-    pr: { shortlist: 3000, metal: 8000, gold: 25000, grandprix: 80000 },
-    fee: 150,
-  },
-  // ESTIMATE — Loeries does not publish shortlist/metal rates.
-  // 2,784 entries (2025); Finalist → Bronze → Silver → Gold → Grand Prix structure confirmed.
-  // Rates estimated from regional show comparison; do not use in client-facing materials without caveat.
-  'Loeries': {
-    shortlist: 25, metal: 12, gold: 4, grandprix: 0.5,
-    pr: { shortlist: 6000, metal: 20000, gold: 80000, grandprix: 300000 },
-    fee: 294,
-  },
-  // ESTIMATE — LIA does not publish entry totals; win rate is therefore not calculable.
-  // Tiered structure confirmed: Finalist → Bronze → Silver → Gold → Grand LIA.
-  // 2024 raw statue count (liaawards.com/press/2024/): 935 statues (29 Grand + 274 Gold + 300 Silver + 332 Bronze)
-  //   — no corresponding entry total published. Rate cannot be derived.
-  // 2013 historical figure (AWN, attributed to LIA press release): original LIA URL is 404 — NOT CHECKABLE.
-  // Rates derived from comparison with comparable global shows (D&AD/One Show tier). ESTIMATE only
-  // (win/shortlist/metal/gold/grandprix rates -- LIA does not publish entry totals).
-  // fee: $875 USD — FESTIVAL-STATED (liaawards.com/enter/entry_fees, checked 8 Jul 2026),
-  // anchored on TV & CINEMA (Single) full-rate tier (1 Jul-close), the closest LIA analog
-  // to the "flagship single-entry" fee other shows anchor on. Supersedes the prior $800
-  // ESTIMATE. Mid-tier (1 May-30 Jun, 20% off) = $700; early-bird (thru 30 Apr, 35% off) = $568.75.
-  'London International Awards': {
-    shortlist: 15, metal: 8, gold: 2.5, grandprix: 0.4,
-    pr: { shortlist: 10000, metal: 40000, gold: 200000, grandprix: 700000 },
-    fee: 875,
-  },
-  // ESTIMATE — ADFEST does not publish shortlist/metal rates. Derived from 2026 winner
-  // analysis (~1,400 entries, 21 categories, multiple Grandes withheld).
-  // Do not use in client-facing materials without caveat.
-  'ADFEST': {
-    shortlist: 20, metal: 9, gold: 3, grandprix: 0.3,
-    pr: { shortlist: 8000, metal: 35000, gold: 150000, grandprix: 500000 },
-    fee: 500,
-  },
-  'Cristal Festival': {
-    shortlist: 30, metal: 16, gold: 6, grandprix: 1.5,
-    pr: { shortlist: 9000, metal: 30000, gold: 120000, grandprix: 450000 },
-    fee: 480,
-  },
-  'Campaign Asia Women to Watch APAC': {
-    shortlist: 40, metal: 40, gold: 40, grandprix: 40,
-    pr: { shortlist: 10000, metal: 10000, gold: 10000, grandprix: 10000 },
-    fee: 300,
-  },
-}
-
 // ── ENTRY_FEES ────────────────────────────────────────────────────────────────
-// Per-show entry fee ranges for display/reference. WIN_RATES.fee is the
-// canonical number used in ROI calculations.
+// Per-show entry fee ranges. ENTRY_FEES.base is the SINGLE canonical entry-fee
+// home (the old WIN_RATES.fee duplicate was retired in the win-rate reconciliation,
+// Phase 2). Rates now live only in the show_rate_facts store; see lib/rate-facts.ts.
 
 export const ENTRY_FEES: Record<string, EntryFeeData> = {
   'Cannes Lions':           { base: 1275, range: '€690–€2,825 (EUR; category/deadline dependent)', note: 'Canonical fee: Film standard single entry €1,095 × EUR 1.1646 = $1,275 USD (verified ledger B1; canneslions.com dates-and-fees). Late-fee tiers after 5 Mar, 19 Mar, 2 Apr. AI/source disclosure and CEO/CMO sign-off required. Festival 22–26 Jun 2026.' },
@@ -731,7 +409,7 @@ export const ENTRY_FEES: Record<string, EntryFeeData> = {
   'New York Festivals Advertising Awards': { base: 1050, range: '$600–$1,500 (USD; entry type/deadline dependent)', note: 'Live URL: nyfadvertising.com. Shortlist 8 Jun, winners 15 Jun 2026. NYF Cristal Village Award confirmed active 2026 NYFA category (verified nyfadvertising.com/Competition/Categories Jun 2026 — homepage "2025" label is stale). ESTIMATE — win rate benchmarks not confirmed from official statistics.' },
   'Dubai Lynx':             { base: 870,  range: '$575–$1,170 (USD; category/deadline dependent)', note: 'MENA premier show. Cannes Lions affiliate. Ceremony 8 Oct 2026 — re-pull all benchmarks after that date. ESTIMATE until post-Oct 2026 stats available.' },
   'Gerety Awards':          { base: 545,  range: '€340–€750 (EUR; single/campaign and deadline dependent)', note: 'Female jury. Ceremony TBC. ESTIMATE — benchmark with Ben.' },
-  'Campaign Asia Agency of the Year': { base: 724,  range: 'HKD 3,950–6,250 per entry (people / agency-brand; tier dependent); South Asia billed INR + 18% GST', note: 'base = standard Agency/Brand single entry HKD 5,650 ≈ USD 724 at HKD peg 7.80 (canonical for ROI; must equal WIN_RATES.fee). Early bird by 30 Jun: HKD 3,950 (people) / 4,780 (agency/brand). Standard by 30 Jul: HKD 4,750 / 5,650. Final by 4 Sep: HKD 5,350 / 6,250. Fees HKD except South Asia (INR + 18% GST). Source: aoyawards.com + 2026 Entry Kit (verified 26 Jun 2026).' },
+  'Campaign Asia Agency of the Year': { base: 724,  range: 'HKD 3,950–6,250 per entry (people / agency-brand; tier dependent); South Asia billed INR + 18% GST', note: 'base = standard Agency/Brand single entry HKD 5,650 ≈ USD 724 at HKD peg 7.80 (canonical entry fee). Early bird by 30 Jun: HKD 3,950 (people) / 4,780 (agency/brand). Standard by 30 Jul: HKD 4,750 / 5,650. Final by 4 Sep: HKD 5,350 / 6,250. Fees HKD except South Asia (INR + 18% GST). Source: aoyawards.com + 2026 Entry Kit (verified 26 Jun 2026).' },
   'ROI Festival':           { base: 265,  range: 'RMB1,200-3,550 across Work/Case types and 3 tiers (2025/18th-edition kit); base = RMB1,800 Case-non-integration-standard / 6.80 CNY-per-USD', note: 'Sourced from the 2025/18th-edition official entry kit (Chinese, PDF, held by Ben) -- Work RMB1,200/1,500/2,300; Case non-integration RMB1,400/1,800/2,600; Case creative-integration (e.g. AI) RMB2,150/2,750/3,550 (early/standard/late). 50% discount for social-responsibility/sustainability entries. NOT yet reconfirmed for the 2026/19th-edition cycle -- the live 2026 portal fee screen only appears after starting a real draft entry.' },
   'Tangrams':               { base: 400,  range: 'N/A — integrated into Spikes Asia', note: 'Use Spikes Asia Strategy & Effectiveness Spike.' },
   'Spikes Asia':            { base: 631,  range: 'SGD 810 (Film base standard single); SGD 655–1,005 across categories (2026 cycle); 2027 rates pending', note: 'Canonical fee: Film base standard single SGD 810 × SGD 0.7787 = $631 USD (verified ledger B1; spikes.asia dates-and-fees). 2026 cycle closed Mar 2026; 2027 entry kit not yet published. Await 2027 rates at spikes.asia before next cycle.' },
@@ -752,31 +430,19 @@ export const ENTRY_FEES: Record<string, EntryFeeData> = {
 // ── Helper functions ──────────────────────────────────────────────────────────
 
 /**
- * Fuzzy-match a show name to the nearest WIN_RATES key.
+ * Fuzzy-match a show name to the nearest ENTRY_FEES key (the canonical show list).
  */
 export function resolveWinRateKey(name: string | null | undefined): string | null {
   if (!name) return null
-  if (WIN_RATES[name]) return name
+  if (ENTRY_FEES[name]) return name
   const stripped = name.replace(/\s*(Awards?|Festival|Show|Competition)\s*$/i, '').trim()
-  if (WIN_RATES[stripped]) return stripped
+  if (ENTRY_FEES[stripped]) return stripped
   const lower = stripped.toLowerCase()
   return (
-    Object.keys(WIN_RATES).find(
+    Object.keys(ENTRY_FEES).find(
       k => k.toLowerCase().includes(lower) || lower.includes(k.toLowerCase())
     ) ?? null
   )
-}
-
-/**
- * Quality-adjusted win probability multiplier.
- * quality   0  →  0.25× (floor)
- * quality  50  → ~0.84×
- * quality  70  → ~1.37×
- * quality  85  → ~2.0×
- * quality 100  →  3.0× (cap)
- */
-export function qFactor(quality: number): number {
-  return Math.min(3, 0.25 + 2.75 * Math.pow((quality || 60) / 100, 1.5))
 }
 
 /**
@@ -820,35 +486,6 @@ export function getDeadlineUrgency(showName: string | null | undefined): Deadlin
     return { level: 'prepare', daysLeft, deadlineDate: show.finalDate, message: `${daysLeft} days to deadline (${show.final}) — prep phases beginning. Shortlist and select categories this week.` }
   }
   return { level: 'ok', daysLeft, deadlineDate: show.finalDate, message: `${daysLeft} days to deadline (${show.final})` }
-}
-
-// ── ROI Index ─────────────────────────────────────────────────────────────────
-
-const _ROI_CEILING: number = (() => {
-  let max = 0
-  for (const [show, rates] of Object.entries(WIN_RATES)) {
-    const dl = DEADLINES_2026.find(d => d.show === show)
-    const prv = dl?.prValue ?? 30
-    const raw = (prv * rates.metal) / rates.fee
-    if (raw > max) max = raw
-  }
-  return max
-})()
-
-export function computeRoiIndex(
-  showName: string | null | undefined,
-  qualityScore?: number
-): number {
-  const key = resolveWinRateKey(showName)
-  if (!key || !WIN_RATES[key]) return 0
-  const rates = WIN_RATES[key]
-  const dl = DEADLINES_2026.find(d => d.show === key)
-  const prValue = dl?.prValue ?? 30
-  const medalChance = qualityScore !== undefined
-    ? rates.metal * qFactor(qualityScore)
-    : rates.metal
-  const raw = (prValue * medalChance) / rates.fee
-  return Math.min(100, Math.round((raw / _ROI_CEILING) * 100))
 }
 
 // ── KB show name normalisation ────────────────────────────────────────────────
