@@ -45,10 +45,13 @@ import PlannerIdentity from '@/components/planner/PlannerIdentity'
 import PlannerTarget from '@/components/planner/PlannerTarget'
 import PlannerEnvelope from '@/components/planner/PlannerEnvelope'
 import PortfolioResult from '@/components/planner/PortfolioResult'
+import PlannerV3 from '@/components/planner/PlannerV3'
 
 // ── Feature flag (soft gate; see file header) ────────────────────────────────
 const PLANNER_V2_DEFAULT = false
 const FLAG_KEY = 'planner_v2'
+// V3-P2 ships behind its own query param/localStorage gate, same pattern as v2.
+const FLAG_KEY_V3 = 'planner_v3'
 
 // ── Defaults ──────────────────────────────────────────────────────────────
 const DEFAULT_BUDGET = 50000
@@ -77,6 +80,7 @@ export default function PlannerPage() {
   // Flag state — resolved from URL + localStorage in an effect (client only).
   const [flagResolved, setFlagResolved] = useState(false)
   const [enabled, setEnabled] = useState(PLANNER_V2_DEFAULT)
+  const [enabledV3, setEnabledV3] = useState(false)
 
   useEffect(() => {
     const param = new URLSearchParams(window.location.search).get(FLAG_KEY)
@@ -88,6 +92,15 @@ export default function PlannerPage() {
     let stored = false
     try { stored = window.localStorage.getItem(FLAG_KEY) === '1' } catch { /* private mode */ }
     setEnabled(PLANNER_V2_DEFAULT || param === '1' || stored)
+    const paramV3 = new URLSearchParams(window.location.search).get(FLAG_KEY_V3)
+    if (paramV3 === '1') {
+      try { window.localStorage.setItem(FLAG_KEY_V3, '1') } catch { /* private mode */ }
+    } else if (paramV3 === '0') {
+      try { window.localStorage.removeItem(FLAG_KEY_V3) } catch { /* private mode */ }
+    }
+    let storedV3 = false
+    try { storedV3 = window.localStorage.getItem(FLAG_KEY_V3) === '1' } catch { /* private mode */ }
+    setEnabledV3(paramV3 === '1' || storedV3)
     setFlagResolved(true)
   }, [])
 
@@ -233,6 +246,12 @@ export default function PlannerPage() {
   // ── Render gates ────────────────────────────────────────────────────────────
   if (!flagResolved || authLoading) {
     return <Shell><p className="text-sm text-gray-500">Loading...</p></Shell>
+  }
+  // V3-P2: when the v3 flag is on, render the campaign-driven planner. It owns
+  // its own data load + flow; the v2 wizard below is untouched and stays the
+  // fallback until V3-P4 flips the default.
+  if (enabledV3) {
+    return <Shell><PlannerV3 /></Shell>
   }
   if (!enabled) {
     return (
