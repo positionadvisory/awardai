@@ -1,21 +1,31 @@
 -- ============================================================================
 -- 000-baseline.sql — Shortlist live database baseline (audit DM-01)
 --
--- Generated 11 June 2026 (Session 51) from the production Supabase instance
--- via migrations/000-baseline-generator.sql (catalog reconstruction).
+-- REGENERATED 16 July 2026 (Portfolio Planner v2, build session P1) from the
+-- production Supabase instance via migrations/000-baseline-generator.sql
+-- (catalog reconstruction, run live via the Supabase MCP execute_sql tool).
+-- Supersedes the 11 June 2026 (Session 51) baseline. This regeneration was
+-- triggered by two schema-changing sessions since: the win-rate reconciliation
+-- Phase 1 (show_rate_facts table + show_rate_facts_read view, F2, previously
+-- committed only to the shortlist-code/ mirror, not this repo — that gap is
+-- closed by this same commit) and this session's Portfolio Planner v2 P1
+-- (agency_profiles.planner_prefs, show_profiles.planner_facets,
+-- dynamic_shows.planner_facets).
 --
--- This is the FIRST complete record of the live public schema. Until this
--- file, core-table DDL existed only in production. It is a point-in-time
--- snapshot: regenerate after schema changes, and replace with a real
--- `supabase db dump --schema public` once the CLI is set up.
---
--- DO NOT RUN against production (everything in it already exists there).
+-- This is a point-in-time snapshot: regenerate after schema changes, and
+-- replace with a real `supabase db dump --schema public` once the CLI is set
+-- up. DO NOT RUN against production (everything in it already exists there).
 -- Purpose: disaster recovery, staging setup, and drift detection.
 --
--- Post-generation cleanup applied (Session 51, run live same day):
---   - get_org_features() dropped (referenced tables removed by DM-13; no callers)
---   - full-table grants to anon/authenticated revoked on jury_records,
---     platform_invitations, show_requests (RLS already denied; trapdoor removed)
+-- Note: this regeneration reflects the CURRENT live catalog end-to-end (not a
+-- patch of the stale Session 51 file), so it also picks up schema changes
+-- from every session between 11 June and 16 July that were never separately
+-- captured in a repo baseline (coach_feedback, project_pillar_facts,
+-- entry_drafts.revisions/data_needed, evaluations.section_rescores,
+-- show_profiles.entry_form/gold_standard_profile/resonant_language/
+-- red_flag_language, dynamic_shows.confidence/last_verified_at, the
+-- notify_new_signup trigger + vault-secret webhook, etc. — all already live,
+-- none introduced by this session).
 -- ============================================================================
 
 
@@ -24,6 +34,8 @@
 -- ============================================================
 
 CREATE EXTENSION IF NOT EXISTS "pg_cron";
+
+CREATE EXTENSION IF NOT EXISTS "pg_net";
 
 CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
 
@@ -74,7 +86,28 @@ CREATE TABLE agency_profiles (
   office_locations text[],
   brand_colors jsonb,
   in_house_team_name text,
-  agency_partner_names text[]
+  agency_partner_names text[],
+  agency_facts jsonb,
+  agency_facts_version integer DEFAULT 0 NOT NULL,
+  agency_facts_validated_at timestamp with time zone,
+  agency_facts_validated_by uuid,
+  planner_prefs jsonb
+);
+
+CREATE TABLE aoy_market_baselines (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  market text NOT NULL,
+  cycle_year integer NOT NULL,
+  discipline text NOT NULL,
+  window_start date NOT NULL,
+  window_end date NOT NULL,
+  baseline_text text NOT NULL,
+  key_figures jsonb DEFAULT '[]'::jsonb NOT NULL,
+  sources jsonb DEFAULT '[]'::jsonb NOT NULL,
+  verified_at timestamp with time zone,
+  verified_by text,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 CREATE TABLE articles (
@@ -151,6 +184,24 @@ CREATE TABLE campaigns (
   search_vector tsvector
 );
 
+CREATE TABLE coach_feedback (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  project_id bigint NOT NULL,
+  direction_id bigint NOT NULL,
+  org_id bigint NOT NULL,
+  created_by uuid NOT NULL,
+  draft_generation integer NOT NULL,
+  pillar text,
+  category_key text,
+  sections jsonb DEFAULT '[]'::jsonb NOT NULL,
+  priorities text[] DEFAULT '{}'::text[] NOT NULL,
+  overall text,
+  market_context jsonb,
+  model_used text DEFAULT 'claude-sonnet-4-6'::text NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 CREATE TABLE directions (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   project_id bigint NOT NULL,
@@ -199,7 +250,17 @@ CREATE TABLE dynamic_shows (
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
   confidence text DEFAULT 'needs_check'::text,
-  last_verified_at date
+  last_verified_at date,
+  planner_facets jsonb
+);
+
+CREATE TABLE engagement_events (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  user_id uuid NOT NULL,
+  org_id bigint NOT NULL,
+  event text NOT NULL,
+  context jsonb DEFAULT '{}'::jsonb NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 CREATE TABLE entry_drafts (
@@ -226,7 +287,11 @@ CREATE TABLE entry_drafts (
   award_show text,
   category text,
   draft_generation integer DEFAULT 1,
-  uuid uuid DEFAULT gen_random_uuid() NOT NULL
+  uuid uuid DEFAULT gen_random_uuid() NOT NULL,
+  section_weight numeric,
+  field_values jsonb,
+  revisions jsonb DEFAULT '[]'::jsonb NOT NULL,
+  data_needed jsonb DEFAULT '[]'::jsonb NOT NULL
 );
 
 CREATE TABLE evaluations (
@@ -247,7 +312,8 @@ CREATE TABLE evaluations (
   evaluation_mode text DEFAULT 'judge'::text,
   changes_analysis text,
   uuid uuid DEFAULT gen_random_uuid() NOT NULL,
-  output jsonb
+  output jsonb,
+  section_rescores jsonb DEFAULT '{}'::jsonb NOT NULL
 );
 
 CREATE TABLE invitations (
@@ -409,6 +475,19 @@ CREATE TABLE project_collaborators (
   created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+CREATE TABLE project_pillar_facts (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  project_id bigint NOT NULL,
+  org_id bigint NOT NULL,
+  pillar text NOT NULL,
+  facts jsonb NOT NULL,
+  schema_version integer DEFAULT 1 NOT NULL,
+  validated_at timestamp with time zone,
+  validated_by uuid,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 CREATE TABLE projects (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   user_id uuid NOT NULL,
@@ -425,7 +504,10 @@ CREATE TABLE projects (
   updated_at timestamp with time zone DEFAULT now(),
   uuid uuid DEFAULT gen_random_uuid() NOT NULL,
   award_year integer,
-  tonal_brief jsonb
+  tonal_brief jsonb,
+  entry_type text DEFAULT 'campaign'::text NOT NULL,
+  agency_facts jsonb,
+  endorsements_checklist jsonb DEFAULT '{}'::jsonb NOT NULL
 );
 
 CREATE TABLE show_profiles (
@@ -443,7 +525,28 @@ CREATE TABLE show_profiles (
   medal_culture text,
   resonant_language text,
   red_flag_language text,
-  gold_standard_profile text
+  gold_standard_profile text,
+  entry_form jsonb,
+  planner_facets jsonb
+);
+
+CREATE TABLE show_rate_facts (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  show_name text NOT NULL,
+  metric text NOT NULL,
+  value numeric(5,2),
+  grade text NOT NULL,
+  denominator text,
+  category_scope text DEFAULT 'whole_show'::text NOT NULL,
+  cycle_year integer,
+  source_url text,
+  source_quote text,
+  attributed_to text,
+  note text,
+  last_verified_at date NOT NULL,
+  verified_by text NOT NULL,
+  superseded_by bigint,
+  created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 CREATE TABLE show_requests (
@@ -479,9 +582,20 @@ CREATE TABLE usage_logs (
   created_at timestamp with time zone DEFAULT now()
 );
 
+CREATE TABLE user_product_state (
+  user_id uuid NOT NULL,
+  guidance_enabled boolean DEFAULT true NOT NULL,
+  wizard_completed_at timestamp with time zone,
+  wizard_route text,
+  section_visits jsonb DEFAULT '{}'::jsonb NOT NULL,
+  nudges jsonb DEFAULT '{}'::jsonb NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 
 -- ============================================================
--- CONSTRAINTS (PK, UNIQUE, CHECK, then FK)
+-- CONSTRAINTS
 -- ============================================================
 
 ALTER TABLE agency_profiles ADD CONSTRAINT agency_profiles_pkey PRIMARY KEY (id);
@@ -491,6 +605,12 @@ ALTER TABLE agency_profiles ADD CONSTRAINT agency_profiles_org_id_unique UNIQUE 
 ALTER TABLE agency_profiles ADD CONSTRAINT agency_profiles_org_type_check CHECK ((org_type = ANY (ARRAY['agency'::text, 'brand'::text, 'production_company'::text, 'media_agency'::text, 'consultancy'::text])));
 
 ALTER TABLE agency_profiles ADD CONSTRAINT agency_profiles_org_id_fkey FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE;
+
+ALTER TABLE aoy_market_baselines ADD CONSTRAINT aoy_market_baselines_pkey PRIMARY KEY (id);
+
+ALTER TABLE aoy_market_baselines ADD CONSTRAINT aoy_market_baselines_discipline_chk CHECK ((discipline = ANY (ARRAY['PR'::text, 'Media'::text, 'Creative'::text, 'Digital'::text, 'all'::text])));
+
+ALTER TABLE aoy_market_baselines ADD CONSTRAINT aoy_market_baselines_window_chk CHECK ((window_end > window_start));
 
 ALTER TABLE articles ADD CONSTRAINT articles_pkey PRIMARY KEY (id);
 
@@ -524,6 +644,16 @@ ALTER TABLE campaigns ADD CONSTRAINT campaigns_slug_key UNIQUE (slug);
 
 ALTER TABLE campaigns ADD CONSTRAINT campaigns_show_id_fkey FOREIGN KEY (show_id) REFERENCES award_shows(id);
 
+ALTER TABLE coach_feedback ADD CONSTRAINT coach_feedback_pkey PRIMARY KEY (id);
+
+ALTER TABLE coach_feedback ADD CONSTRAINT coach_feedback_direction_generation_unique UNIQUE (direction_id, draft_generation);
+
+ALTER TABLE coach_feedback ADD CONSTRAINT coach_feedback_direction_id_fkey FOREIGN KEY (direction_id) REFERENCES directions(id) ON DELETE CASCADE;
+
+ALTER TABLE coach_feedback ADD CONSTRAINT coach_feedback_org_id_fkey FOREIGN KEY (org_id) REFERENCES organizations(id);
+
+ALTER TABLE coach_feedback ADD CONSTRAINT coach_feedback_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
+
 ALTER TABLE directions ADD CONSTRAINT directions_pkey PRIMARY KEY (id);
 
 ALTER TABLE directions ADD CONSTRAINT directions_uuid_key UNIQUE (uuid);
@@ -545,6 +675,14 @@ ALTER TABLE dynamic_shows ADD CONSTRAINT dynamic_shows_confidence_check CHECK ((
 ALTER TABLE dynamic_shows ADD CONSTRAINT dynamic_shows_added_by_fkey FOREIGN KEY (added_by) REFERENCES auth.users(id) ON DELETE SET NULL;
 
 ALTER TABLE dynamic_shows ADD CONSTRAINT dynamic_shows_source_request_id_fkey FOREIGN KEY (source_request_id) REFERENCES show_requests(id) ON DELETE SET NULL;
+
+ALTER TABLE engagement_events ADD CONSTRAINT engagement_events_pkey PRIMARY KEY (id);
+
+ALTER TABLE engagement_events ADD CONSTRAINT engagement_events_event_check CHECK ((event = ANY (ARRAY['eval_completed'::text, 'directions_generated'::text, 'draft_generated'::text, 'presskit_generated'::text, 'script_generated'::text, 'quick_eval_used'::text, 'outcome_recorded'::text, 'section_view'::text, 'spine_step_clicked'::text, 'nextstep_shown'::text, 'nextstep_clicked'::text, 'nudge_shown'::text, 'nudge_clicked'::text, 'nudge_dismissed'::text, 'wizard_frame_viewed'::text, 'wizard_route_selected'::text, 'guidance_disabled'::text, 'guidance_enabled'::text, 'tour_restarted'::text, 'first_run_landed'::text, 'first_run_upload_started'::text, 'first_run_score_shown'::text, 'first_run_sample_used'::text, 'first_run_nextstep_selected'::text])));
+
+ALTER TABLE engagement_events ADD CONSTRAINT engagement_events_org_id_fkey FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE;
+
+ALTER TABLE engagement_events ADD CONSTRAINT engagement_events_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 
 ALTER TABLE entry_drafts ADD CONSTRAINT entry_drafts_pkey PRIMARY KEY (id);
 
@@ -646,9 +784,19 @@ ALTER TABLE project_collaborators ADD CONSTRAINT project_collaborators_org_id_fk
 
 ALTER TABLE project_collaborators ADD CONSTRAINT project_collaborators_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
 
+ALTER TABLE project_pillar_facts ADD CONSTRAINT project_pillar_facts_pkey PRIMARY KEY (id);
+
+ALTER TABLE project_pillar_facts ADD CONSTRAINT project_pillar_facts_project_id_pillar_key UNIQUE (project_id, pillar);
+
+ALTER TABLE project_pillar_facts ADD CONSTRAINT project_pillar_facts_pillar_check CHECK ((pillar = ANY (ARRAY['people'::text, 'brand'::text])));
+
+ALTER TABLE project_pillar_facts ADD CONSTRAINT project_pillar_facts_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
+
 ALTER TABLE projects ADD CONSTRAINT projects_pkey PRIMARY KEY (id);
 
 ALTER TABLE projects ADD CONSTRAINT projects_uuid_key UNIQUE (uuid);
+
+ALTER TABLE projects ADD CONSTRAINT projects_entry_type_check CHECK ((entry_type = ANY (ARRAY['campaign'::text, 'aoy'::text])));
 
 ALTER TABLE projects ADD CONSTRAINT projects_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'analyzing'::text, 'directions'::text, 'drafting'::text, 'complete'::text, 'archived'::text])));
 
@@ -657,6 +805,22 @@ ALTER TABLE projects ADD CONSTRAINT projects_org_id_fkey FOREIGN KEY (org_id) RE
 ALTER TABLE projects ADD CONSTRAINT projects_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 
 ALTER TABLE show_profiles ADD CONSTRAINT show_profiles_pkey PRIMARY KEY (id);
+
+ALTER TABLE show_rate_facts ADD CONSTRAINT show_rate_facts_pkey PRIMARY KEY (id);
+
+ALTER TABLE show_rate_facts ADD CONSTRAINT show_rate_facts_attributed_to_required_check CHECK (((grade <> 'THIRD_PARTY'::text) OR (attributed_to IS NOT NULL)));
+
+ALTER TABLE show_rate_facts ADD CONSTRAINT show_rate_facts_denominator_check CHECK (((denominator IS NULL) OR (denominator = ANY (ARRAY['entries'::text, 'pieces'::text, 'unknown'::text]))));
+
+ALTER TABLE show_rate_facts ADD CONSTRAINT show_rate_facts_grade_check CHECK ((grade = ANY (ARRAY['FESTIVAL_STATED'::text, 'SOURCED'::text, 'THIRD_PARTY'::text, 'ESTIMATE'::text, 'NONE_PUBLISHED'::text, 'REFUTED'::text])));
+
+ALTER TABLE show_rate_facts ADD CONSTRAINT show_rate_facts_metric_check CHECK ((metric = ANY (ARRAY['shortlist_rate'::text, 'win_rate'::text, 'gold_rate'::text, 'grandprix_rate'::text])));
+
+ALTER TABLE show_rate_facts ADD CONSTRAINT show_rate_facts_source_url_required_check CHECK (((grade <> ALL (ARRAY['FESTIVAL_STATED'::text, 'SOURCED'::text])) OR (source_url IS NOT NULL)));
+
+ALTER TABLE show_rate_facts ADD CONSTRAINT show_rate_facts_value_required_check CHECK (((grade = ANY (ARRAY['NONE_PUBLISHED'::text, 'REFUTED'::text])) OR (value IS NOT NULL)));
+
+ALTER TABLE show_rate_facts ADD CONSTRAINT show_rate_facts_superseded_by_fkey FOREIGN KEY (superseded_by) REFERENCES show_rate_facts(id);
 
 ALTER TABLE show_requests ADD CONSTRAINT show_requests_pkey PRIMARY KEY (id);
 
@@ -674,18 +838,32 @@ ALTER TABLE usage_logs ADD CONSTRAINT usage_logs_org_id_fkey FOREIGN KEY (org_id
 
 ALTER TABLE usage_logs ADD CONSTRAINT usage_logs_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id);
 
+ALTER TABLE user_product_state ADD CONSTRAINT user_product_state_pkey PRIMARY KEY (user_id);
+
+ALTER TABLE user_product_state ADD CONSTRAINT user_product_state_wizard_route_check CHECK (((wizard_route IS NULL) OR (wizard_route = ANY (ARRAY['evaluate'::text, 'new_entry'::text, 'scope_season'::text, 'skipped'::text]))));
+
+ALTER TABLE user_product_state ADD CONSTRAINT user_product_state_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
 
 -- ============================================================
--- INDEXES
+-- INDEXES (not backing a constraint)
 -- ============================================================
+
+CREATE UNIQUE INDEX aoy_market_baselines_key_idx ON public.aoy_market_baselines USING btree (market, cycle_year, discipline);
 
 CREATE INDEX campaigns_embedding_ivfflat_idx ON public.campaigns USING ivfflat (embedding vector_cosine_ops) WITH (lists='30');
 
 CREATE INDEX campaigns_search_idx ON public.campaigns USING gin (search_vector);
 
+CREATE INDEX coach_feedback_project_idx ON public.coach_feedback USING btree (project_id);
+
 CREATE INDEX directions_org_id_idx ON public.directions USING btree (org_id);
 
 CREATE INDEX directions_project_id_idx ON public.directions USING btree (project_id);
+
+CREATE INDEX engagement_events_org_event_created_idx ON public.engagement_events USING btree (org_id, event, created_at DESC);
+
+CREATE INDEX engagement_events_user_created_idx ON public.engagement_events USING btree (user_id, created_at DESC);
 
 CREATE INDEX entry_drafts_direction_id_idx ON public.entry_drafts USING btree (direction_id);
 
@@ -723,6 +901,10 @@ CREATE INDEX idx_project_collaborators_org_id ON public.project_collaborators US
 
 CREATE INDEX idx_project_collaborators_project_id ON public.project_collaborators USING btree (project_id);
 
+CREATE INDEX idx_project_pillar_facts_org ON public.project_pillar_facts USING btree (org_id);
+
+CREATE INDEX idx_project_pillar_facts_project ON public.project_pillar_facts USING btree (project_id);
+
 CREATE INDEX idx_projects_org ON public.projects USING btree (org_id);
 
 CREATE INDEX idx_projects_status ON public.projects USING btree (status);
@@ -751,6 +933,8 @@ CREATE UNIQUE INDEX show_profiles_show_cat_nnd_uniq ON public.show_profiles USIN
 
 CREATE INDEX show_profiles_show_name_idx ON public.show_profiles USING btree (show_name);
 
+CREATE INDEX show_rate_facts_show_metric_idx ON public.show_rate_facts USING btree (show_name, metric) WHERE (superseded_by IS NULL);
+
 CREATE INDEX show_requests_status_idx ON public.show_requests USING btree (status);
 
 CREATE INDEX stripe_webhook_events_created_idx ON public.stripe_webhook_events USING btree (created_at);
@@ -761,6 +945,18 @@ CREATE INDEX usage_logs_org_action_created_idx ON public.usage_logs USING btree 
 -- ============================================================
 -- FUNCTIONS
 -- ============================================================
+
+CREATE OR REPLACE FUNCTION public.append_project_material(p_project_id bigint, p_material jsonb)
+ RETURNS void
+ LANGUAGE sql
+ SET search_path TO 'public'
+AS $function$
+  UPDATE projects
+  SET materials = coalesce(materials, '[]'::jsonb) || jsonb_build_array(p_material),
+      updated_at = now()
+  WHERE id = p_project_id
+$function$
+;
 
 CREATE OR REPLACE FUNCTION public.bulk_insert_campaigns(data jsonb)
  RETURNS integer
@@ -774,7 +970,7 @@ BEGIN
   FOR rec IN SELECT * FROM jsonb_array_elements(data)
   LOOP
     SELECT id INTO sid FROM public.award_shows WHERE slug = (rec->>'show_slug');
-    
+
     INSERT INTO public.campaigns (
       campaign_name, slug, show_id, show_raw, year, award_tier, award_category,
       client, agency, market, what, insight, win_factor, results, source, verified
@@ -786,7 +982,7 @@ BEGIN
       'import', true
     )
     ON CONFLICT (slug) DO NOTHING;
-    
+
     cnt := cnt + 1;
   END LOOP;
   RETURN cnt;
@@ -913,6 +1109,102 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.get_project_entry_drafts(p_project_id bigint)
+ RETURNS TABLE(id bigint, project_id bigint, direction_id bigint, field_key text, field_label text, word_limit integer, section_weight numeric, version_a text, version_b text, version_c text, selected text, custom_text text, field_values jsonb, chat_history jsonb, revisions jsonb, data_needed jsonb, award_show text, category text, sort_order integer, draft_generation integer, created_at timestamp with time zone, updated_at timestamp with time zone)
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'public'
+AS $function$
+  WITH d AS (
+    SELECT ed.*,
+           coalesce(ed.draft_generation, 1) AS gen,
+           max(coalesce(ed.draft_generation, 1))
+             OVER (PARTITION BY ed.direction_id) AS max_gen
+    FROM entry_drafts ed
+    WHERE ed.project_id = p_project_id
+  )
+  SELECT
+    d.id,
+    d.project_id,
+    d.direction_id,
+    d.field_key,
+    d.field_label,
+    d.word_limit,
+    d.section_weight,
+    CASE WHEN d.gen = d.max_gen THEN d.version_a
+         ELSE coalesce(
+           nullif(trim(d.custom_text), ''),
+           CASE d.selected
+             WHEN 'b' THEN coalesce(nullif(trim(d.version_b), ''), d.version_a)
+             WHEN 'c' THEN coalesce(nullif(trim(d.version_c), ''), d.version_a)
+             ELSE d.version_a
+           END,
+           d.version_a
+         )
+    END AS version_a,
+    CASE WHEN d.gen = d.max_gen THEN d.version_b ELSE NULL END AS version_b,
+    CASE WHEN d.gen = d.max_gen THEN d.version_c ELSE NULL END AS version_c,
+    CASE WHEN d.gen = d.max_gen THEN d.selected ELSE NULL END AS selected,
+    CASE WHEN d.gen = d.max_gen THEN d.custom_text ELSE NULL END AS custom_text,
+    CASE WHEN d.gen = d.max_gen THEN d.field_values ELSE NULL END AS field_values,
+    CASE WHEN d.gen = d.max_gen THEN d.chat_history ELSE NULL END AS chat_history,
+    CASE WHEN d.gen = d.max_gen THEN d.revisions ELSE NULL END AS revisions,
+    CASE WHEN d.gen = d.max_gen THEN d.data_needed ELSE NULL END AS data_needed,
+    d.award_show,
+    d.category,
+    d.sort_order,
+    d.gen AS draft_generation,
+    d.created_at,
+    d.updated_at
+  FROM d
+  ORDER BY d.sort_order ASC, d.id ASC
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.get_project_material_text(p_project_id bigint, p_path text)
+ RETURNS text
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'public'
+AS $function$
+  SELECT m.value->>'extracted_text'
+  FROM projects p
+  CROSS JOIN LATERAL jsonb_array_elements(coalesce(p.materials, '[]'::jsonb)) AS m(value)
+  WHERE p.id = p_project_id
+    AND m.value->>'path' = p_path
+  LIMIT 1
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.get_project_materials_meta(p_project_id bigint)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'public'
+AS $function$
+  SELECT coalesce(
+    (
+      SELECT jsonb_agg(
+        (m.value - 'extracted_text') || jsonb_build_object(
+          'has_text', coalesce(length(m.value->>'extracted_text'), 0) > 0,
+          'text_words',
+            CASE
+              WHEN coalesce(trim(m.value->>'extracted_text'), '') = '' THEN 0
+              ELSE coalesce(array_length(regexp_split_to_array(trim(m.value->>'extracted_text'), '\s+'), 1), 0)
+            END
+        )
+        ORDER BY m.ordinality
+      )
+      FROM projects p
+      CROSS JOIN LATERAL jsonb_array_elements(coalesce(p.materials, '[]'::jsonb))
+        WITH ORDINALITY AS m(value, ordinality)
+      WHERE p.id = p_project_id
+    ),
+    '[]'::jsonb
+  )
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.handle_new_user()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -1030,8 +1322,23 @@ CREATE OR REPLACE FUNCTION public.increment_usage(p_org_id bigint, p_counter tex
  RETURNS void
  LANGUAGE plpgsql
  SECURITY DEFINER
+ SET search_path TO 'public'
 AS $function$
 BEGIN
+  -- Whitelist the dynamic counter column. Anything outside this set is ignored.
+  IF p_counter NOT IN (
+    'entries_generated',
+    'evaluations_run',
+    'edits_run',
+    'video_scripts_generated',
+    'directions_generated',
+    'budget_analyses_run',
+    'kb_uploads'
+  ) THEN
+    RAISE WARNING 'increment_usage: unknown counter %, skipping', p_counter;
+    RETURN;
+  END IF;
+
   INSERT INTO monthly_usage (org_id, period_year, period_month)
   VALUES (
     p_org_id,
@@ -1074,6 +1381,68 @@ end;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.merge_evaluation_section_rescore(p_evaluation_id bigint, p_org_id bigint, p_section_key text, p_payload jsonb)
+ RETURNS jsonb
+ LANGUAGE sql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  update public.evaluations
+     set section_rescores = coalesce(section_rescores, '{}'::jsonb)
+                            || jsonb_build_object(p_section_key, p_payload)
+   where id = p_evaluation_id
+     and org_id = p_org_id
+  returning section_rescores;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.notify_new_signup()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_secret text;
+begin
+  begin
+    select decrypted_secret into v_secret
+    from vault.decrypted_secrets
+    where name = 'notify_signup_shared_secret'
+    limit 1;
+
+    if v_secret is null then
+      raise warning 'notify_new_signup: notify_signup_shared_secret not found in vault — skipping notify call for profile %', new.id;
+      return new;
+    end if;
+
+    perform net.http_post(
+      url     := 'https://qctpjlysyotkwkvfqyng.supabase.co/functions/v1/notify-signup',
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'x-webhook-secret', v_secret
+      ),
+      body := jsonb_build_object(
+        'record', jsonb_build_object(
+          'id', new.id,
+          'email', new.email,
+          'full_name', new.full_name,
+          'org_id', new.org_id,
+          'created_at', new.created_at
+        )
+      ),
+      timeout_milliseconds := 5000
+    );
+  exception when others then
+    -- Never let a notify failure touch the signup transaction.
+    raise warning 'notify_new_signup: swallowed error for profile %: %', new.id, sqlerrm;
+  end;
+
+  return new;
+end;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.org_usage_last_hour(p_org_id bigint, p_action text)
  RETURNS integer
  LANGUAGE sql
@@ -1090,6 +1459,26 @@ AS $function$
          AND created_at > now() - interval '1 hour'
     )
   END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.remove_project_material(p_project_id bigint, p_path text)
+ RETURNS void
+ LANGUAGE sql
+ SET search_path TO 'public'
+AS $function$
+  UPDATE projects p
+  SET materials = coalesce(
+        (
+          SELECT jsonb_agg(m.value ORDER BY m.ordinality)
+          FROM jsonb_array_elements(coalesce(p.materials, '[]'::jsonb))
+            WITH ORDINALITY AS m(value, ordinality)
+          WHERE m.value->>'path' IS DISTINCT FROM p_path
+        ),
+        '[]'::jsonb
+      ),
+      updated_at = now()
+  WHERE p.id = p_project_id
 $function$
 ;
 
@@ -1212,6 +1601,8 @@ CREATE TRIGGER entry_drafts_updated_at BEFORE UPDATE ON public.entry_drafts FOR 
 
 CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION handle_new_user();
 
+CREATE TRIGGER on_profile_created_notify AFTER INSERT ON public.profiles FOR EACH ROW EXECUTE FUNCTION notify_new_signup();
+
 CREATE TRIGGER organizations_updated_at BEFORE UPDATE ON public.organizations FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
 
 CREATE TRIGGER press_kit_drafts_updated_at BEFORE UPDATE ON public.press_kit_drafts FOR EACH ROW EXECUTE FUNCTION update_press_kit_drafts_updated_at();
@@ -1227,8 +1618,7 @@ CREATE TRIGGER trg_enforce_project_limit BEFORE INSERT ON public.projects FOR EA
 -- VIEWS
 -- ============================================================
 
-CREATE OR REPLACE VIEW admin_org_overview AS
- SELECT o.id,
+CREATE VIEW admin_org_overview AS  SELECT o.id,
     o.name,
     o.slug,
     o.plan,
@@ -1237,12 +1627,28 @@ CREATE OR REPLACE VIEW admin_org_overview AS
     o.created_at,
     count(DISTINCT p.id) AS member_count,
     string_agg(DISTINCT p.email, ', '::text ORDER BY p.email) AS member_emails,
-    count(DISTINCT ul.id) FILTER (WHERE ul.created_at > (now() - '30 days'::interval)) AS usage_last_30d
-   FROM organizations o
-     LEFT JOIN profiles p ON p.org_id = o.id
-     LEFT JOIN usage_logs ul ON ul.org_id = o.id
+    count(DISTINCT ul.id) FILTER (WHERE (ul.created_at > (now() - '30 days'::interval))) AS usage_last_30d
+   FROM ((organizations o
+     LEFT JOIN profiles p ON ((p.org_id = o.id)))
+     LEFT JOIN usage_logs ul ON ((ul.org_id = o.id)))
   GROUP BY o.id, o.name, o.slug, o.plan, o.trial_unlimited, o.max_projects, o.created_at
   ORDER BY o.created_at DESC;
+
+CREATE VIEW show_rate_facts_read AS  SELECT id,
+    show_name,
+    metric,
+    value,
+    grade,
+    denominator,
+    category_scope,
+    cycle_year,
+    source_url,
+    source_quote,
+    attributed_to,
+    note,
+    last_verified_at
+   FROM show_rate_facts
+  WHERE ((grade <> 'REFUTED'::text) AND (superseded_by IS NULL));
 
 
 -- ============================================================
@@ -1250,6 +1656,8 @@ CREATE OR REPLACE VIEW admin_org_overview AS
 -- ============================================================
 
 ALTER TABLE agency_profiles ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE aoy_market_baselines ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE articles ENABLE ROW LEVEL SECURITY;
 
@@ -1263,9 +1671,13 @@ ALTER TABLE campaign_tags ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE campaigns ENABLE ROW LEVEL SECURITY;
 
+ALTER TABLE coach_feedback ENABLE ROW LEVEL SECURITY;
+
 ALTER TABLE directions ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE dynamic_shows ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE engagement_events ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE entry_drafts ENABLE ROW LEVEL SECURITY;
 
@@ -1293,6 +1705,8 @@ ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE project_collaborators ENABLE ROW LEVEL SECURITY;
 
+ALTER TABLE project_pillar_facts ENABLE ROW LEVEL SECURITY;
+
 ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE show_profiles ENABLE ROW LEVEL SECURITY;
@@ -1302,6 +1716,15 @@ ALTER TABLE show_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stripe_webhook_events ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE usage_logs ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE user_product_state ENABLE ROW LEVEL SECURITY;
+
+-- NOTE: show_rate_facts (like aoy_market_baselines) deliberately has NO RLS
+-- policy and NO row security enabled — it is locked down purely by REVOKE
+-- (see GRANTS section below): anon/authenticated hold zero privileges on the
+-- base table, and only show_rate_facts_read (a view) is GRANTed SELECT. This
+-- is the same "REVOKE is the primary defense, RLS alone is a trapdoor"
+-- pattern documented in Shortlist-Gotchas-Critical.md.
 
 
 -- ============================================================
@@ -1327,6 +1750,10 @@ CREATE POLICY "authenticated users can read campaigns" ON campaigns AS PERMISSIV
 CREATE POLICY campaigns_admin_write ON campaigns AS PERMISSIVE FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 CREATE POLICY campaigns_read ON campaigns AS PERMISSIVE FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY coach_feedback_org_select ON coach_feedback AS PERMISSIVE FOR SELECT TO authenticated USING ((org_id IN ( SELECT profiles.org_id
+   FROM profiles
+  WHERE (profiles.id = auth.uid()))));
 
 CREATE POLICY directions_org_insert ON directions AS PERMISSIVE FOR INSERT TO public WITH CHECK ((project_id IN ( SELECT projects.id
    FROM projects
@@ -1355,6 +1782,8 @@ CREATE POLICY "org members can access their directions" ON directions AS PERMISS
   WHERE (profiles.id = auth.uid()))));
 
 CREATE POLICY "Authenticated users read active dynamic shows" ON dynamic_shows AS PERMISSIVE FOR SELECT TO authenticated USING ((status = 'active'::text));
+
+CREATE POLICY "Users can insert own engagement events" ON engagement_events AS PERMISSIVE FOR INSERT TO authenticated WITH CHECK (((user_id = auth.uid()) AND (org_id = get_my_org_id())));
 
 CREATE POLICY drafts_via_project ON entry_drafts AS PERMISSIVE FOR ALL TO authenticated USING ((project_id IN ( SELECT projects.id
    FROM projects
@@ -1448,6 +1877,10 @@ CREATE POLICY collaborators_update_own_org ON project_collaborators AS PERMISSIV
    FROM profiles
   WHERE (profiles.id = auth.uid()))));
 
+CREATE POLICY pillar_facts_select_own_org ON project_pillar_facts AS PERMISSIVE FOR SELECT TO public USING ((org_id = ( SELECT profiles.org_id
+   FROM profiles
+  WHERE (profiles.id = auth.uid()))));
+
 CREATE POLICY "org members can access their projects" ON projects AS PERMISSIVE FOR ALL TO public USING ((org_id = ( SELECT profiles.org_id
    FROM profiles
   WHERE (profiles.id = auth.uid()))));
@@ -1478,110 +1911,134 @@ CREATE POLICY "org members can read their usage logs" ON usage_logs AS PERMISSIV
 
 CREATE POLICY usage_own ON usage_logs AS PERMISSIVE FOR SELECT TO authenticated USING ((user_id = auth.uid()));
 
+CREATE POLICY "Users can insert own product state" ON user_product_state AS PERMISSIVE FOR INSERT TO authenticated WITH CHECK ((user_id = auth.uid()));
+
+CREATE POLICY "Users can read own product state" ON user_product_state AS PERMISSIVE FOR SELECT TO authenticated USING ((user_id = auth.uid()));
+
+CREATE POLICY "Users can update own product state" ON user_product_state AS PERMISSIVE FOR UPDATE TO authenticated USING ((user_id = auth.uid())) WITH CHECK ((user_id = auth.uid()));
+
 
 -- ============================================================
--- TABLE GRANTS (anon / authenticated)
+-- TABLE-LEVEL GRANTS (anon / authenticated)
 -- ============================================================
+-- NOTE: show_rate_facts itself carries ZERO grants to anon/authenticated
+-- below (by design, REVOKEd). Only show_rate_facts_read (a view) is granted
+-- SELECT. See Gotchas-Critical: a view over a REVOKEd table needs its own
+-- explicit REVOKE/GRANT pass, which was done in the same migration.
 
 GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON admin_org_overview TO anon;
 
 GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON admin_org_overview TO authenticated;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON agency_profiles TO anon;
+GRANT REFERENCES, SELECT, TRIGGER ON agency_profiles TO anon;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON agency_profiles TO authenticated;
+GRANT REFERENCES, SELECT, TRIGGER ON agency_profiles TO authenticated;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON articles TO anon;
+GRANT REFERENCES, SELECT, TRIGGER ON articles TO anon;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON articles TO authenticated;
+GRANT REFERENCES, SELECT, TRIGGER ON articles TO authenticated;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON award_shows TO anon;
+GRANT REFERENCES, SELECT, TRIGGER ON award_shows TO anon;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON award_shows TO authenticated;
+GRANT REFERENCES, SELECT, TRIGGER ON award_shows TO authenticated;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON award_tiers TO anon;
+GRANT REFERENCES, SELECT, TRIGGER ON award_tiers TO anon;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON award_tiers TO authenticated;
+GRANT REFERENCES, SELECT, TRIGGER ON award_tiers TO authenticated;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON campaign_awards TO anon;
+GRANT REFERENCES, SELECT, TRIGGER ON campaign_awards TO anon;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON campaign_awards TO authenticated;
+GRANT REFERENCES, SELECT, TRIGGER ON campaign_awards TO authenticated;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON campaign_tags TO anon;
+GRANT REFERENCES, SELECT, TRIGGER ON campaign_tags TO anon;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON campaign_tags TO authenticated;
+GRANT REFERENCES, SELECT, TRIGGER ON campaign_tags TO authenticated;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON campaigns TO anon;
+GRANT REFERENCES, SELECT, TRIGGER ON campaigns TO anon;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON campaigns TO authenticated;
+GRANT REFERENCES, SELECT, TRIGGER ON campaigns TO authenticated;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON directions TO anon;
+GRANT SELECT ON coach_feedback TO authenticated;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON directions TO authenticated;
+GRANT REFERENCES, SELECT, TRIGGER ON directions TO anon;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON dynamic_shows TO anon;
+GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER ON directions TO authenticated;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON dynamic_shows TO authenticated;
+GRANT REFERENCES, SELECT, TRIGGER ON dynamic_shows TO anon;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON entry_drafts TO anon;
+GRANT REFERENCES, SELECT, TRIGGER ON dynamic_shows TO authenticated;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON entry_drafts TO authenticated;
+GRANT INSERT ON engagement_events TO authenticated;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON evaluations TO anon;
+GRANT REFERENCES, SELECT, TRIGGER ON entry_drafts TO anon;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON evaluations TO authenticated;
+GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, UPDATE ON entry_drafts TO authenticated;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON invitations TO anon;
+GRANT REFERENCES, SELECT, TRIGGER ON evaluations TO anon;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON invitations TO authenticated;
+GRANT DELETE, REFERENCES, SELECT, TRIGGER ON evaluations TO authenticated;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON jury_cells TO anon;
+GRANT REFERENCES, SELECT, TRIGGER ON invitations TO anon;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON jury_cells TO authenticated;
+GRANT DELETE, REFERENCES, SELECT, TRIGGER ON invitations TO authenticated;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON jury_president_uplift TO anon;
+GRANT REFERENCES, SELECT, TRIGGER ON jury_cells TO anon;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON jury_president_uplift TO authenticated;
+GRANT REFERENCES, SELECT, TRIGGER ON jury_cells TO authenticated;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON jury_regional_uplift TO anon;
+GRANT REFERENCES, SELECT, TRIGGER ON jury_president_uplift TO anon;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON jury_regional_uplift TO authenticated;
+GRANT REFERENCES, SELECT, TRIGGER ON jury_president_uplift TO authenticated;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON monthly_usage TO anon;
+GRANT REFERENCES, SELECT, TRIGGER ON jury_regional_uplift TO anon;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON monthly_usage TO authenticated;
+GRANT REFERENCES, SELECT, TRIGGER ON jury_regional_uplift TO authenticated;
+
+GRANT REFERENCES, SELECT, TRIGGER ON monthly_usage TO anon;
+
+GRANT REFERENCES, SELECT, TRIGGER ON monthly_usage TO authenticated;
 
 GRANT REFERENCES, SELECT, TRIGGER, TRUNCATE ON organizations TO anon;
 
 GRANT REFERENCES, SELECT, TRIGGER, TRUNCATE ON organizations TO authenticated;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON press_kit_drafts TO anon;
+GRANT REFERENCES, SELECT, TRIGGER ON press_kit_drafts TO anon;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON press_kit_drafts TO authenticated;
+GRANT INSERT, REFERENCES, SELECT, TRIGGER, UPDATE ON press_kit_drafts TO authenticated;
 
 GRANT REFERENCES, SELECT, TRIGGER, TRUNCATE ON profiles TO anon;
 
 GRANT REFERENCES, SELECT, TRIGGER, TRUNCATE ON profiles TO authenticated;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON project_collaborators TO anon;
+GRANT REFERENCES, SELECT, TRIGGER ON project_collaborators TO anon;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON project_collaborators TO authenticated;
+GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER ON project_collaborators TO authenticated;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON projects TO anon;
+GRANT REFERENCES, SELECT, TRIGGER ON project_pillar_facts TO anon;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON projects TO authenticated;
+GRANT REFERENCES, SELECT, TRIGGER ON project_pillar_facts TO authenticated;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON show_profiles TO anon;
+GRANT REFERENCES, SELECT, TRIGGER ON projects TO anon;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON show_profiles TO authenticated;
+GRANT INSERT, REFERENCES, SELECT, TRIGGER, UPDATE ON projects TO authenticated;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON usage_logs TO anon;
+GRANT REFERENCES, SELECT, TRIGGER ON show_profiles TO anon;
 
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON usage_logs TO authenticated;
+GRANT REFERENCES, SELECT, TRIGGER ON show_profiles TO authenticated;
+
+GRANT SELECT ON show_rate_facts_read TO anon;
+
+GRANT SELECT ON show_rate_facts_read TO authenticated;
+
+GRANT REFERENCES, SELECT, TRIGGER ON usage_logs TO anon;
+
+GRANT REFERENCES, SELECT, TRIGGER ON usage_logs TO authenticated;
+
+GRANT INSERT, SELECT, UPDATE ON user_product_state TO authenticated;
 
 
 -- ============================================================
--- COLUMN GRANTS
+-- COLUMN-LEVEL GRANTS (anon / authenticated)
 -- ============================================================
 
 GRANT UPDATE (avatar_url, full_name) ON profiles TO authenticated;
