@@ -325,7 +325,7 @@ export default function PlannerV3() {
             </div>
           )}
 
-          <PlannerV3Result plan={plan} teaserShows={teaserShows} />
+          <PlannerV3Result plan={plan} displayCurrency={confirmValue.budgetCurrency} teaserShows={teaserShows} />
 
           <div className="flex items-center justify-between">
             <button
