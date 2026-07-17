@@ -64,18 +64,24 @@ const TIER_LABEL: Record<PlannerV3Tier, string> = {
   reserve: 'Reserve',
 }
 
-const TIER_BADGE: Record<PlannerV3Tier, string> = {
-  core: 'bg-green-100 text-green-800',
-  prestige: 'bg-emerald-100 text-emerald-800',
-  specialist: 'bg-sky-100 text-sky-800',
-  reserve: 'bg-gray-100 text-gray-600',
+// Inline styles, NOT Tailwind classes: dynamic color utilities (bg-sky-100 /
+// bg-emerald-100 / their text pairs) appear ONLY in this map, so Tailwind's
+// scanner purges them and the badge renders with no background (confirmed live
+// 17 Jul: sky/emerald absent from the served CSS, green present). Same posture
+// as the mix bar. Green / violet / blue / gray are deliberately far apart so
+// Core and Prestige never read as the same colour.
+const TIER_BADGE: Record<PlannerV3Tier, { backgroundColor: string; color: string }> = {
+  core: { backgroundColor: '#dcfce7', color: '#166534' },       // green-100 / green-800
+  prestige: { backgroundColor: '#ede9fe', color: '#6d28d9' },   // violet-100 / violet-700
+  specialist: { backgroundColor: '#e0f2fe', color: '#075985' }, // sky-100 / sky-800
+  reserve: { backgroundColor: '#f3f4f6', color: '#4b5563' },    // gray-100 / gray-600
 }
 
 // Mix-bar segment colors — INLINE styles only (Tailwind purges arbitrary
 // values / dynamic classes here; same posture as the P2.1 mix bar).
 const TIER_COLOR: Record<PlannerV3Tier, string> = {
   core: '#166534', // green-800
-  prestige: '#059669', // emerald-600 (matches the emerald badge; distinct from core green)
+  prestige: '#7c3aed', // violet-600 (far from core green so the two never blur)
   specialist: '#0369a1', // sky-700
   reserve: '#9ca3af', // gray-400 (matches the gray badge; keeps the bar off three greens)
 }
@@ -271,7 +277,7 @@ function ShowRow({ show, currency }: { show: ShowBlock; currency: CurrencyCode }
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-semibold text-gray-900">{show.show_name}</span>
-            <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${TIER_BADGE[show.tier]}`}>
+            <span className="text-[11px] font-semibold rounded-full px-2 py-0.5" style={TIER_BADGE[show.tier]}>
               {TIER_LABEL[show.tier]}
             </span>
             {show.fee_flag === 'partial_unsourced' && (
