@@ -420,6 +420,9 @@ function clamp01(n: number): number {
 export type ScoredEntry = ReducedEntry & {
   priority_score: number
   rate_fact: RateFact | null
+  /** Both displayable facts, surfaced separately in the UI (rate_fact is the scoring one). */
+  shortlist_fact: RateFact | null
+  win_fact: RateFact | null
   difficulty_known: boolean
   on_discipline: boolean
 }
@@ -451,7 +454,7 @@ export function scoreEntry(entry: ReducedEntry, rateFacts: RateFact[], ctx: Prio
   const showDiscipline = agencyShowDiscipline(ctx.discipline)
   const on_discipline = entry.resolution.facet ? facetAdmitsDiscipline(entry.resolution.facet, showDiscipline) : true
 
-  return { ...entry, priority_score, rate_fact: bestFact, difficulty_known: difficultyKnown, on_discipline }
+  return { ...entry, priority_score, rate_fact: bestFact, shortlist_fact: displayableShortlist, win_fact: displayableWin, difficulty_known: difficultyKnown, on_discipline }
 }
 
 // ── recommendFor(campaign) → placements — THE PRIMITIVE ──────────────────────
@@ -541,12 +544,26 @@ function feeForResolution(resolution: Extract<ShowResolution, { status: 'resolve
   return { fee_usd: fee.base, is_estimate: !!resolution.feeIsUpperBoundEstimate }
 }
 
+// Curated PRESTIGE tier: marquee, hard-to-win shows, INDEPENDENT of geography
+// (Ben's editorial call, 17 Jul 2026): Spikes Asia and Effie APAC are prestige
+// plays in Asia despite being regional. Edit this list to change what reads as
+// Prestige. Matched tolerantly via sameShow so name variants still land.
+const PRESTIGE_SHOW_NAMES: string[] = [
+  'Cannes Lions', 'D&AD', 'One Show', 'Clio Awards',
+  'Spikes Asia', 'Dubai Lynx', 'Eurobest', 'London International Awards',
+  'ADFEST', 'Effie APAC',
+]
+function isPrestigeShow(canonicalShow: string): boolean {
+  return PRESTIGE_SHOW_NAMES.some(n => sameShow(n, canonicalShow))
+}
+
 function tierFor(entry: ScoredEntry, status: 'recommended' | 'reserve'): PlannerV3Tier {
   if (status === 'reserve') return 'reserve'
+  // Prestige wins over the specialist axis and is NOT geography-derived.
+  if (isPrestigeShow(entry.resolution.canonicalShow)) return 'prestige'
   const facet = entry.resolution.facet
   if (facet?.axis === 'specialist') return 'specialist'
-  const geo = facet?.geo_scope ?? 'global'
-  return geo === 'global' ? 'prestige' : 'core'
+  return 'core'
 }
 
 /**
