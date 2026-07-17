@@ -41,7 +41,6 @@
  * =============================================================================
  */
 
-import { useState } from 'react'
 import Link from 'next/link'
 import type { PlannerV3Plan, ShowBlock, PlacedEntry, PlannerV3Tier } from '@/lib/planner-v3-engine'
 import type { CurrencyCode } from '@/lib/fx'
@@ -72,7 +71,7 @@ const TIER_LABEL: Record<PlannerV3Tier, string> = {
 // Core and Prestige never read as the same colour.
 const TIER_BADGE: Record<PlannerV3Tier, { backgroundColor: string; color: string }> = {
   core: { backgroundColor: '#dcfce7', color: '#166534' },       // green-100 / green-800
-  prestige: { backgroundColor: '#ede9fe', color: '#6d28d9' },   // violet-100 / violet-700
+  prestige: { backgroundColor: '#f7edcb', color: '#7c5e12' },   // pale gold / deep gold (app gold #c9a95c family)
   specialist: { backgroundColor: '#e0f2fe', color: '#075985' }, // sky-100 / sky-800
   reserve: { backgroundColor: '#f3f4f6', color: '#4b5563' },    // gray-100 / gray-600
 }
@@ -81,7 +80,7 @@ const TIER_BADGE: Record<PlannerV3Tier, { backgroundColor: string; color: string
 // values / dynamic classes here; same posture as the P2.1 mix bar).
 const TIER_COLOR: Record<PlannerV3Tier, string> = {
   core: '#166534', // green-800
-  prestige: '#7c3aed', // violet-600 (far from core green so the two never blur)
+  prestige: '#c9a95c', // app gold (WelcomeRouter/GeneratingBar/direction-card); distinct from green/blue/gray
   specialist: '#0369a1', // sky-700
   reserve: '#9ca3af', // gray-400 (matches the gray badge; keeps the bar off three greens)
 }
@@ -139,17 +138,6 @@ function byClosingDate(a: ShowBlock, b: ShowBlock): number {
   if (ad && !bd) return -1
   if (!ad && bd) return 1
   return 0
-}
-
-/** The distinct categories entered at a show (case/space-insensitive dedupe). */
-function categoryList(s: ShowBlock): string[] {
-  const seen = new Map<string, string>()
-  for (const e of s.entries) {
-    if (!e.category) continue
-    const k = e.category.trim().toLowerCase()
-    if (!seen.has(k)) seen.set(k, e.category.trim())
-  }
-  return Array.from(seen.values())
 }
 
 /**
@@ -258,134 +246,91 @@ function MixChart({ plan }: { plan: PlannerV3Plan }) {
 // ── One show row: critical line + fee/rate detail behind a click ─────────────
 
 function ShowRow({ show, currency }: { show: ShowBlock; currency: CurrencyCode }) {
-  const [open, setOpen] = useState(true)
-
   const recEntries = show.entries.filter(e => e.status === 'recommended')
   const reserveEntries = show.entries.filter(e => e.status === 'reserve')
   const recCount = recEntries.length
-  const cats = categoryList(show)
-  const cats_shown = cats.slice(0, 4)
-  const cats_more = cats.length - cats_shown.length
 
-  // Budget for the show's recommended entries, in display currency.
   const recBudgetUsd = recEntries.reduce((sum, e) => sum + (e.fee_usd ?? 0), 0)
   const knownRec = recEntries.filter(e => e.fee_usd !== null)
   const budget = knownRec.length > 0 ? toDisplay(recBudgetUsd, currency) : null
   const anyEstimate = recEntries.some(e => e.fee_is_estimate)
-  const anyDrift = show.entries.some(e => e.categoryFlag === 'drift')
-  const noTaxonomy = show.entries.length > 0 && show.entries.every(e => e.categoryFlag === 'no_taxonomy')
 
-  // ONE odds fact for the whole show (all entries share the canonical show).
-  // Odds are a property of the SHOW (all entries share the canonical show): read
-  // the shortlist + win facts off the first entry and label each explicitly.
+  // Odds are a property of the show (all entries share the canonical show).
   const factEntry = show.entries[0]
   const shortlistFact = factEntry ? factEntry.shortlist_fact : null
   const winFact = factEntry ? factEntry.win_fact : null
 
   const enterBy = formatDate(show.final_date)
+  const twoCol = { display: 'grid', gridTemplateColumns: '1fr auto', columnGap: '0.75rem' } as const
 
   return (
     <li className="py-3">
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+      {/* Header: show + tier + count | budget + deadline */}
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1.5">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-semibold text-gray-900">{show.show_name}</span>
             <span className="text-[11px] font-semibold rounded-full px-2 py-0.5" style={TIER_BADGE[show.tier]}>
               {TIER_LABEL[show.tier]}
             </span>
-            {show.fee_flag === 'partial_unsourced' && (
-              <span className="text-[11px] text-amber-700">some fees not published</span>
-            )}
-          </div>
-          <p className="text-xs text-gray-600 mt-1">
-            {pluralEntries(recCount)}
-            {reserveEntries.length > 0 ? ` (+${reserveEntries.length} reserve)` : ''}
-            {cats_shown.length > 0 ? <> · {cats_shown.join(', ')}{cats_more > 0 ? ` +${cats_more} more` : ''}</> : null}
-          </p>
-          <p className="text-xs text-gray-500 mt-1">{whyLine(show)}</p>
-          {anyDrift && (
-            <span className="inline-flex items-center mt-1.5 text-[11px] font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
-              Category to double-check
+            <span className="text-[11px] text-gray-400">
+              {pluralEntries(recCount)}{reserveEntries.length > 0 ? ` (+${reserveEntries.length} reserve)` : ''}
             </span>
-          )}
-          {noTaxonomy && <p className="text-[11px] text-gray-400 mt-1">No taxonomy on file for this show.</p>}
+          </div>
+          <p className="text-xs text-gray-500 mt-1">{whyLine(show)}</p>
         </div>
-
         <div className="flex-shrink-0 text-left sm:text-right">
           <p className="text-sm font-semibold text-gray-900">
             {budget ? budget.text : 'fee not published'}
-            {anyEstimate && budget && <span className="text-[11px] font-normal text-amber-700"> (est.)</span>}
+            {anyEstimate && budget && <span className="text-[11px] font-normal text-gray-500"> est.</span>}
           </p>
           {enterBy ? (
             <p className="text-xs text-gray-500 mt-0.5">enter by {enterBy}</p>
           ) : (
-            <p className="text-xs text-gray-400 mt-0.5">deadline not on file</p>
+            <p className="text-xs text-amber-700 mt-0.5">no open deadline</p>
           )}
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        className="mt-2 text-xs text-green-800 hover:text-green-700 underline"
-        aria-expanded={open}
+      {/* Entries: each category listed ONCE, aligned fee column, always visible */}
+      <ul className="mt-2 border-t border-gray-100 pt-1.5">
+        {show.entries.map(e => {
+          const fee = e.fee_usd !== null ? toDisplay(e.fee_usd, currency) : null
+          const reserve = e.status === 'reserve'
+          return (
+            <li key={e.direction_id} className="py-1 text-xs" style={twoCol}>
+              <span className="min-w-0">
+                <span className={reserve ? 'text-gray-400' : 'text-gray-800'}>{e.category ?? 'Category not set'}</span>
+                {e.categoryFlag === 'drift' && <span className="text-gray-400"> &middot; not on this show&apos;s list</span>}
+                {reserve && <span className="text-gray-400"> &middot; reserve</span>}
+                <span className="block text-[11px] text-gray-400">{e.campaign.campaign_name}</span>
+              </span>
+              <span className={`text-right tabular-nums ${reserve ? 'text-gray-400' : 'text-gray-600'}`}>
+                {fee ? fee.text : 'not published'}
+                {e.fee_is_estimate && fee && <span className="text-gray-400"> est.</span>}
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+
+      {/* Published odds: two labelled figures, always visible */}
+      <div
+        className="mt-2 text-xs"
+        style={{ display: 'flex', flexWrap: 'wrap', columnGap: '1.25rem', rowGap: '0.125rem', alignItems: 'baseline' }}
       >
-        {open ? 'Hide fee and rate detail' : 'Fee and rate detail'}
-      </button>
+        <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Published odds</span>
+        <span className="flex items-baseline gap-1.5"><span className="text-gray-500">Shortlist</span><GatedNumber fact={shortlistFact} /></span>
+        <span className="flex items-baseline gap-1.5"><span className="text-gray-500">Win</span><GatedNumber fact={winFact} /></span>
+      </div>
 
-      {open && (
-        <div className="mt-3 rounded-lg bg-gray-50 border border-gray-100 p-3 space-y-3">
-          <div className="text-xs text-gray-700">
-            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Published odds</p>
-            <div className="flex flex-col gap-0.5">
-              <span className="flex items-baseline gap-2">
-                <span className="text-gray-500 w-20 shrink-0">Shortlist</span>
-                <GatedNumber fact={shortlistFact} />
-              </span>
-              <span className="flex items-baseline gap-2">
-                <span className="text-gray-500 w-20 shrink-0">Win</span>
-                <GatedNumber fact={winFact} />
-              </span>
-            </div>
-            <p className="text-[11px] text-gray-400 mt-1">Sourced figures only. Blank where a show publishes no rate.</p>
-          </div>
-
-          <div>
-            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Entries</p>
-            <ul className="space-y-1">
-              {show.entries.map(e => {
-                const fee = e.fee_usd !== null ? toDisplay(e.fee_usd, currency) : null
-                return (
-                  <li key={e.direction_id} className="flex items-start justify-between gap-3 text-xs">
-                    <span className="min-w-0 text-gray-700">
-                      {e.campaign.campaign_name}
-                      {e.category ? <span className="text-gray-500"> · {e.category}</span> : null}
-                      {e.status === 'reserve' && <span className="text-gray-400"> · reserve</span>}
-                      {e.categoryFlag === 'drift' && <span className="text-amber-700"> · category drift</span>}
-                      {e.deduped_count > 1 && (
-                        <span className="text-gray-400"> · {e.deduped_count} similar directions merged</span>
-                      )}
-                    </span>
-                    <span className="flex-shrink-0 text-gray-600 text-right">
-                      {fee ? fee.text : 'fee not published'}
-                      {e.fee_is_estimate && fee && <span className="text-amber-700"> est.</span>}
-                    </span>
-                  </li>
-                )
-              })}
-            </ul>
-          </div>
-
-          {anyEstimate && (
-            <p className="text-[11px] text-gray-500">
-              Fees marked est. use the family&apos;s published rate as a sourced upper bound where a country program
-              publishes no separate fee. Never an invented discount.
-            </p>
-          )}
-          {(shortlistFact ?? winFact)?.source_url && (
-            <p className="text-[11px] text-gray-400 break-words">Rate source: {(shortlistFact ?? winFact)!.source_url}</p>
-          )}
-        </div>
+      {anyEstimate && (
+        <p className="text-[11px] text-gray-400 mt-1">
+          Fees marked est. use the family&apos;s published rate as a sourced upper bound, never an invented discount.
+        </p>
+      )}
+      {(shortlistFact ?? winFact)?.source_url && (
+        <p className="text-[11px] text-gray-400 mt-0.5 break-words">Rate source: {(shortlistFact ?? winFact)!.source_url}</p>
       )}
     </li>
   )
@@ -434,8 +379,12 @@ export default function PlannerV3Result({ plan, displayCurrency, teaserShows }: 
   // Deadlines first-class: split the recommended slate this-cycle vs next-cycle,
   // and order each by closing date (soonest first). unknown_cycle (no deadline
   // row) rides with this cycle; it simply carries "deadline not on file".
-  const thisCycle = recommendedShows.filter(s => s.cycle_status !== 'next_cycle').slice().sort(byClosingDate)
+  // A show with a real closing date this cycle vs. one whose cycle dates are not
+  // published yet (final_date null). Never present a show with no open deadline as
+  // "enter this cycle" (e.g. Spikes Asia: 2026 closed, 2027 not announced).
+  const thisCycle = recommendedShows.filter(s => s.cycle_status !== 'next_cycle' && s.final_date).slice().sort(byClosingDate)
   const nextCycle = recommendedShows.filter(s => s.cycle_status === 'next_cycle').slice().sort(byClosingDate)
+  const datesUnconfirmed = recommendedShows.filter(s => s.cycle_status !== 'next_cycle' && !s.final_date)
 
   const total = toDisplay(plan.budget_total_usd, displayCurrency)
   const anyEstimateAcrossPlan = plan.shows.some(s => s.entries.some(e => e.fee_is_estimate && e.status === 'recommended'))
@@ -483,6 +432,13 @@ export default function PlannerV3Result({ plan, displayCurrency, teaserShows }: 
         title="Next cycle"
         blurb="This cycle has closed. Plan these for the next opening."
         shows={nextCycle}
+        currency={displayCurrency}
+      />
+
+      <ShowGroup
+        title="Dates not yet confirmed"
+        blurb="Recommended, but this show has no open deadline yet (its next cycle is not announced). Plan for it, then confirm the date before entering."
+        shows={datesUnconfirmed}
         currency={displayCurrency}
       />
 
