@@ -75,9 +75,9 @@ const TIER_BADGE: Record<PlannerV3Tier, string> = {
 // values / dynamic classes here; same posture as the P2.1 mix bar).
 const TIER_COLOR: Record<PlannerV3Tier, string> = {
   core: '#166534', // green-800
-  prestige: '#15803d', // green-700
+  prestige: '#059669', // emerald-600 (matches the emerald badge; distinct from core green)
   specialist: '#0369a1', // sky-700
-  reserve: '#86efac', // green-300
+  reserve: '#9ca3af', // gray-400 (matches the gray badge; keeps the bar off three greens)
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -221,11 +221,12 @@ function MixChart({ plan }: { plan: PlannerV3Plan }) {
           />
         ))}
       </div>
-      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+      <div className="flex flex-wrap gap-x-5 gap-y-2 mt-3">
         {segments.map(s => (
-          <span key={s.key} className="flex items-center gap-1.5 text-xs text-gray-600">
-            <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: TIER_COLOR[s.key] }} />
-            {s.label} <span className="font-semibold tabular-nums">{s.count}</span>
+          <span key={s.key} className="flex items-center gap-1.5 text-xs text-gray-600 whitespace-nowrap">
+            <span className="inline-block w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: TIER_COLOR[s.key] }} />
+            <span>{s.label}</span>
+            <span className="font-semibold tabular-nums">{s.count}</span>
           </span>
         ))}
       </div>

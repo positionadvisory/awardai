@@ -20,6 +20,9 @@
  * localStorage, cleared with ?planner_v2=0). Query params read via
  * window.location.search in an effect, NEVER useSearchParams (Gotchas).
  *
+ * V3-P4 FLIP (17 Jul 2026): PLANNER_V3_DEFAULT=true. A plain /planner now
+ * renders the campaign-driven v3; ?planner_v3=0 opts back to the v2 wizard.
+ *
  * Next page-export-shape rule (Gotchas S161): this file exports ONLY a default.
  * =============================================================================
  */
@@ -52,6 +55,10 @@ const PLANNER_V2_DEFAULT = false
 const FLAG_KEY = 'planner_v2'
 // V3-P2 ships behind its own query param/localStorage gate, same pattern as v2.
 const FLAG_KEY_V3 = 'planner_v3'
+// V3-P4 FLIP (17 Jul 2026): v3 is now the DEFAULT planner. A plain /planner
+// renders the campaign-driven v3; ?planner_v3=0 opts back to the v2 wizard
+// (itself still behind ?planner_v2=1). Reversible soft-flip, mirrors PLANNER_V2_DEFAULT.
+const PLANNER_V3_DEFAULT = true
 
 // ── Defaults ──────────────────────────────────────────────────────────────
 const DEFAULT_BUDGET = 50000
@@ -80,7 +87,7 @@ export default function PlannerPage() {
   // Flag state — resolved from URL + localStorage in an effect (client only).
   const [flagResolved, setFlagResolved] = useState(false)
   const [enabled, setEnabled] = useState(PLANNER_V2_DEFAULT)
-  const [enabledV3, setEnabledV3] = useState(false)
+  const [enabledV3, setEnabledV3] = useState(PLANNER_V3_DEFAULT)
 
   useEffect(() => {
     const param = new URLSearchParams(window.location.search).get(FLAG_KEY)
@@ -100,7 +107,7 @@ export default function PlannerPage() {
     }
     let storedV3 = false
     try { storedV3 = window.localStorage.getItem(FLAG_KEY_V3) === '1' } catch { /* private mode */ }
-    setEnabledV3(paramV3 === '1' || storedV3)
+    setEnabledV3(paramV3 === '0' ? false : (PLANNER_V3_DEFAULT || paramV3 === '1' || storedV3))
     setFlagResolved(true)
   }, [])
 
