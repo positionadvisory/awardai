@@ -120,6 +120,13 @@ function pluralEntries(n: number): string {
   return `${n} ${n === 1 ? 'entry' : 'entries'}`
 }
 
+/** Light suggestion for a common near-miss so the "couldn't match" note is actionable. */
+function suggestShow(raw: string | null | undefined): string | null {
+  const s = (raw ?? '').toLowerCase()
+  if (s.includes('agency of the year') && s.includes('campaign')) return 'Campaign Asia Agency of the Year'
+  return null
+}
+
 function hasRecommended(s: ShowBlock): boolean {
   return s.entries.some(e => e.status === 'recommended')
 }
@@ -213,9 +220,9 @@ function MixChart({ plan }: { plan: PlannerV3Plan }) {
   if (total === 0) return null
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-4">
+    <div className="bg-white border border-gray-200 rounded-xl p-5">
       <div className="flex items-baseline justify-between mb-2">
-        <h2 className="text-base font-bold text-gray-900">Your recommended mix</h2>
+        <h2 className="text-sm font-bold text-gray-900">Your recommended mix</h2>
         <span className="text-xs text-gray-500">{pluralEntries(total)}</span>
       </div>
       <div className="flex w-full h-4 rounded-full overflow-hidden" role="img" aria-label="Recommended mix by tier">
@@ -227,12 +234,15 @@ function MixChart({ plan }: { plan: PlannerV3Plan }) {
           />
         ))}
       </div>
-      <div className="flex flex-wrap gap-x-5 gap-y-2 mt-3">
+      <div className="flex flex-wrap mt-3" style={{ columnGap: '1.5rem', rowGap: '0.5rem' }}>
         {segments.map(s => (
-          <span key={s.key} className="flex items-center gap-1.5 text-xs text-gray-600 whitespace-nowrap">
-            <span className="inline-block w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: TIER_COLOR[s.key] }} />
-            <span>{s.label}</span>
-            <span className="font-semibold tabular-nums">{s.count}</span>
+          <span key={s.key} className="inline-flex items-center whitespace-nowrap text-xs text-gray-600">
+            <span
+              className="inline-block rounded-sm shrink-0"
+              style={{ width: 10, height: 10, backgroundColor: TIER_COLOR[s.key], marginRight: 8 }}
+            />
+            <span style={{ marginRight: 6 }}>{s.label}</span>
+            <span className="font-semibold tabular-nums text-gray-900">{s.count}</span>
           </span>
         ))}
       </div>
@@ -248,7 +258,7 @@ function MixChart({ plan }: { plan: PlannerV3Plan }) {
 // ── One show row: critical line + fee/rate detail behind a click ─────────────
 
 function ShowRow({ show, currency }: { show: ShowBlock; currency: CurrencyCode }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
 
   const recEntries = show.entries.filter(e => e.status === 'recommended')
   const reserveEntries = show.entries.filter(e => e.status === 'reserve')
@@ -266,8 +276,11 @@ function ShowRow({ show, currency }: { show: ShowBlock; currency: CurrencyCode }
   const noTaxonomy = show.entries.length > 0 && show.entries.every(e => e.categoryFlag === 'no_taxonomy')
 
   // ONE odds fact for the whole show (all entries share the canonical show).
-  const factEntry = show.entries.find(e => e.rate_fact !== null) ?? show.entries[0]
-  const showFact = factEntry ? factEntry.rate_fact : null
+  // Odds are a property of the SHOW (all entries share the canonical show): read
+  // the shortlist + win facts off the first entry and label each explicitly.
+  const factEntry = show.entries[0]
+  const shortlistFact = factEntry ? factEntry.shortlist_fact : null
+  const winFact = factEntry ? factEntry.win_fact : null
 
   const enterBy = formatDate(show.final_date)
 
@@ -291,9 +304,9 @@ function ShowRow({ show, currency }: { show: ShowBlock; currency: CurrencyCode }
           </p>
           <p className="text-xs text-gray-500 mt-1">{whyLine(show)}</p>
           {anyDrift && (
-            <p className="text-[11px] text-amber-700 mt-1">
-              Check category: a chosen category does not match this show&apos;s published list.
-            </p>
+            <span className="inline-flex items-center mt-1.5 text-[11px] font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
+              Category to double-check
+            </span>
           )}
           {noTaxonomy && <p className="text-[11px] text-gray-400 mt-1">No taxonomy on file for this show.</p>}
         </div>
@@ -322,9 +335,19 @@ function ShowRow({ show, currency }: { show: ShowBlock; currency: CurrencyCode }
 
       {open && (
         <div className="mt-3 rounded-lg bg-gray-50 border border-gray-100 p-3 space-y-3">
-          <div className="text-xs text-gray-600">
-            <span className="font-semibold text-gray-700">Published odds: </span>
-            <GatedNumber fact={showFact} caption="shortlist / win rate, sourced only" />
+          <div className="text-xs text-gray-700">
+            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Published odds</p>
+            <div className="flex flex-col gap-0.5">
+              <span className="flex items-baseline gap-2">
+                <span className="text-gray-500 w-20 shrink-0">Shortlist</span>
+                <GatedNumber fact={shortlistFact} />
+              </span>
+              <span className="flex items-baseline gap-2">
+                <span className="text-gray-500 w-20 shrink-0">Win</span>
+                <GatedNumber fact={winFact} />
+              </span>
+            </div>
+            <p className="text-[11px] text-gray-400 mt-1">Sourced figures only. Blank where a show publishes no rate.</p>
           </div>
 
           <div>
@@ -359,8 +382,8 @@ function ShowRow({ show, currency }: { show: ShowBlock; currency: CurrencyCode }
               publishes no separate fee. Never an invented discount.
             </p>
           )}
-          {factEntry && factEntry.rate_fact && factEntry.rate_fact.source_url && (
-            <p className="text-[11px] text-gray-400 break-words">Rate source: {factEntry.rate_fact.source_url}</p>
+          {(shortlistFact ?? winFact)?.source_url && (
+            <p className="text-[11px] text-gray-400 break-words">Rate source: {(shortlistFact ?? winFact)!.source_url}</p>
           )}
         </div>
       )}
@@ -472,8 +495,8 @@ export default function PlannerV3Result({ plan, displayCurrency, teaserShows }: 
 
       {/* Region-dropped — surfaced, never silently dropped */}
       {plan.region_dropped.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <p className="text-xs font-semibold text-gray-500 mb-1">Not open in your market</p>
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <p className="text-sm font-bold text-gray-900 mb-1">Not open in your market</p>
           <p className="text-xs text-gray-500">
             {plan.region_dropped.length} {plan.region_dropped.length === 1 ? 'entry is' : 'entries are'} outside your
             selected market and left out of the plan. Change your market on the previous step to include them.
@@ -491,15 +514,23 @@ export default function PlannerV3Result({ plan, displayCurrency, teaserShows }: 
 
       {/* Unresolved — unrecognized / out-of-scope, surfaced with the raw name */}
       {plan.unresolved.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <p className="text-xs font-semibold text-gray-500 mb-1">Shows we could not place</p>
-          <ul className="text-xs text-gray-600 space-y-0.5">
-            {plan.unresolved.map((u, i) => (
-              <li key={`${u.campaign.project_id}-${u.rawShowName}-${i}`}>
-                {u.campaign.campaign_name}: &ldquo;{u.rawShowName}&rdquo; ({u.reason.replace('_', ' ')})
-                {u.note ? <span className="text-gray-400">: {u.note}</span> : null}
-              </li>
-            ))}
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <p className="text-sm font-bold text-gray-900">Couldn&apos;t match to a show we cover</p>
+          <p className="text-xs text-gray-500 mt-0.5">
+            These campaigns name a target show we don&apos;t recognise, so they are left out of the plan. Set the
+            show on the campaign to one we cover to include it.
+          </p>
+          <ul className="text-xs text-gray-600 mt-2 space-y-1">
+            {plan.unresolved.map((u, i) => {
+              const suggestion = suggestShow(u.rawShowName)
+              return (
+                <li key={`${u.campaign.project_id}-${u.rawShowName}-${i}`}>
+                  <span className="text-gray-700">{u.campaign.campaign_name}</span>
+                  <span className="text-gray-500"> names &ldquo;{u.rawShowName}&rdquo;.</span>
+                  {suggestion && <span className="text-gray-500"> Did you mean {suggestion}?</span>}
+                </li>
+              )
+            })}
           </ul>
         </div>
       )}
