@@ -102,6 +102,7 @@ import {
   showHasNoCategoryList,
   showHasNoCategoryConcept,
 } from '@/lib/show-taxonomy'
+import { isAoyShow, normalizeAoyCategory, AOY_CATEGORY_KEYS } from '@/lib/aoy-taxonomy'
 import { convert, type CurrencyCode } from '@/lib/fx'
 import { DEADLINES_2026, type ShowDeadline, ENTRY_FEES, resolveWinRateKey } from '@/lib/shows-data'
 import { getRateFact, mayDisplayNumber, type RateFact } from '@/lib/rate-facts'
@@ -235,6 +236,16 @@ export type CategoryFlag = 'ok' | 'no_taxonomy' | 'drift'
  */
 export function categoryCrossCheck(canonicalShow: string, category: string | null): CategoryFlag {
   if (showHasNoCategoryConcept(canonicalShow)) return 'ok'
+  // AOY categories are track/market-prefixed free text and Campaign Asia AOY is
+  // not in SHOW_CATEGORIES, so the generic list check below would wrongly read
+  // 'no taxonomy'. Validate via the canonical AOY normalizer + the 63 rubric stems
+  // (read-only reuse of the parity-locked lib/aoy-taxonomy; strips the market/
+  // sub-region prefix so 'China PR Agency of the Year' -> 'PR Agency of the Year').
+  if (isAoyShow(canonicalShow)) {
+    if (!category) return 'drift'
+    const stem = normalizeAoyCategory(category)
+    return AOY_CATEGORY_KEYS.some(k => k.toLowerCase() === stem.toLowerCase()) ? 'ok' : 'drift'
+  }
   if (showHasNoCategoryList(canonicalShow)) return 'no_taxonomy'
   const list = categoriesForShow(canonicalShow)
   if (list.length === 0) return 'no_taxonomy'
