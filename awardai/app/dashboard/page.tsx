@@ -127,7 +127,8 @@ export default function DashboardPage() {
         supabase.from('profiles').select('role').eq('id', user.id).single(),
       ])
 
-      if (profileData?.role !== 'admin') {
+      // Org admins AND owners may view the dashboard (owners were wrongly locked out; fixed 2026-07-18)
+      if (!['admin', 'owner'].includes(profileData?.role ?? '')) {
         setAccessDenied(true)
         setFetching(false)
         return
