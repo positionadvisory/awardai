@@ -252,7 +252,7 @@ export default function CampaignsPage() {
             <Link href="/projects" className="text-sm text-gray-500 hover:text-gray-900 transition-colors">
               Projects
             </Link>
-            {userRole === 'admin' && (
+            {['admin', 'owner'].includes(userRole ?? '') && (
               <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900 transition-colors">
                 Dashboard
               </Link>
