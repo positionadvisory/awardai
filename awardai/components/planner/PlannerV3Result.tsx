@@ -42,7 +42,7 @@
  */
 
 import Link from 'next/link'
-import type { PlannerV3Plan, ShowBlock, PlacedEntry, PlannerV3Tier } from '@/lib/planner-v3-engine'
+import type { PlannerV3Plan, ShowBlock, PlacedEntry, PlannerV3Tier, EntryEligibility } from '@/lib/planner-v3-engine'
 import type { CurrencyCode } from '@/lib/fx'
 import { convert } from '@/lib/fx'
 import { formatMoney } from '@/lib/planner-display'
@@ -83,6 +83,15 @@ const TIER_COLOR: Record<PlannerV3Tier, string> = {
   prestige: '#c9a95c', // app gold (WelcomeRouter/GeneratingBar/direction-card); distinct from green/blue/gray
   specialist: '#0369a1', // sky-700
   reserve: '#9ca3af', // gray-400 (matches the gray badge; keeps the bar off three greens)
+}
+
+// Eligibility line colours — INLINE styles (same purge-immune posture as the tier
+// maps above; a dynamically-selected colour that lives only in a map gets scanned
+// out of the served CSS, Gotchas S V3-P4).
+const ELIG_COLOR: Record<EntryEligibility['status'], string> = {
+  in_window: '#15803d',     // green-700
+  out_of_window: '#b45309', // amber-700
+  unverifiable: '#6b7280',  // gray-500
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -304,6 +313,12 @@ function ShowRow({ show, currency }: { show: ShowBlock; currency: CurrencyCode }
                 {e.categoryFlag === 'drift' && <span className="text-gray-400"> &middot; not on this show&apos;s list</span>}
                 {reserve && <span className="text-gray-400"> &middot; reserve</span>}
                 <span className="block text-[11px] text-gray-400">{e.campaign.campaign_name}</span>
+                {e.eligibility && (
+                  <span className="block text-[11px]" style={{ color: ELIG_COLOR[e.eligibility.status] }}>
+                    {e.eligibility.status === 'unverifiable' ? 'Verify eligibility — ' : ''}
+                    {e.eligibility.reason}
+                  </span>
+                )}
               </span>
               <span className={`text-right tabular-nums ${reserve ? 'text-gray-400' : 'text-gray-600'}`}>
                 {fee ? fee.text : 'not published'}
@@ -382,7 +397,16 @@ export default function PlannerV3Result({ plan, displayCurrency, teaserShows }: 
   // A show with a real closing date this cycle vs. one whose cycle dates are not
   // published yet (final_date null). Never present a show with no open deadline as
   // "enter this cycle" (e.g. Spikes Asia: 2026 closed, 2027 not announced).
-  const thisCycle = recommendedShows.filter(s => s.cycle_status !== 'next_cycle' && s.final_date).slice().sort(byClosingDate)
+  const thisCycle = recommendedShows
+    .filter(s => s.cycle_status !== 'next_cycle' && s.final_date && s.eligibility_status !== 'out_of_window')
+    .slice()
+    .sort(byClosingDate)
+  // Demoted out of "Enter this cycle": every recommended entry's work first ran
+  // outside the show's eligibility window. Surfaced with the reason, never dropped.
+  const notEligibleThisCycle = recommendedShows
+    .filter(s => s.cycle_status !== 'next_cycle' && s.final_date && s.eligibility_status === 'out_of_window')
+    .slice()
+    .sort(byClosingDate)
   const nextCycle = recommendedShows.filter(s => s.cycle_status === 'next_cycle').slice().sort(byClosingDate)
   const datesUnconfirmed = recommendedShows.filter(s => s.cycle_status !== 'next_cycle' && !s.final_date)
 
@@ -425,6 +449,13 @@ export default function PlannerV3Result({ plan, displayCurrency, teaserShows }: 
         title="Enter this cycle"
         blurb="Ordered by closing date, soonest first."
         shows={thisCycle}
+        currency={displayCurrency}
+      />
+
+      <ShowGroup
+        title="Not eligible this cycle"
+        blurb="Recommended, but the campaign first ran outside this show's eligibility window for the open cycle. Held here with the reason, never dropped — plan it for a cycle it qualifies for."
+        shows={notEligibleThisCycle}
         currency={displayCurrency}
       />
 
