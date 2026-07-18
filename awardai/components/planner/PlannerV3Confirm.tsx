@@ -35,6 +35,12 @@ type Props = {
   onChange: (patch: Partial<PlannerV3ConfirmValue>) => void
   /** True when a stored value was found for a field — shown as a small hint. */
   prefilled?: Partial<Record<keyof PlannerV3ConfirmValue, boolean>>
+  /** Selected campaigns, for the optional per-campaign first-aired date inputs.
+   *  Omitted / empty = the eligibility section is not rendered (skipping changes nothing). */
+  campaigns?: { project_id: number; campaign_name: string }[]
+  /** project_id -> ISO first-aired date the user typed (empty string = not set). */
+  firstAired?: Record<number, string>
+  onFirstAiredChange?: (projectId: number, date: string) => void
 }
 
 const REGION_OPTIONS: { value: PlannerRegion; label: string }[] = [
@@ -70,7 +76,7 @@ function PrefillHint({ show }: { show?: boolean }) {
   return <span className="ml-1 text-[10px] font-normal text-gray-400">(from your profile)</span>
 }
 
-export default function PlannerV3Confirm({ value, onChange, prefilled }: Props) {
+export default function PlannerV3Confirm({ value, onChange, prefilled, campaigns, firstAired, onFirstAiredChange }: Props) {
   const budgetDisplay = value.budget > 0 ? value.budget.toLocaleString('en-US') : ''
   const regionValue = REGION_OPTIONS.some(o => o.value === value.region) ? value.region : 'Global'
 
@@ -175,6 +181,32 @@ export default function PlannerV3Confirm({ value, onChange, prefilled }: Props) 
           Shifts how the plan is ordered. Best chance of winning leans on shows with a published win or shortlist rate.
         </p>
       </div>
+
+      {campaigns && campaigns.length > 0 && (
+        <div>
+          <label className={labelClass}>When did each campaign first run? (optional)</label>
+          <p className="text-xs text-gray-400 mb-2">
+            Add the first public air / publish date and the plan checks each campaign against a show&apos;s eligibility
+            window, so it never recommends a show this cycle that the work is too old or too new to enter. Leave any
+            blank to skip: the plan is unchanged, and the show is flagged &ldquo;verify eligibility&rdquo; instead of
+            guessing.
+          </p>
+          <ul className="space-y-2">
+            {campaigns.map(c => (
+              <li key={c.project_id} className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:items-center">
+                <span className="text-sm text-gray-700 min-w-0 truncate">{c.campaign_name}</span>
+                <input
+                  type="date"
+                  className={controlClass}
+                  value={firstAired?.[c.project_id] ?? ''}
+                  onChange={e => onFirstAiredChange?.(c.project_id, e.target.value)}
+                  aria-label={`First run date for ${c.campaign_name}`}
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   )
 }

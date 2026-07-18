@@ -104,7 +104,7 @@ import {
 } from '@/lib/show-taxonomy'
 import { isAoyShow, normalizeAoyCategory, AOY_CATEGORY_KEYS } from '@/lib/aoy-taxonomy'
 import { convert, type CurrencyCode } from '@/lib/fx'
-import { DEADLINES_2026, type ShowDeadline, ENTRY_FEES, resolveWinRateKey } from '@/lib/shows-data'
+import { DEADLINES_2026, type ShowDeadline, type EligibilityWindow, ENTRY_FEES, resolveWinRateKey } from '@/lib/shows-data'
 import { getRateFact, mayDisplayNumber, type RateFact } from '@/lib/rate-facts'
 import { resolveCycleStatus, type PlannerCycleStatus } from '@/lib/planner-engine'
 import type { PlannerAgencyDiscipline, PlannerLens } from '@/lib/planner-engine'
@@ -278,6 +278,10 @@ export type SelectedCampaign = {
   /** The show that score was measured against — always carried alongside the number. */
   scored_show: string | null
   directions: PlannerV3Direction[]
+  /** Optional user-supplied "first publicly aired/published" date (ISO YYYY-MM-DD).
+   *  Nullable/absent = not provided; the eligibility check then stays unverifiable,
+   *  never a silent pass. No schema column this cycle (planner-input only). */
+  first_aired?: string | null
 }
 
 export type PriorityContext = {
@@ -488,6 +492,21 @@ export function recommendFor(
 
 export type PlannerV3Tier = 'core' | 'prestige' | 'specialist' | 'reserve'
 
+/**
+ * Per-entry eligibility determination: does this campaign's first-aired date fall
+ * inside the target show's official eligibility window? Set ONLY when the show has
+ * a window on file (shows-data EligibilityWindow); absent = no window = no claim.
+ * The engine NEVER silently passes or drops — an out-of-window entry carries
+ * `reason` and is demoted out of "Enter this cycle"; a window-but-no-date entry is
+ * flagged 'unverifiable' with a "verify eligibility window" reason.
+ */
+export type EntryEligibility = {
+  status: 'in_window' | 'out_of_window' | 'unverifiable'
+  window: EligibilityWindow
+  campaignDate: string | null
+  reason: string
+}
+
 export type PlacedEntry = ScoredEntry & {
   status: 'recommended' | 'reserve'
   /** Sourced fee in USD, or null when unsourced (never invented). */
@@ -495,6 +514,8 @@ export type PlacedEntry = ScoredEntry & {
   /** True when fee_usd is a family/edition upper-bound estimate (e.g. MMA Smarties Vietnam via APAC). */
   fee_is_estimate: boolean
   region_dropped: boolean
+  /** Optional eligibility read; absent = the show has no window on file (no claim). */
+  eligibility?: EntryEligibility
 }
 
 export type ShowBlock = {
@@ -507,6 +528,8 @@ export type ShowBlock = {
   fee_flag: 'ok' | 'partial_unsourced' | 'fully_unsourced'
   cycle_status: PlannerCycleStatus
   final_date: string | null
+  /** Roll-up of eligibility across recommended entries; null = no window on file for this show. */
+  eligibility_status: 'ok' | 'out_of_window' | 'verify' | null
 }
 
 export type PlannerV3Plan = {
@@ -542,6 +565,73 @@ function feeForResolution(resolution: Extract<ShowResolution, { status: 'resolve
     return { fee_usd: null, is_estimate: false }
   }
   return { fee_usd: fee.base, is_estimate: !!resolution.feeIsUpperBoundEstimate }
+}
+
+// ── Eligibility (window ∩ campaign date) ─────────────────────────────────────
+// Additive dimension over resolveCycleStatus: that fn answers "is the show's entry
+// cycle open on asOfDate"; this answers "does the WORK qualify for that cycle's
+// eligibility window". ISO YYYY-MM-DD strings compare lexicographically =
+// chronologically, so no Date object is needed (keeps the derivation pure). Set
+// ONLY when the show carries an eligibilityWindow; an absent window = no claim.
+
+const _ELIG_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+function fmtEligDate(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
+  if (!m) return iso
+  const mo = parseInt(m[2], 10)
+  if (mo < 1 || mo > 12) return iso
+  return parseInt(m[3], 10) + " " + _ELIG_MONTHS[mo - 1] + " " + m[1]
+}
+
+function resolveEligibility(
+  canonicalShow: string,
+  firstAired: string | null | undefined,
+  deadlines: ShowDeadline[],
+): EntryEligibility | undefined {
+  const found = deadlines.find(d => sameShow(d.show, canonicalShow))
+  const window = found?.eligibilityWindow
+  if (!window) return undefined // no window on file -> no eligibility claim
+  const winText = fmtEligDate(window.start) + " to " + fmtEligDate(window.end)
+  if (!firstAired) {
+    return {
+      status: "unverifiable",
+      window,
+      campaignDate: null,
+      reason: "Add this campaign's first-aired date to confirm it falls in the " + winText + " eligibility window.",
+    }
+  }
+  if (firstAired >= window.start && firstAired <= window.end) {
+    return {
+      status: "in_window",
+      window,
+      campaignDate: firstAired,
+      reason: "First ran " + fmtEligDate(firstAired) + ", inside the " + winText + " eligibility window.",
+    }
+  }
+  const before = firstAired < window.start
+  return {
+    status: "out_of_window",
+    window,
+    campaignDate: firstAired,
+    reason: before
+      ? "First ran " + fmtEligDate(firstAired) + ", before this cycle's eligibility window opens (" + fmtEligDate(window.start) + "). Eligible a future cycle, not this one."
+      : "First ran " + fmtEligDate(firstAired) + ", after this cycle's eligibility window closed (" + fmtEligDate(window.end) + ").",
+  }
+}
+
+// Block-level roll-up over a show's RECOMMENDED entries. At least one in-window
+// entry keeps the block in "Enter this cycle" (mixed blocks stay, per-entry
+// reasons still render); every recommended entry out-of-window demotes the whole
+// block; window-but-no-date only -> "verify". No window on any entry -> null.
+function blockEligibilityStatus(recommended: PlacedEntry[]): ShowBlock['eligibility_status'] {
+  const elig = recommended.map(e => e.eligibility).filter((x): x is EntryEligibility => !!x)
+  if (elig.length === 0) return null
+  const hasIn = elig.some(e => e.status === "in_window")
+  const hasVerify = elig.some(e => e.status === "unverifiable")
+  const hasOut = elig.some(e => e.status === "out_of_window")
+  if (hasIn) return hasVerify ? "verify" : "ok"
+  if (hasOut) return "out_of_window"
+  return "verify"
 }
 
 // Curated PRESTIGE tier: marquee, hard-to-win shows, INDEPENDENT of geography
@@ -639,7 +729,8 @@ export function derivePlanV3(
     } else {
       status = 'reserve'
     }
-    placed.push({ ...entry, status, fee_usd, fee_is_estimate: is_estimate, region_dropped: false })
+    const eligibility = resolveEligibility(entry.resolution.canonicalShow, entry.campaign.first_aired, deadlines)
+    placed.push({ ...entry, status, fee_usd, fee_is_estimate: is_estimate, region_dropped: false, eligibility })
   }
   const regionDropped: PlacedEntry[] = regionDroppedEntries.map(entry => {
     const { fee_usd, is_estimate } = feeForResolution(entry.resolution)
@@ -677,6 +768,7 @@ export function derivePlanV3(
       fee_flag,
       cycle_status,
       final_date: finalDate,
+      eligibility_status: blockEligibilityStatus(entries.filter(e => e.status === 'recommended')),
     }
   })
 

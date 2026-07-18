@@ -82,6 +82,9 @@ export default function PlannerV3() {
   const [existingPrefs, setExistingPrefs] = useState<Record<string, unknown> | null>(null)
 
   const [selected, setSelected] = useState<Set<number>>(new Set())
+  // Optional per-campaign first-aired dates (project_id -> ISO). No schema column
+  // this cycle: planner-input only, fed into the engine's eligibility check.
+  const [firstAired, setFirstAired] = useState<Record<number, string>>({})
   const [confirmValue, setConfirmValue] = useState<PlannerV3ConfirmValue>({
     budget: DEFAULT_BUDGET,
     budgetCurrency: DEFAULT_CURRENCY,
@@ -194,7 +197,7 @@ export default function PlannerV3() {
   const plan = useMemo(() => {
     const campaigns = options
       .filter(o => selected.has(o.project_id))
-      .map(toSelectedCampaign)
+      .map(o => ({ ...toSelectedCampaign(o), first_aired: firstAired[o.project_id] || null }))
     const input: PlannerV3Input = {
       campaigns,
       budget: confirmValue.budget,
@@ -205,7 +208,7 @@ export default function PlannerV3() {
       asOfDate,
     }
     return derivePlanV3(input, facets, rateFacts)
-  }, [options, selected, confirmValue, facets, rateFacts, asOfDate])
+  }, [options, selected, confirmValue, facets, rateFacts, asOfDate, firstAired])
 
   const teaserShows = useMemo(
     () => marketEligibleShows(facets, confirmValue.region, 5),
@@ -302,7 +305,16 @@ export default function PlannerV3() {
 
       {step === 'confirm' && (
         <Card title="Budget and market" blurb="Prefilled from your profile. Confirm or change anything.">
-          <PlannerV3Confirm value={confirmValue} onChange={patchConfirm} prefilled={prefilled} />
+          <PlannerV3Confirm
+            value={confirmValue}
+            onChange={patchConfirm}
+            prefilled={prefilled}
+            campaigns={options
+              .filter(o => selected.has(o.project_id))
+              .map(o => ({ project_id: o.project_id, campaign_name: o.campaign_name }))}
+            firstAired={firstAired}
+            onFirstAiredChange={(pid, date) => setFirstAired(prev => ({ ...prev, [pid]: date }))}
+          />
           <NextBack onNext={() => setStep('result')} onBack={() => setStep('campaigns')} nextLabel="See my plan" />
         </Card>
       )}
