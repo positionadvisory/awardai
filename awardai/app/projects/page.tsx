@@ -578,7 +578,7 @@ export default function ProjectsPage() {
                 Winning Campaigns
               </Link>
             )}
-            {userRole === 'admin' && (
+            {['admin', 'owner'].includes(userRole ?? '') && (
               <Link href="/dashboard" className="hidden sm:inline text-sm text-gray-500 hover:text-gray-900 transition-colors">
                 Dashboard
               </Link>

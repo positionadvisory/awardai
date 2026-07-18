@@ -159,7 +159,6 @@ export default function DashboardPage() {
       if (!orgId) { setFetching(false); return }
 
       const now = new Date()
-      const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1).toISOString()
       const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
       const [
@@ -174,7 +173,7 @@ export default function DashboardPage() {
         supabase.from('projects').select('id, campaign_name, client_name, target_shows, status, created_at, user_id').eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('directions').select('id, project_id, best_show, best_category, win_likelihood, created_by, created_at').eq('org_id', orgId),
         supabase.from('evaluations').select('id, project_id, overall_score, scores, created_at, created_by').eq('org_id', orgId),
-        supabase.from('monthly_usage').select('*').eq('org_id', orgId).gte('month', sixMonthsAgo).order('month', { ascending: true }),
+        supabase.from('monthly_usage').select('*').eq('org_id', orgId).order('period_year', { ascending: false }).order('period_month', { ascending: false }).limit(6),
         supabase.from('profiles').select('id, full_name, email, role, created_at').eq('org_id', orgId),
         supabase.from('usage_logs').select('id, user_id, action, model, input_tokens, output_tokens, created_at').eq('org_id', orgId).gte('created_at', thirtyDaysAgo).order('created_at', { ascending: false }).limit(1000),
         supabase.from('entry_drafts').select('id, direction_id, created_by, created_at').eq('org_id', orgId),
@@ -183,7 +182,7 @@ export default function DashboardPage() {
       setProjects(projectsData ?? [])
       setDirections(directionsData ?? [])
       setEvaluations(evaluationsData ?? [])
-      setMonthlyUsage(usageData ?? [])
+      setMonthlyUsage(((usageData ?? []) as Array<MonthlyUsage & { period_year: number; period_month: number }>).slice().reverse().map(m => ({ ...m, month: `${m.period_year}-${String(m.period_month).padStart(2, '0')}-01` })))
       setProfiles(profilesData ?? [])
       setUsageLogs(usageLogsData ?? [])
       setEntryDrafts(entryDraftsData ?? [])
@@ -271,11 +270,14 @@ export default function DashboardPage() {
     }))
 
   // Projects by status
+  // Bucket on the statuses the DB actually allows (draft/analyzing/directions/
+  // drafting/complete/archived) — the old 'active'/'final' checks matched nothing,
+  // so every project always displayed as Draft.
   const statusCounts = { active: 0, draft: 0, final: 0 }
   for (const p of projects) {
-    if (p.status === 'active') statusCounts.active++
-    else if (p.status === 'final') statusCounts.final++
-    else statusCounts.draft++
+    if (p.status === 'analyzing' || p.status === 'directions' || p.status === 'drafting') statusCounts.active++
+    else if (p.status === 'complete') statusCounts.final++
+    else if (p.status !== 'archived') statusCounts.draft++
   }
 
   // ── User activity ─────────────────────────────────────────────────
@@ -309,11 +311,15 @@ export default function DashboardPage() {
     return { profile, projects: userProjects.length, draftsThisMonth, evalsThisMonth, costThisMonth, lastActive, flags }
   })
 
-  // High usage flag — > 2× org average cost this month
+  // Cost data is internal ops info: only the platform super-admin view surfaces it.
+  // Customer-facing org admins/owners see activity, stages and flags, never spend.
+  const isSuperAdmin = user?.email === 'ben@positionadvisory.com'
+
+  // High usage flag — > 2× org average cost this month (super-admin view only)
   const avgCost = userActivityRows.reduce((s, u) => s + u.costThisMonth, 0) / (userActivityRows.length || 1)
   const userActivityFlagged = userActivityRows.map(u => ({
     ...u,
-    flags: u.costThisMonth > avgCost * 2 && u.costThisMonth > 0.01 ? [...u.flags, 'high_usage'] : u.flags,
+    flags: isSuperAdmin && u.costThisMonth > avgCost * 2 && u.costThisMonth > 0.01 ? [...u.flags, 'high_usage'] : u.flags,
   }))
 
   // Sort by the column the user picked. Strings (name) compare with
@@ -642,7 +648,7 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-sm font-semibold text-gray-700">User Activity</h2>
-              <p className="text-xs text-gray-400 mt-0.5">This month — click a row to view full detail</p>
+              <p className="text-xs text-gray-400 mt-0.5">{isSuperAdmin ? 'This month — click a row to view full detail' : 'This month'}</p>
             </div>
             <span className="text-xs text-gray-400">{profiles.length} user{profiles.length !== 1 ? 's' : ''}</span>
           </div>
@@ -666,9 +672,11 @@ export default function DashboardPage() {
                     <th onClick={() => toggleUserSort('evals')} className="text-right text-gray-400 font-medium pb-2 px-3 cursor-pointer select-none hover:text-gray-600 transition-colors">
                       <span className="inline-block w-2 text-gray-500">{userSortArrow('evals')}</span> Evals
                     </th>
-                    <th onClick={() => toggleUserSort('cost')} className="text-right text-gray-400 font-medium pb-2 px-3 cursor-pointer select-none hover:text-gray-600 transition-colors">
-                      <span className="inline-block w-2 text-gray-500">{userSortArrow('cost')}</span> Cost (mo)
-                    </th>
+                    {isSuperAdmin && (
+                      <th onClick={() => toggleUserSort('cost')} className="text-right text-gray-400 font-medium pb-2 px-3 cursor-pointer select-none hover:text-gray-600 transition-colors">
+                        <span className="inline-block w-2 text-gray-500">{userSortArrow('cost')}</span> Cost (mo)
+                      </th>
+                    )}
                     <th onClick={() => toggleUserSort('lastActive')} className="text-right text-gray-400 font-medium pb-2 px-3 cursor-pointer select-none hover:text-gray-600 transition-colors">
                       <span className="inline-block w-2 text-gray-500">{userSortArrow('lastActive')}</span> Last active
                     </th>
@@ -681,8 +689,8 @@ export default function DashboardPage() {
                   {sortedUserRows.map(u => (
                     <tr
                       key={u.profile.id}
-                      className="hover:bg-gray-50 cursor-pointer transition-colors"
-                      onClick={() => router.push(`/dashboard/users/${u.profile.id}`)}
+                      className={isSuperAdmin ? 'hover:bg-gray-50 cursor-pointer transition-colors' : 'transition-colors'}
+                      onClick={isSuperAdmin ? () => router.push(`/dashboard/users/${u.profile.id}`) : undefined}
                     >
                       <td className="py-2.5 pr-4">
                         <p className="font-medium text-gray-800">{u.profile.full_name ?? u.profile.email ?? 'Unknown'}</p>
@@ -691,7 +699,7 @@ export default function DashboardPage() {
                       <td className="py-2.5 px-3 text-right text-gray-600">{u.projects}</td>
                       <td className="py-2.5 px-3 text-right text-gray-600">{u.draftsThisMonth}</td>
                       <td className="py-2.5 px-3 text-right text-gray-600">{u.evalsThisMonth}</td>
-                      <td className="py-2.5 px-3 text-right text-gray-600">{fmtCost(u.costThisMonth)}</td>
+                      {isSuperAdmin && <td className="py-2.5 px-3 text-right text-gray-600">{fmtCost(u.costThisMonth)}</td>}
                       <td className="py-2.5 px-3 text-right text-gray-400">
                         {u.lastActive
                           ? new Date(u.lastActive).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
