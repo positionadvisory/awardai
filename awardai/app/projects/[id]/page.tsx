@@ -184,58 +184,6 @@ import {
 
 import ShowCombobox from '@/components/ShowCombobox'
 
-// Base win rates (% chance of shortlist/metal) per show — used in Directions tab Win Likelihood calculation.
-// Sources: published show statistics and industry estimates. Default cap: 30%.
-const BASE_WIN_RATES: Record<string, number> = {
-  'Cannes Lions': 5,            // ~3–7% for shortlist/metal across most Lions
-  'D&AD': 4,                    // Pencils are extremely scarce; ~2–6%
-  'One Show': 10,               // Pencil win rate ~8–12%
-  'Clio Awards': 12,
-  'Effies': 18,                 // Effectiveness shows tend to have broader recognition
-  'WARC Awards': 15,
-  'WARC Effectiveness Awards': 15,
-  'Spikes Asia': 10,
-  'Dubai Lynx': 15,
-  'Eurobest': 9,             // Research-based: ~9% shortlist rate
-  'New York Festivals': 15,
-  'London International Awards': 12,
-  'Campaign Big Awards': 15,
-  'Creative Circle': 14,
-  'Epica Awards': 8,          // Research-based: scarce, journalist jury
-  'ADFEST': 12,
-  'Webby Awards': 5,           // Research-based: 13,000+ entries, very competitive
-  'Shorty Awards': 20,
-  'MMA Smarties': 20,
-  'Asian Marketing Effectiveness Awards': 18,
-  'Asia Pacific Effie Awards': 18,
-  'Global Effie Awards': 12,
-  'Australian Effies': 18,
-  'The Drum Awards Festival': 12,       // ~12% across discipline shows
-  'African Cristal Festival': 9,        // One winner per category — scarce
-  'Loeries': 15,                        // Regional dominant; ~2,784 entries, 2025
-  'Campaign UK Agency of the Year': 15, // Agency-tier; broad recognition
-  'Campaign US Agency of the Year': 15,
-  'Campaign Global Agency of the Year': 15,
-  'Adweek Agency of the Year': 15,      // Editorial judged; paid entry new in 2025
-  'One Show Indies': 8,                 // Inaugural 2026; high-bar One Show criteria
-  'SABRE Awards Asia-Pacific': 15,        // PR sector show; ~20% EMEA finalist rate proxy; APAC volume lower
-  'Global SABRE Awards': 5,              // Prestige capstone — top 40 from 5,000+ total entries; no direct entry
-  'ICCO Global Awards': 15,              // PR sector show; effectiveness-purist; selective field (64 shortlisted 2024)
-  'PRCA UK Awards': 15,                 // PR sector show; fee-banded tiers, outcomes-led
-  'PRCA APAC Awards': 15,               // PR sector show; APAC regional
-}
-
-// Calculate realistic win likelihood: base rate × quality adjustment from eval score
-// Score 10 → 1.5×, score 5 → 1.0×, score 0 → 0.5×. Hard cap at 45%.
-function calculateWinLikelihood(show: string | null, evalScore?: number): number {
-  const base = Math.min(BASE_WIN_RATES[show ?? ''] ?? 20, 30)
-  if (evalScore !== undefined) {
-    const multiplier = 0.5 + (evalScore / 10)
-    return Math.round(Math.min(base * multiplier, 45))
-  }
-  return base
-}
-
 // Session 54 — slim score band for engagement_events context (never the raw
 // score: keep event context coarse). Thresholds match the UI score colors.
 function scoreBand(score: number | null | undefined): 'high' | 'mid' | 'low' | null {
@@ -754,7 +702,7 @@ export default function ProjectPage() {
   const [dirSourceMaterialIdx, setDirSourceMaterialIdx] = useState<number>(-1)
   const [dirSourceEntryDirectionId, setDirSourceEntryDirectionId] = useState<number>(-1)
   // Directions tab: sort key
-  const [dirSortKey, setDirSortKey] = useState<'default' | 'category_fit' | 'medal_chance'>('default')
+  const [dirSortKey, setDirSortKey] = useState<'default' | 'category_fit'>('default')
 
   // Festival / jury intelligence — show_profiles rows keyed by directionId
   const [showProfiles, setShowProfiles] = useState<Record<number, ShowProfile | null>>({})
@@ -4472,7 +4420,7 @@ export default function ProjectPage() {
                 {directions.length > 1 && (
                   <div className="flex items-center gap-2 mb-4">
                     <span className="text-xs text-gray-400 flex-shrink-0">Sort by:</span>
-                    {(['default', 'category_fit', 'medal_chance'] as const).map(key => (
+                    {(['default', 'category_fit'] as const).map(key => (
                       <button
                         key={key}
                         onClick={() => setDirSortKey(key)}
@@ -4482,7 +4430,7 @@ export default function ProjectPage() {
                             : 'bg-white border-gray-300 text-gray-500 hover:border-gray-400 hover:text-gray-700'
                         }`}
                       >
-                        {key === 'default' ? 'Default' : key === 'category_fit' ? 'Category Fit ↓' : 'Medal Chance ↓'}
+                        {key === 'default' ? 'Default' : 'Category Fit ↓'}
                       </button>
                     ))}
                   </div>
@@ -4491,13 +4439,6 @@ export default function ProjectPage() {
                 {[...directions].sort((a, b) => {
                   if (dirSortKey === 'category_fit') {
                     return (b.win_likelihood ?? 0) - (a.win_likelihood ?? 0)
-                  }
-                  if (dirSortKey === 'medal_chance') {
-                    const aEval = evaluations[a.id]?.judge ?? evaluations[a.id]?.coach
-                    const bEval = evaluations[b.id]?.judge ?? evaluations[b.id]?.coach
-                    const aChance = calculateWinLikelihood(a.best_show, aEval?.overall_score)
-                    const bChance = calculateWinLikelihood(b.best_show, bEval?.overall_score)
-                    return bChance - aChance
                   }
                   return 0
                 }).map((d, idx, arr) => {
