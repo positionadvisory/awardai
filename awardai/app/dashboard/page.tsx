@@ -270,11 +270,14 @@ export default function DashboardPage() {
     }))
 
   // Projects by status
+  // Bucket on the statuses the DB actually allows (draft/analyzing/directions/
+  // drafting/complete/archived) — the old 'active'/'final' checks matched nothing,
+  // so every project always displayed as Draft.
   const statusCounts = { active: 0, draft: 0, final: 0 }
   for (const p of projects) {
-    if (p.status === 'active') statusCounts.active++
-    else if (p.status === 'final') statusCounts.final++
-    else statusCounts.draft++
+    if (p.status === 'analyzing' || p.status === 'directions' || p.status === 'drafting') statusCounts.active++
+    else if (p.status === 'complete') statusCounts.final++
+    else if (p.status !== 'archived') statusCounts.draft++
   }
 
   // ── User activity ─────────────────────────────────────────────────
