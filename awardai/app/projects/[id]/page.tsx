@@ -625,12 +625,6 @@ export default function ProjectPage() {
   const [expandedEntryFields, setExpandedEntryFields] = useState<Record<number, boolean>>({})
   // Draft version history expand/collapse — keyed by directionId
   const [expandedDraftHistory, setExpandedDraftHistory] = useState<Record<number, boolean>>({})
-  // Fix (22 Jul 2026): per-generation full-text toggle inside the compare panel,
-  // keyed `${dirId}:${gen}`. The history preview line-clamps each field to 3
-  // lines, which reads as truncation when a generation is the single uploaded
-  // 'Entry' blob (thousands of words -> 3 lines). Same invisible-content class
-  // as the uploaded-entry max-h-96 fix.
-  const [expandedHistoryFull, setExpandedHistoryFull] = useState<Record<string, boolean>>({})
 
   // Entries tab — collapsible entry cards (S91). Each direction's entry is a
   // collapsible card so a project with several entries is scannable instead of
@@ -5323,20 +5317,17 @@ export default function ProjectPage() {
                                   const genDate = genFields[0]?.created_at
                                     ? new Date(genFields[0].created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
                                     : null
-                                  const histKey = `${dirId}:${gen}`
-                                  const histFull = !!expandedHistoryFull[histKey]
+                                  {/* Fix (22 Jul 2026): compare shows FULL sections, always.
+                                      The first pass defaulted to line-clamp-3 previews with a
+                                      Show-full toggle; truncated text ending in an ellipsis
+                                      reads as broken, and 'click to compare' already implies
+                                      the full text. The panel is opt-in and collapsed by
+                                      default, so length is acceptable. */}
                                   return (
                                     <div key={gen} className="px-5 py-4">
-                                      <div className="flex items-center justify-between mb-3">
-                                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                                          Draft v{gen}{genDate ? ` · ${genDate}` : ''}
-                                        </p>
-                                        <button
-                                          onClick={() => setExpandedHistoryFull(prev => ({ ...prev, [histKey]: !histFull }))}
-                                          className="text-xs text-green-700 hover:text-green-600 transition-colors">
-                                          {histFull ? 'Preview ↑' : 'Show full ↓'}
-                                        </button>
-                                      </div>
+                                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
+                                        Draft v{gen}{genDate ? ` · ${genDate}` : ''}
+                                      </p>
                                       <div className="space-y-3">
                                         {genFields.map(field => {
                                           const histContent = field.custom_text?.trim()
@@ -5345,9 +5336,7 @@ export default function ProjectPage() {
                                           return (
                                             <div key={field.id}>
                                               <p className="text-xs font-medium text-gray-500 mb-1">{field.field_label}</p>
-                                              <p className={histFull
-                                                ? 'text-sm text-gray-500 leading-relaxed whitespace-pre-wrap'
-                                                : 'text-sm text-gray-500 leading-relaxed line-clamp-3'}>{histFull ? (histContent || '').replace(/\n{3,}/g, '\n\n').trim() : histContent}</p>
+                                              <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-wrap">{(histContent || '').replace(/\n{3,}/g, '\n\n').trim()}</p>
                                             </div>
                                           )
                                         })}
