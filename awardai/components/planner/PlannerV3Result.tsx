@@ -24,8 +24,11 @@
  *   - The mix chart summarises the RECOMMENDATION (recommended entries by tier
  *     + reserve), not the universe. Dependency-free CSS stacked bar, inline
  *     styles (Tailwind purges arbitrary values, Gotchas).
- *   - One campaign fanning into several categories at one show renders as
- *     several entries (post-reduction) — shown in the per-show detail.
+ *   - CAMPAIGN-FIRST grouping: inside each show card the campaign name is the
+ *     visible line and its recommended categories are the sub-list, with a
+ *     per-campaign budget subtotal; a "Budget by campaign" summary at the top
+ *     rolls those subtotals up across every show. Display-layer only — the
+ *     engine output already carries campaign + category per entry.
  *
  * Load-bearing honesty rules carried from the engine/spec:
  *   - Odds render ONLY through <GatedNumber/> off the entry's sourced rate_fact
@@ -263,6 +266,94 @@ function MixChart({ plan }: { plan: PlannerV3Plan }) {
   )
 }
 
+// ── Group a show's entries CAMPAIGN-FIRST (campaign name is the visible line,
+//    its categories are the sub-list). Order is preserved from the engine's
+//    priority-sorted entries, so the view stays deterministic. ───────────────
+type CampaignEntryGroup = { project_id: number; campaign_name: string; entries: PlacedEntry[] }
+
+function groupEntriesByCampaign(entries: PlacedEntry[]): CampaignEntryGroup[] {
+  const order: number[] = []
+  const byId = new Map<number, CampaignEntryGroup>()
+  for (const e of entries) {
+    const id = e.campaign.project_id
+    let g = byId.get(id)
+    if (!g) {
+      g = { project_id: id, campaign_name: e.campaign.campaign_name, entries: [] }
+      byId.set(id, g)
+      order.push(id)
+    }
+    g.entries.push(e)
+  }
+  return order.map(id => byId.get(id) as CampaignEntryGroup)
+}
+
+// ── Top summary: total budget per campaign across ALL shows (recommended
+//    entries only, matching each show card's budget line). A quick-reference
+//    roll-up shown before the per-show detail. ────────────────────────────────
+type CampaignBudgetRow = { name: string; usd: number; recCount: number; anyEstimate: boolean; anyUnsourced: boolean }
+
+function CampaignBudgetSummary({ plan, currency }: { plan: PlannerV3Plan; currency: CurrencyCode }) {
+  const order: number[] = []
+  const byId = new Map<number, CampaignBudgetRow>()
+  for (const s of plan.shows) {
+    for (const e of s.entries) {
+      if (e.status !== 'recommended') continue
+      const id = e.campaign.project_id
+      let row = byId.get(id)
+      if (!row) {
+        row = { name: e.campaign.campaign_name, usd: 0, recCount: 0, anyEstimate: false, anyUnsourced: false }
+        byId.set(id, row)
+        order.push(id)
+      }
+      row.recCount += 1
+      if (e.fee_usd !== null) {
+        row.usd += e.fee_usd
+        if (e.fee_is_estimate) row.anyEstimate = true
+      } else {
+        row.anyUnsourced = true
+      }
+    }
+  }
+  if (order.length === 0) return null
+  const rows = order.map(id => ({ project_id: id, ...(byId.get(id) as CampaignBudgetRow) }))
+  rows.sort((a, b) => b.usd - a.usd || a.name.localeCompare(b.name))
+  const fx = toDisplay(plan.budget_total_usd, currency)
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-5">
+      <h2 className="text-sm font-bold text-gray-900">Budget by campaign</h2>
+      <p className="text-xs text-gray-500 mt-0.5">
+        Recommended entries only, totalled across every show. Entry fees at each show&apos;s standard rate.
+      </p>
+      <ul className="divide-y divide-gray-100 mt-2">
+        {rows.map(r => {
+          const money = r.usd > 0 ? toDisplay(r.usd, currency) : null
+          return (
+            <li
+              key={r.project_id}
+              className="py-2 text-xs"
+              style={{ display: 'grid', gridTemplateColumns: '1fr auto', columnGap: '0.75rem', alignItems: 'baseline' }}
+            >
+              <span className="min-w-0">
+                <span className="font-semibold text-gray-900">{r.name}</span>
+                <span className="ml-1.5 text-[11px] text-gray-400">{pluralEntries(r.recCount)}</span>
+              </span>
+              <span className="text-right font-semibold tabular-nums text-gray-900">
+                {money ? money.text : 'fee not published'}
+                {r.anyEstimate && money && <span className="text-[11px] font-normal text-gray-500"> est.</span>}
+                {r.anyUnsourced && money && <span className="text-[11px] font-normal text-gray-400"> + unpriced</span>}
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+      {currency !== 'USD' && fx.rateDate && (
+        <p className="text-[11px] text-gray-400 mt-2">Converted to {currency} at FX {fx.rateDate}.</p>
+      )}
+    </div>
+  )
+}
+
 // ── One show row: critical line + fee/rate detail behind a click ─────────────
 
 function ShowRow({ show, currency }: { show: ShowBlock; currency: CurrencyCode }) {
@@ -312,29 +403,61 @@ function ShowRow({ show, currency }: { show: ShowBlock; currency: CurrencyCode }
         </div>
       </div>
 
-      {/* Entries: each category listed ONCE, aligned fee column, always visible */}
-      <ul className="mt-2 border-t border-gray-100 pt-1.5">
-        {show.entries.map(e => {
-          const fee = e.fee_usd !== null ? toDisplay(e.fee_usd, currency) : null
-          const reserve = e.status === 'reserve'
+      {/* Entries grouped CAMPAIGN-FIRST: campaign name is the visible line, its
+          categories are the sub-list, with a per-campaign subtotal (recommended
+          entries only, matching the show budget above). */}
+      <ul className="mt-2 border-t border-gray-100 pt-1.5 space-y-2">
+        {groupEntriesByCampaign(show.entries).map(g => {
+          const recG = g.entries.filter(e => e.status === 'recommended')
+          const knownRecG = recG.filter(e => e.fee_usd !== null)
+          const subUsd = knownRecG.reduce((sum, e) => sum + (e.fee_usd as number), 0)
+          const sub = knownRecG.length > 0 ? toDisplay(subUsd, currency) : null
+          const anyEstimateG = recG.some(e => e.fee_is_estimate)
+          const reserveCountG = g.entries.length - recG.length
+          const countLabel =
+            recG.length > 0
+              ? `${pluralEntries(recG.length)}${reserveCountG > 0 ? ` (+${reserveCountG} reserve)` : ''}`
+              : `${reserveCountG} reserve`
+          const subText = sub ? sub.text : recG.length > 0 ? 'fee not published' : ''
           return (
-            <li key={e.direction_id} className="py-1 text-xs" style={twoCol}>
-              <span className="min-w-0">
-                <span className={reserve ? 'text-gray-400' : 'text-gray-800'}>{e.category ?? 'Category not set'}</span>
-                {e.categoryFlag === 'drift' && <span className="text-gray-400"> &middot; not on this show&apos;s list</span>}
-                {reserve && <span className="text-gray-400"> &middot; reserve</span>}
-                <span className="block text-[11px] text-gray-400">{e.campaign.campaign_name}</span>
-                {e.eligibility && (
-                  <span className="block text-[11px]" style={{ color: ELIG_COLOR[e.eligibility.status] }}>
-                    {e.eligibility.status === 'unverifiable' ? 'Verify eligibility — ' : ''}
-                    {e.eligibility.reason}
-                  </span>
-                )}
-              </span>
-              <span className={`text-right tabular-nums ${reserve ? 'text-gray-400' : 'text-gray-600'}`}>
-                {fee ? fee.text : 'not published'}
-                {e.fee_is_estimate && fee && <span className="text-gray-400"> est.</span>}
-              </span>
+            <li key={g.project_id}>
+              {/* Campaign line + per-campaign subtotal */}
+              <div style={twoCol} className="items-baseline">
+                <span className="min-w-0 text-xs font-semibold text-gray-900">
+                  {g.campaign_name}
+                  <span className="ml-1.5 text-[11px] font-normal text-gray-400">{countLabel}</span>
+                </span>
+                <span className="text-right text-xs font-semibold tabular-nums text-gray-700">
+                  {subText}
+                  {anyEstimateG && sub && <span className="font-normal text-gray-400"> est.</span>}
+                </span>
+              </div>
+              {/* Category sub-list for this campaign */}
+              <ul className="mt-1 pl-3 border-l border-gray-100">
+                {g.entries.map(e => {
+                  const fee = e.fee_usd !== null ? toDisplay(e.fee_usd, currency) : null
+                  const reserve = e.status === 'reserve'
+                  return (
+                    <li key={e.direction_id} className="py-0.5 text-xs" style={twoCol}>
+                      <span className="min-w-0">
+                        <span className={reserve ? 'text-gray-400' : 'text-gray-700'}>{e.category ?? 'Category not set'}</span>
+                        {e.categoryFlag === 'drift' && <span className="text-gray-400"> &middot; not on this show&apos;s list</span>}
+                        {reserve && <span className="text-gray-400"> &middot; reserve</span>}
+                        {e.eligibility && (
+                          <span className="block text-[11px]" style={{ color: ELIG_COLOR[e.eligibility.status] }}>
+                            {e.eligibility.status === 'unverifiable' ? 'Verify eligibility — ' : ''}
+                            {e.eligibility.reason}
+                          </span>
+                        )}
+                      </span>
+                      <span className={`text-right tabular-nums ${reserve ? 'text-gray-400' : 'text-gray-600'}`}>
+                        {fee ? fee.text : 'not published'}
+                        {e.fee_is_estimate && fee && <span className="text-gray-400"> est.</span>}
+                      </span>
+                    </li>
+                  )
+                })}
+              </ul>
             </li>
           )
         })}
@@ -456,6 +579,8 @@ export default function PlannerV3Result({ plan, displayCurrency, teaserShows }: 
           </p>
         )}
       </div>
+
+      <CampaignBudgetSummary plan={plan} currency={displayCurrency} />
 
       <MixChart plan={plan} />
 
