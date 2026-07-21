@@ -82,9 +82,12 @@ export default function PlannerV3() {
   const [existingPrefs, setExistingPrefs] = useState<Record<string, unknown> | null>(null)
 
   const [selected, setSelected] = useState<Set<number>>(new Set())
-  // Optional per-campaign first-aired dates (project_id -> ISO). No schema column
-  // this cycle: planner-input only, fed into the engine's eligibility check.
+  // Optional per-campaign first-aired dates (project_id -> ISO), persisted to
+  // projects.first_aired (P1 planner demo polish, 19 Jul) and fed into the
+  // engine's eligibility check. origFirstAired is the as-loaded snapshot, used
+  // only to diff "changed" dates before writing back on Run.
   const [firstAired, setFirstAired] = useState<Record<number, string>>({})
+  const [origFirstAired, setOrigFirstAired] = useState<Record<number, string>>({})
   const [confirmValue, setConfirmValue] = useState<PlannerV3ConfirmValue>({
     budget: DEFAULT_BUDGET,
     budgetCurrency: DEFAULT_CURRENCY,
@@ -134,6 +137,15 @@ export default function PlannerV3() {
       }
       if (cancelled) return
       setOptions(opts)
+      // Prefill each campaign's date input from the persisted column (DB is the
+      // source of truth on load; in-session edits below are diffed against this
+      // snapshot before any write-back).
+      const seeded: Record<number, string> = {}
+      for (const o of opts) {
+        if (o.first_aired) seeded[o.project_id] = o.first_aired
+      }
+      setFirstAired(seeded)
+      setOrigFirstAired(seeded)
       setExistingPrefs((agencyProfile?.planner_prefs as Record<string, unknown> | null) ?? null)
 
       // Prefill the confirm step from saved v3 prefs first, else agency profile.
@@ -226,6 +238,32 @@ export default function PlannerV3() {
   const patchConfirm = (patch: Partial<PlannerV3ConfirmValue>) =>
     setConfirmValue(prev => ({ ...prev, ...patch }))
 
+  // Write only CHANGED first-aired dates back to projects.first_aired (client
+  // write is allowed here — projects is not on the no-client-write list,
+  // Gotchas Auth/Supabase — but a client update can silently affect zero rows
+  // under RLS, DM-16, so check the returned rows before trusting the write).
+  // Fire-and-forget: a failed/partial write never blocks the plan, which
+  // already has the value in memory for this session either way.
+  const persistFirstAired = () => {
+    const changedIds = Object.keys(firstAired)
+      .map(Number)
+      .filter(pid => (firstAired[pid] ?? '') !== (origFirstAired[pid] ?? ''))
+    if (changedIds.length === 0) return
+    changedIds.forEach(pid => {
+      const dateVal = firstAired[pid] || null
+      supabase
+        .from('projects')
+        .update({ first_aired: dateVal })
+        .eq('id', pid)
+        .select('id')
+        .then(({ data, error }) => {
+          if (!error && data && data.length > 0) {
+            setOrigFirstAired(prev => ({ ...prev, [pid]: dateVal ?? '' }))
+          }
+        })
+    })
+  }
+
   // Re-derive from current campaigns (explicit action; clears the diff note by
   // adopting the live qualifying set as the new selection baseline).
   const refreshFromCurrent = () => {
@@ -315,7 +353,11 @@ export default function PlannerV3() {
             firstAired={firstAired}
             onFirstAiredChange={(pid, date) => setFirstAired(prev => ({ ...prev, [pid]: date }))}
           />
-          <NextBack onNext={() => setStep('result')} onBack={() => setStep('campaigns')} nextLabel="See my plan" />
+          <NextBack
+            onNext={() => { persistFirstAired(); setStep('result') }}
+            onBack={() => setStep('campaigns')}
+            nextLabel="See my plan"
+          />
         </Card>
       )}
 

@@ -97,6 +97,17 @@ const ELIG_COLOR: Record<EntryEligibility['status'], string> = {
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 /** Format an ISO date (YYYY-MM-DD) as "12 Sep 2026", timezone-free. */
+/** Domain only, no protocol/path (full URL kept in the title attr for hover).
+ *  Falls back to the raw string if it isn't a parseable URL. */
+function sourceDomain(url: string | null): string {
+  if (!url) return ''
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return url
+  }
+}
+
 function formatDate(iso: string | null): string {
   if (!iso) return ''
   const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/)
@@ -345,7 +356,10 @@ function ShowRow({ show, currency }: { show: ShowBlock; currency: CurrencyCode }
         </p>
       )}
       {(shortlistFact ?? winFact)?.source_url && (
-        <p className="text-[11px] text-gray-400 mt-0.5 break-words">Rate source: {(shortlistFact ?? winFact)!.source_url}</p>
+        <p className="text-[11px] text-gray-400 mt-0.5 flex items-baseline gap-1.5">
+          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Rate source</span>
+          <span title={(shortlistFact ?? winFact)!.source_url ?? ''}>{sourceDomain((shortlistFact ?? winFact)!.source_url)}</span>
+        </p>
       )}
     </li>
   )

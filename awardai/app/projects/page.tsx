@@ -19,6 +19,17 @@ const WELCOME_ROUTER_LAUNCH = '2026-06-12T00:00:00Z'
 // the v2 brief hardcoded "33 shows" and would have shipped stale).
 const SHOW_COUNT_LABEL = `${Math.max(10, Math.floor(DEADLINES_2026.length / 10) * 10)}+`
 
+// Planner nav-link visibility only (P1 planner demo polish, 19 Jul 2026): the
+// /planner route itself stays URL-reachable for anyone in the org (acceptable
+// for alpha, per the build plan) — this only decides whether the link renders.
+// Same pattern as the Winning Campaigns link above.
+const PLANNER_LINK_ALLOWLIST = [
+  'bencondit@gmail.com',
+  'ben@positionadvisory.com',
+  'nicky.s.wang@gmail.com',
+  'nicky@positionadvisory.com',
+]
+
 /* ── Avatar dropdown (top-right nav) ─────────────────────────────────────── */
 function AvatarMenu({ email, onSignOut, onTakeTour }: { email: string; onSignOut: () => void; onTakeTour: () => void }) {
   const [open, setOpen] = useState(false)
@@ -581,6 +592,11 @@ export default function ProjectsPage() {
             {['admin', 'owner'].includes(userRole ?? '') && (
               <Link href="/dashboard" className="hidden sm:inline text-sm text-gray-500 hover:text-gray-900 transition-colors">
                 Dashboard
+              </Link>
+            )}
+            {PLANNER_LINK_ALLOWLIST.includes(user?.email ?? '') && (
+              <Link href="/planner" className="hidden sm:inline text-sm text-gray-500 hover:text-gray-900 transition-colors">
+                Planner
               </Link>
             )}
             <AvatarMenu email={user?.email ?? ''} onSignOut={handleSignOut} onTakeTour={handleTakeTour} />

@@ -5,6 +5,15 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
 
+// Planner nav-link visibility only (P1 planner demo polish, 19 Jul 2026) — see
+// the identical constant + comment in app/projects/page.tsx.
+const PLANNER_LINK_ALLOWLIST = [
+  'bencondit@gmail.com',
+  'ben@positionadvisory.com',
+  'nicky.s.wang@gmail.com',
+  'nicky@positionadvisory.com',
+]
+
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 type Campaign = {
@@ -255,6 +264,11 @@ export default function CampaignsPage() {
             {['admin', 'owner'].includes(userRole ?? '') && (
               <Link href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900 transition-colors">
                 Dashboard
+              </Link>
+            )}
+            {PLANNER_LINK_ALLOWLIST.includes(user?.email ?? '') && (
+              <Link href="/planner" className="text-sm text-gray-500 hover:text-gray-900 transition-colors">
+                Planner
               </Link>
             )}
             <button

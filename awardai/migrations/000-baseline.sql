@@ -507,7 +507,8 @@ CREATE TABLE projects (
   tonal_brief jsonb,
   entry_type text DEFAULT 'campaign'::text NOT NULL,
   agency_facts jsonb,
-  endorsements_checklist jsonb DEFAULT '{}'::jsonb NOT NULL
+  endorsements_checklist jsonb DEFAULT '{}'::jsonb NOT NULL,
+  first_aired date
 );
 
 CREATE TABLE show_profiles (
