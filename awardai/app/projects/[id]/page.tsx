@@ -5044,9 +5044,16 @@ export default function ProjectPage() {
                                       </button>
                                     </div>
                                   </div>
+                                  {/* Fix (21 Jul 2026): 'View full entry' previously opened a
+                                      384px scroll window (max-h-96) whose macOS overlay scrollbar
+                                      is invisible until touched, so a long uploaded entry (any
+                                      creative-track show without a structured entry_form) read as
+                                      truncated mid-sentence. Expanded now renders the full entry;
+                                      blank-line runs from docx/pdf extraction are collapsed for
+                                      display only (Copy still copies the raw content). */}
                                   {isExpanded && (
-                                    <div className="mt-3 max-h-96 overflow-y-auto pr-1">
-                                      <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{content}</p>
+                                    <div className="mt-3">
+                                      <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{(content || '').replace(/\n{3,}/g, '\n\n').trim()}</p>
                                     </div>
                                   )}
                                 </div>
