@@ -54,12 +54,14 @@ export type CampaignOption = {
   directions: PlannerV3Direction[]
   /** Preselected iff scored and at/above QUALIFY_THRESHOLD. */
   qualifies: boolean
+  /** Persisted "first publicly aired/published" date (ISO YYYY-MM-DD), or null. */
+  first_aired: string | null
 }
 
 // Local row shapes — cast the RLS query results to these rather than typing the
 // builder (a `ReturnType<typeof createClient>` param types results as `never`;
 // Gotchas TypeScript/Build). Only the columns this module reads are listed.
-type ProjectRow = { id: number; campaign_name: string | null; client_name: string | null; created_at: string | null }
+type ProjectRow = { id: number; campaign_name: string | null; client_name: string | null; created_at: string | null; first_aired: string | null }
 type DirectionRow = {
   id: number
   project_id: number
@@ -80,7 +82,7 @@ type EvalRow = { id: number; project_id: number; entry_draft_id: number; overall
 export async function fetchCampaignOptions(orgId: number): Promise<CampaignOption[]> {
   const { data: projectData, error: projErr } = await supabase
     .from('projects')
-    .select('id, campaign_name, client_name, created_at')
+    .select('id, campaign_name, client_name, created_at, first_aired')
     .eq('org_id', orgId)
     .order('created_at', { ascending: true })
 
@@ -165,7 +167,7 @@ export async function fetchCampaignOptions(orgId: number): Promise<CampaignOptio
     const campaign_name = p.campaign_name || p.client_name || `Project ${p.id}`
     const qualifies = entry_readiness !== null && entry_readiness >= QUALIFY_THRESHOLD
 
-    return { project_id: p.id, campaign_name, entry_readiness, scored_show, directions: pv3dirs, qualifies }
+    return { project_id: p.id, campaign_name, entry_readiness, scored_show, directions: pv3dirs, qualifies, first_aired: p.first_aired ?? null }
   })
 
   options.sort((a, b) => {

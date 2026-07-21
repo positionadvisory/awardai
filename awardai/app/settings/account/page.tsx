@@ -261,6 +261,11 @@ export default function AccountPage() {
   const isCanceled    = billing?.status === 'canceled'
   const hasBilling    = isTrialing || isActive || isPastDue || isCanceled
   const isFree        = !hasBilling
+  // Complimentary access: org has trial_unlimited (Super Trial, granted
+  // manually via service-role SQL — e.g. the Lorenz demo org) AND never had
+  // real Stripe billing. Ordinary free orgs (trial_unlimited false) are
+  // unaffected and still see the normal Free / Start free trial state.
+  const isComplimentary = isFree && !!billing?.trial_unlimited
   const cancelPending = billing?.cancel_at_period_end ?? false
 
   const initial = (profile?.full_name || profile?.email || '?')[0].toUpperCase()
@@ -328,9 +333,9 @@ export default function AccountPage() {
           <Row label="Plan">
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ fontWeight: 600 }}>
-                {isFree ? 'Free' : 'Shortlist Pro — $299/month'}
+                {isComplimentary ? 'Complimentary access' : isFree ? 'Free' : 'Shortlist Pro — $299/month'}
               </span>
-              {billing && <StatusBadge status={billing.status} />}
+              {billing && !isComplimentary && <StatusBadge status={billing.status} />}
             </div>
           </Row>
 
@@ -366,8 +371,17 @@ export default function AccountPage() {
             </Row>
           )}
 
-          {/* Upgrade CTA */}
-          {isFree && (
+          {/* Complimentary access (trial_unlimited, no Stripe billing) — no upsell */}
+          {isComplimentary && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontSize: 13, color: '#166534', background: '#dcfce7', borderRadius: 6, padding: '8px 12px' }}>
+                Complimentary access — full features
+              </div>
+            </div>
+          )}
+
+          {/* Upgrade CTA — ordinary free orgs only */}
+          {isFree && !isComplimentary && (
             <div style={{ marginTop: 16 }}>
               <div style={{ fontSize: 13, color: '#166534', background: '#dcfce7', borderRadius: 6, padding: '8px 12px', marginBottom: 12 }}>
                 7-day free trial · $299/month after · card required
