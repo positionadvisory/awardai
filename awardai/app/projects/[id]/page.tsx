@@ -95,6 +95,7 @@ import PressKitTab from '@/components/tabs/PressKitTab'
 import VideoScriptTab from '@/components/tabs/VideoScriptTab'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { COLLAB_TYPE_LABELS, materialWordCount, buildAnalysisText, type CollabType } from '@/lib/project-page-shared'
+import { trySegmentEntryGeneric } from '@/lib/segment-entry-generic-client'
 
 // ── TonalBrief — structured production brief returned by generate-tonal-brief ─
 export type ColorSwatch = { hex: string; name: string; role: string }
@@ -2772,6 +2773,27 @@ export default function ProjectPage() {
         }
 
         setEntries(prev => [...prev, draft])
+
+        // Upload Segmentation P2 (22 Jul 2026): creative-track shows (no AOY /
+        // config / SMARTIES routing above) have no structured entry_form, so
+        // the blob draft just written renders as one wall-of-text row. Try to
+        // segment it into clean sections via the shared segment-entry-generic
+        // helper (S162 lesson: ONE function, not a local reimplementation).
+        // Best-effort: {segmented:false} or any failure leaves the blob draft
+        // exactly as inserted above, and the eval call below is unaffected
+        // either way (evaluate-entry assembles whichever rows exist).
+        const segGenericResult = await trySegmentEntryGeneric({
+          supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          accessToken,
+          projectId: project.id,
+          directionId: dir.id,
+          materialPath: material.path,
+        })
+        if (segGenericResult.segmented) {
+          const { data: refreshedDrafts } = await supabase.rpc('get_project_entry_drafts', { p_project_id: project.id })
+          if (refreshedDrafts) setEntries(refreshedDrafts)
+        }
       }
 
       // AOY entries score through the weight-aware jury (evaluate-aoy-entry, S75)

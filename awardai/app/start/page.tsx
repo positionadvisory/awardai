@@ -17,6 +17,7 @@ import { useAuth } from '@/lib/useAuth'
 import { useEngagement } from '@/lib/useEngagement'
 import { isAoyShow, AOY_SHOW_NAME } from '@/lib/aoy-taxonomy'
 import { resolveEntryForm } from '@/lib/entry-form'
+import { trySegmentEntryGeneric } from '@/lib/segment-entry-generic-client'
 import {
   CANONICAL_SHOWS, categoriesForShow, showHasNoCategoryConcept,
   showHasNoCategoryList, NO_CATEGORY_PLACEHOLDER, isSmartiesShow,
@@ -281,6 +282,22 @@ export default function StartPage() {
           await supabase.from('directions').delete().eq('id', dir.id)
           setError(draftErr?.message || 'Could not prepare the entry for scoring.'); setStage('confirm'); runningRef.current = false; return
         }
+
+        // Upload Segmentation P2 (22 Jul 2026): try to segment the blob draft
+        // into clean sections via the shared segment-entry-generic helper (the
+        // SAME function the project-page Quick Eval calls — S162 lesson, no
+        // local reimplementation). Best-effort only: {segmented:false} or any
+        // failure leaves the blob draft exactly as inserted above, and the
+        // eval call below reads from the DB either way, so no local state to
+        // reconcile here (unlike the project page's persistent entries list).
+        await trySegmentEntryGeneric({
+          supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          accessToken: token,
+          projectId,
+          directionId: dir.id,
+          materialPath,
+        })
       }
 
       const evalFn = quickIsAoy ? 'evaluate-aoy-entry' : configMode ? 'evaluate-entry-config' : quickIsSmarties ? 'evaluate-smarties-entry' : 'evaluate-entry'
