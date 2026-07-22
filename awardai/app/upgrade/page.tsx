@@ -43,6 +43,7 @@ export default function UpgradePage() {
   const [error, setError] = useState('')
   const [hov, setHov] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const [ready, setReady] = useState(false)
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
@@ -51,11 +52,31 @@ export default function UpgradePage() {
     return () => window.removeEventListener('resize', check)
   }, [])
 
-  // Guard: if no session, redirect to login
+  // Guard: no session -> login. Comped (trial_unlimited) or already-paid orgs
+  // never see the card wall -> straight to /projects. Fails open to showing
+  // the page if the status lookup errors (matches paywall philosophy).
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) router.replace('/login')
-    })
+    let cancelled = false
+    ;(async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) { router.replace('/login'); return }
+      try {
+        const res = await fetch('/api/billing/status', {
+          headers: { 'Authorization': `Bearer ${session.access_token}` },
+        })
+        if (res.ok) {
+          const status = await res.json()
+          if (status.trial_unlimited || (status.plan && status.plan !== 'free')) {
+            router.replace('/projects')
+            return
+          }
+        }
+      } catch {
+        // fail open: show the upgrade page
+      }
+      if (!cancelled) setReady(true)
+    })()
+    return () => { cancelled = true }
   }, [router])
 
   const handleStartTrial = async () => {
@@ -90,6 +111,10 @@ export default function UpgradePage() {
     }
 
     setLoading(false)
+  }
+
+  if (!ready) {
+    return <div style={{ minHeight: '100vh', background: 'var(--green-deep)' }} />
   }
 
   return (
