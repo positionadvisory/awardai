@@ -34,6 +34,12 @@ interface GeneratingBarProps {
    * Import the relevant array from @/lib/generatingStatements and pass it here.
    */
   statements?: string[]
+  /**
+   * Fill colour. Defaults to the original gold (#c9a95c) so every existing call
+   * site is unchanged. Pass a per-mode accent to differentiate runs (e.g. the
+   * jury eval uses green, the coach run keeps gold — 22 Jul 2026).
+   */
+  accent?: string
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -64,6 +70,7 @@ export default function GeneratingBar({
   statementInterval = 5_000,
   onComplete,
   statements: statementsProp,
+  accent = '#c9a95c',
 }: GeneratingBarProps) {
   const statements = statementsProp ?? DEFAULT_STATEMENTS
 
@@ -148,13 +155,13 @@ export default function GeneratingBar({
         borderRadius: '2px',
         overflow: 'hidden',
       }}>
-        {/* Gold fill */}
+        {/* Accent fill (default gold; jury eval passes green) */}
         <div style={{
           position: 'absolute',
           top: 0,
           bottom: 0,
           left: 0,
-          backgroundColor: '#c9a95c',
+          backgroundColor: accent,
           borderRadius: '2px',
           width: `${progress}%`,
           transition: `width ${progress === 100 ? '500ms' : '200ms'} ease-out`,
