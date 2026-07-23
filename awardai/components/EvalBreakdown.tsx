@@ -96,11 +96,20 @@ export function scoreBg(score: number): string {
   return 'bg-red-50 border-red-200'
 }
 
-// Coach mode shows UNTAPPED potential (10 - raw score). Lower = better.
-export function coachScoreColor(untapped: number): string {
-  if (untapped <= 2) return 'text-green-700'   // <=2 pts gap, most potential captured
-  if (untapped <= 5) return 'text-amber-700'   // moderate gap
-  return 'text-red-600'                         // significant potential not yet in draft
+// Coach headroom tier (22 Jul 2026). The coach panel no longer shows a number.
+// The prior display printed 10 minus overall_score on an inverse 0-10 scale
+// users had to hold against the jury's; it flipped a 73-Lion ECD twice on a
+// live demo. Instead a coarse WORD-ONLY tier reads how much room
+// the entry has left, bucketed from overall_score (higher = closer to ceiling).
+// The digit is NEVER rendered; the bucket is intentionally coarse so Opus scorer
+// sampling variance (S144) cannot jitter the label the way a shown digit would.
+// NOT derived from priority_fixes: production shows a constant 5 fixes on every
+// coach eval (scores 0.8-7.4), so a count-based tier would be constant (Ben,
+// 22 Jul: derive the hidden tier from the score instead, show only the word).
+function coachHeadroom(score: number): { label: string; caption: string } {
+  if (score >= 8) return { label: 'Near ceiling', caption: 'this entry is close to its potential' }
+  if (score >= 5) return { label: 'Solid headroom', caption: 'targeted improvements available' }
+  return { label: 'Significant headroom', caption: 'real room to strengthen this entry' }
 }
 
 // Compact-variant score colours (/start, S158 round 3): app thresholds on
@@ -237,20 +246,60 @@ export default function EvalBreakdown({
     <>
       {(() => {
         const isCoach = evaluation.evaluation_mode === 'coach'
-        const untapped = parseFloat((10 - evaluation.overall_score).toFixed(1))
-        const displayScore = isCoach ? untapped : evaluation.overall_score
+        if (isCoach) {
+          // Coach header (22 Jul 2026): NO numeric score. The prior display
+          // rendered an inverse 0-10 gap figure users held against the jury's
+          // scale; it flipped a 73-Lion ECD twice on a live demo. The coach's
+          // model-written
+          // focus_point is now the personalized headline, with a coarse word-only
+          // headroom tier above it. No digit, no /10, no delta badge — a second
+          // number just breeds a second fixation (the whole point of the change).
+          const score = evaluation.overall_score
+          const tier = Number.isFinite(score) ? coachHeadroom(score) : null
+          const co = (evaluation.output ?? null) as CoachOutput | null
+          const fixCount = Array.isArray(co?.priority_fixes) ? co!.priority_fixes.length : 0
+          const focus = (co?.focus_point ?? '').trim()
+          return (
+      <div className="flex items-start justify-between mb-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-medium bg-green-100 text-green-800 border border-green-200 px-2 py-0.5 rounded-full">✦ Coach Review</span>
+            {tier && (
+              /* tier colour is INLINE (Tailwind purges dynamically-selected classes, V3-P4);
+                 a single calm gold, not a traffic-light — colour must not leak score magnitude */
+              <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#a97f2f' }}>
+                {tier.label}
+                {fixCount > 0 && <span className="font-normal normal-case tracking-normal text-gray-400"> · {fixCount} priority {fixCount === 1 ? 'fix' : 'fixes'}</span>}
+              </span>
+            )}
+          </div>
+          {tier && <p className="text-xs text-gray-400 mt-1">{tier.caption}</p>}
+          {focus && (
+            <p className="text-gray-800 mt-2 leading-snug" style={{ fontFamily: '"Instrument Serif", "Times New Roman", serif', fontSize: '1.5rem', letterSpacing: '-0.01em' }}>
+              {focus}
+            </p>
+          )}
+        </div>
+        {evaluation.created_at && (
+          <p className="text-xs text-gray-400 flex-shrink-0 ml-3">
+            {new Date(evaluation.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+          </p>
+        )}
+      </div>
+          )
+        }
         return (
       <div className="flex items-start justify-between mb-4">
         <div>
           <div className="flex items-baseline gap-2 flex-wrap">
             <span
-              className={`font-bold tabular-nums ${isCoach ? coachScoreColor(displayScore) : scoreColor(displayScore)}`}
+              className={`font-bold tabular-nums ${scoreColor(evaluation.overall_score)}`}
               style={{ fontFamily: '"Instrument Serif", "Times New Roman", serif', fontSize: '2.8rem', lineHeight: 1, letterSpacing: '-0.02em' }}
             >
-              {displayScore.toFixed(1)}
+              {evaluation.overall_score.toFixed(1)}
             </span>
             <span className="text-gray-400" style={{ fontFamily: '"Instrument Serif", "Times New Roman", serif', fontSize: '1.25rem' }}>/10</span>
-            {/* Overall delta badge — shown as raw score change regardless of mode */}
+            {/* Overall delta badge — raw score change between comparison re-evals (jury only) */}
             {deltas?.['overall'] !== undefined && deltas['overall'] !== 0 && (
               <span className={`text-sm font-bold tabular-nums px-2 py-0.5 rounded-full ${deltas['overall'] > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
                 {deltas['overall'] > 0 ? `↑ +${deltas['overall']}` : `↓ ${deltas['overall']}`}
@@ -259,22 +308,9 @@ export default function EvalBreakdown({
             {deltas?.['overall'] === 0 && (
               <span className="text-sm text-gray-400 px-2 py-0.5 rounded-full bg-gray-100">— No change</span>
             )}
-            {/* Mode badge */}
-            {isCoach ? (
-              <span className="text-xs font-medium bg-green-100 text-green-800 border border-green-200 px-2 py-0.5 rounded-full">✦ Coach Review</span>
-            ) : (
-              <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">⚖ Jury Evaluation</span>
-            )}
+            <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">⚖ Jury Evaluation</span>
           </div>
-          {/* Coach: label the inverted score, then explain what it measures */}
-          {isCoach && (
-            <p className="text-xs font-semibold text-gray-500 mt-1">untapped potential <span className="font-normal text-gray-400">— lower is better</span></p>
-          )}
-          <p className="text-xs text-gray-400 mt-0.5">
-            {isCoach
-              ? 'Estimated gap between this draft and your campaign\'s full potential'
-              : 'Scored on entry as written'}
-          </p>
+          <p className="text-xs text-gray-400 mt-0.5">Scored on entry as written</p>
         </div>
         {evaluation.created_at && (
           <p className="text-xs text-gray-400">
@@ -284,13 +320,6 @@ export default function EvalBreakdown({
       </div>
         )
       })()}
-
-      {/* Coach mode: explain that dimension scores still read higher = more covered */}
-      {evaluation.evaluation_mode === 'coach' && (
-        <p className="text-xs text-gray-400 italic mb-3">
-          Dimension scores show how fully each aspect of your campaign&apos;s available material is represented in this draft. Higher = stronger coverage; lower = more to unlock in that area.
-        </p>
-      )}
 
       {/* AOY weight-aware jury (S75): per-section scores x section_weight.
           Replaces the fixed 6-dimension campaign grid for AOY entries. */}
@@ -436,7 +465,7 @@ export default function EvalBreakdown({
           slot's builder owns its own AOY-judge gate and returns null otherwise. */}
       {marketContextSlot}
 
-      {!((evaluation.output as unknown as { aoy?: boolean } | null)?.aoy) && !((evaluation.output as unknown as { smarties?: boolean } | null)?.smarties) && !((evaluation.output as unknown as { config?: boolean } | null)?.config) && (
+      {evaluation.evaluation_mode !== 'coach' && !((evaluation.output as unknown as { aoy?: boolean } | null)?.aoy) && !((evaluation.output as unknown as { smarties?: boolean } | null)?.smarties) && !((evaluation.output as unknown as { config?: boolean } | null)?.config) && (
       <div className="grid grid-cols-3 gap-2 mb-5">
         {SCORE_DIMENSIONS.map(dim => {
           const score = evaluation.scores?.[dim.key] ?? 0
@@ -547,15 +576,10 @@ export default function EvalBreakdown({
               const o = evaluation.output as CoachOutput
               return (
                 <>
-                  {/* Strongest Asset */}
-                  {o.focus_point && (
-                    <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-5">
-                      <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-2">✦ Your Entry&apos;s Strongest Asset</p>
-                      <p className="text-sm text-gray-800 leading-relaxed">{o.focus_point}</p>
-                    </div>
-                  )}
+                  {/* focus_point now renders as the coach headline in the header
+                      block above (22 Jul 2026); not repeated here. */}
 
-                  {/* Priority Fixes */}
+                  {/* Priority Fixes — lead the panel (the real payoff) */}
                   {o.priority_fixes && o.priority_fixes.length > 0 && (
                     <div className="mb-5">
                       <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">Priority Fixes — Biggest Impact First</p>

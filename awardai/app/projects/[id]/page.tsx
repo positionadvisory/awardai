@@ -71,7 +71,7 @@ import { isAoyShow, AOY_SHOW_NAME, aoyResolveStored, aoyTrackById, buildAoyBestC
 import SectionWorkbench, { type SectionRevision } from '@/components/SectionWorkbench'
 import EvalSummaryBar from '@/components/EvalSummaryBar'
 import EvalBreakdown, {
-  MeterBar, SCORE_DIMENSIONS, scoreColor, scoreBg, coachScoreColor,
+  MeterBar, SCORE_DIMENSIONS, scoreColor, scoreBg,
   type EvaluationScores, type JudgeOutput, type CoachOutput, type EvaluationOutput,
 } from '@/components/EvalBreakdown'
 import { extractEntryText, safeFileName } from '@/lib/extract-entry-text'
@@ -6216,6 +6216,8 @@ export default function ProjectPage() {
                               isGenerating={isEvaluatingThis}
                               estimatedDuration={50000}
                               statements={evaluatingMode[dirId] === 'coach' ? COACH_REVIEW_STATEMENTS : JURY_EVAL_STATEMENTS}
+                              /* coach run feels different from the click: gold (opportunity/craft) vs the jury's green */
+                              accent={evaluatingMode[dirId] === 'coach' ? '#c9a95c' : '#15803d'}
                             />
                           </div>
                         )}
