@@ -112,6 +112,30 @@ function coachHeadroom(score: number): { label: string; caption: string } {
   return { label: 'Significant headroom', caption: 'real room to strengthen this entry' }
 }
 
+// Coach headline split (23 Jul 2026, Ben). focus_point can run several sentences;
+// rendering all of it in the big serif overwhelms the side panel. Rule: at most
+// ~2 lines of lead in the big serif, the remainder in the panel's body copy
+// (sans, text-sm). Split at the first natural break (colon, else first sentence
+// end) within ~2 lines; if none, cut at the last word boundary before the cap.
+function splitFocusPoint(text: string): { lead: string; rest: string } {
+  const t = text.trim()
+  const MAX = 72 // ~2 lines of the serif lead at this width
+  const breaks: number[] = []
+  const colon = t.indexOf(':')
+  if (colon >= 0) breaks.push(colon + 1)
+  const period = t.search(/\.\s/)
+  if (period >= 0) breaks.push(period + 1)
+  const within = breaks.filter(b => b > 0 && b <= MAX).sort((a, b) => a - b)
+  let cut = within.length ? within[0] : -1
+  if (cut === -1) {
+    if (t.length <= MAX) return { lead: t, rest: '' }
+    const slice = t.slice(0, 64)
+    const sp = slice.lastIndexOf(' ')
+    cut = sp > 0 ? sp : 64
+  }
+  return { lead: t.slice(0, cut).trim(), rest: t.slice(cut).trim() }
+}
+
 // Compact-variant score colours (/start, S158 round 3): app thresholds on
 // bordered chips. Kept alongside scoreColor/scoreBg so the thresholds can
 // never drift between the two skins.
@@ -274,11 +298,15 @@ export default function EvalBreakdown({
             )}
           </div>
           {tier && <p className="text-xs text-gray-400 mt-1">{tier.caption}</p>}
-          {focus && (
-            <p className="text-gray-800 mt-2 leading-snug" style={{ fontFamily: '"Instrument Serif", "Times New Roman", serif', fontSize: '1.5rem', letterSpacing: '-0.01em' }}>
-              {focus}
-            </p>
-          )}
+          {focus && (() => {
+            const { lead, rest } = splitFocusPoint(focus)
+            return (
+              <div className="mt-2">
+                <p className="text-gray-800 leading-snug" style={{ fontFamily: '"Instrument Serif", "Times New Roman", serif', fontSize: '1.5rem', letterSpacing: '-0.01em' }}>{lead}</p>
+                {rest && <p className="text-sm text-gray-700 leading-relaxed mt-2">{rest}</p>}
+              </div>
+            )
+          })()}
         </div>
         {evaluation.created_at && (
           <p className="text-xs text-gray-400 flex-shrink-0 ml-3">
