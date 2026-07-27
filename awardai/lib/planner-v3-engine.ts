@@ -528,8 +528,12 @@ export type ShowBlock = {
   fee_flag: 'ok' | 'partial_unsourced' | 'fully_unsourced'
   cycle_status: PlannerCycleStatus
   final_date: string | null
-  /** Roll-up of eligibility across recommended entries; null = no window on file for this show. */
-  eligibility_status: 'ok' | 'out_of_window' | 'verify' | null
+  /** Roll-up of eligibility across recommended entries.
+   *  'no_window' = this show publishes no eligibility window we hold, so NOTHING was
+   *  checked. It is a distinct state from 'ok' and must be surfaced, not read as a pass:
+   *  only 2 of the DEADLINES_2026 rows carry a window, so 'no_window' is the common case
+   *  and silently rendering it as clean was an unearned assurance (fixed 27 Jul 2026). */
+  eligibility_status: 'ok' | 'out_of_window' | 'verify' | 'no_window'
 }
 
 export type PlannerV3Plan = {
@@ -622,10 +626,11 @@ function resolveEligibility(
 // Block-level roll-up over a show's RECOMMENDED entries. At least one in-window
 // entry keeps the block in "Enter this cycle" (mixed blocks stay, per-entry
 // reasons still render); every recommended entry out-of-window demotes the whole
-// block; window-but-no-date only -> "verify". No window on any entry -> null.
+// block; window-but-no-date only -> "verify". No window on any entry -> 'no_window'
+// (an explicit "we checked nothing" state, never conflated with 'ok').
 function blockEligibilityStatus(recommended: PlacedEntry[]): ShowBlock['eligibility_status'] {
   const elig = recommended.map(e => e.eligibility).filter((x): x is EntryEligibility => !!x)
-  if (elig.length === 0) return null
+  if (elig.length === 0) return 'no_window'
   const hasIn = elig.some(e => e.status === "in_window")
   const hasVerify = elig.some(e => e.status === "unverifiable")
   const hasOut = elig.some(e => e.status === "out_of_window")

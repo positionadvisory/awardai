@@ -389,6 +389,12 @@ function ShowRow({ show, currency }: { show: ShowBlock; currency: CurrencyCode }
             </span>
           </div>
           <p className="text-xs text-gray-500 mt-1">{whyLine(show)}</p>
+          {show.eligibility_status === 'no_window' && (
+            <p className="text-xs text-gray-500 mt-0.5">
+              No eligibility window published for this show, so campaign dates were not checked against it. Confirm in
+              the entry kit before committing this work.
+            </p>
+          )}
         </div>
         <div className="flex-shrink-0 text-left sm:text-right">
           <p className="text-sm font-semibold text-gray-900">
@@ -445,7 +451,7 @@ function ShowRow({ show, currency }: { show: ShowBlock; currency: CurrencyCode }
                         {reserve && <span className="text-gray-400"> &middot; reserve</span>}
                         {e.eligibility && (
                           <span className="block text-[11px]" style={{ color: ELIG_COLOR[e.eligibility.status] }}>
-                            {e.eligibility.status === 'unverifiable' ? 'Verify eligibility — ' : ''}
+                            {e.eligibility.status === 'unverifiable' ? 'Verify eligibility: ' : ''}
                             {e.eligibility.reason}
                           </span>
                         )}
