@@ -7,7 +7,10 @@
 // lib/* files it reuses) changes, re-sync this file by hand.
 //
 // HAND-COPIED below, byte-equivalent in logic (not always byte-identical text)
-// to lib/planner-v3-engine.ts as of V3-P1 (16 Jul 2026), plus the small slices
+// to lib/planner-v3-engine.ts as of 27 Jul 2026 (re-synced: the 19 Jul
+// T3-ELIGIBILITY-WINDOW work shipped to the engine and was never mirrored here,
+// so "53/53 green" had been asserting a 16 Jul snapshot for eight days), plus
+// the small slices
 // of lib/show-taxonomy.ts / lib/shows-data.ts / lib/rate-facts.ts / lib/fx.ts /
 // lib/planner-facets.ts / lib/planner-engine.ts it depends on. Data tables below
 // are TRIMMED to exactly the shows these fixtures touch (Cannes Lions, MMA
@@ -28,18 +31,54 @@ function check(label, cond) {
   }
 }
 
-// ---- hand-copied: sameShow (tolerant, case-insensitive) --------------------
+// ---- hand-copied: normaliseKbShow + sameShow -------------------------------
+// PREVIOUSLY WRONG (fixed 27 Jul 2026): this file's sameShow was a bare
+// lowercase === compare, while the real lib/show-taxonomy.ts sameShow
+// alias-normalises BOTH sides through lib/shows-data.ts normaliseKbShow first.
+// The fixture was therefore testing show resolution against a stricter matcher
+// than production uses, which is exactly backwards: a resolution the engine
+// handles (e.g. "Cannes Lions 2026", "Smarties APAC") could not be exercised
+// here at all. KB_SHOW_ALIASES is TRIMMED to the entries touching fixture shows,
+// copied verbatim from lib/shows-data.ts.
+const KB_SHOW_ALIASES = {
+  'mma smarties': 'MMA Smarties APAC',
+  'mma smarties global': 'MMA Smarties Global',
+  'smarties apac': 'MMA Smarties APAC',
+  'smarties global': 'MMA Smarties Global',
+}
+function normaliseKbShow(raw) {
+  if (!raw) return null
+  const firstSegment = raw.split(/\s*\|\s*/)[0].trim()
+  const yearStripped = firstSegment.replace(/\s+20\d{2}(\s.*)?$/, '').trim()
+  const preSepLower = yearStripped.toLowerCase()
+  if (preSepLower in KB_SHOW_ALIASES) return KB_SHOW_ALIASES[preSepLower]
+  const cleaned = yearStripped.replace(/\s*[-\u2013\u2014:\/]\s*.*$/, '').trim()
+  if (cleaned.length <= 3 || cleaned.includes('{') || cleaned.includes('}')) return null
+  const lower = cleaned.toLowerCase()
+  if (lower in KB_SHOW_ALIASES) return KB_SHOW_ALIASES[lower]
+  return cleaned
+}
 function sameShow(a, b) {
   if (!a || !b) return false
-  return a.trim().toLowerCase() === b.trim().toLowerCase()
+  const norm = (x) => (normaliseKbShow(x) ?? x).trim().toLowerCase()
+  return norm(a) === norm(b)
 }
 
 // ---- hand-copied (trimmed): lib/shows-data.ts DEADLINES_2026 ---------------
+// NOTE on eligibilityWindow coverage: only 2 of the 39 real DEADLINES_2026 rows
+// carry one (Epica Awards, London International Awards). LIA is included below
+// SOLELY so the eligibility path has a show to exercise; its window/fee/date are
+// copied verbatim from lib/shows-data.ts, never invented. Every other row here
+// genuinely has no window, which is what makes 'no_window' the common case.
 const DEADLINES_2026 = [
   { show: 'Cannes Lions', region: 'Global', finalDate: '2026-04-09' },
   { show: 'MMA Smarties APAC', region: 'APAC', finalDate: '2026-07-21' },
   { show: 'MMA Smarties Global', region: 'Global', finalDate: '2026-08-06' },
   { show: 'Spikes Asia', region: 'APAC', finalDate: '2026-05-01' },
+  {
+    show: 'London International Awards', region: 'Global', finalDate: '2026-08-31',
+    eligibilityWindow: { start: '2025-07-01', end: '2026-08-31', source: 'liaawards.com/enter (rules_for_entry + entry_fees), checked 8 Jul 2026: work first released/published/broadcast 1 Jul 2025-31 Aug 2026' },
+  },
 ]
 
 // ---- hand-copied (trimmed): lib/shows-data.ts ENTRY_FEES + resolveWinRateKey --
@@ -48,6 +87,7 @@ const ENTRY_FEES = {
   'MMA Smarties APAC': { base: 405, range: '', note: '' },
   'MMA Smarties Global': { base: 495, range: '', note: '' },
   'Spikes Asia': { base: 631, range: '', note: '' },
+  'London International Awards': { base: 875, range: '', note: '' },
   // Effie APAC deliberately has NO fee row here to fixture the fully_unsourced path.
 }
 function resolveWinRateKey(name) {
@@ -145,6 +185,57 @@ function resolveCycleStatus(showName, asOfDate, deadlines = DEADLINES_2026) {
   const asOf = new Date(asOfDate + 'T00:00:00')
   const final = new Date(found.finalDate + 'T00:00:00')
   return { status: final < asOf ? 'next_cycle' : 'live', finalDate: found.finalDate }
+}
+
+// ---- hand-copied: lib/planner-v3-engine.ts eligibility block ----------------
+// Additive dimension over resolveCycleStatus: that fn answers "is the show's entry
+// cycle open on asOfDate"; this answers "does the WORK qualify for that cycle's
+// eligibility window". Set ONLY when the show carries an eligibilityWindow.
+const _ELIG_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+function fmtEligDate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
+  if (!m) return iso
+  const mo = parseInt(m[2], 10)
+  if (mo < 1 || mo > 12) return iso
+  return parseInt(m[3], 10) + " " + _ELIG_MONTHS[mo - 1] + " " + m[1]
+}
+function resolveEligibility(canonicalShow, firstAired, deadlines) {
+  const found = deadlines.find(d => sameShow(d.show, canonicalShow))
+  const window = found?.eligibilityWindow
+  if (!window) return undefined // no window on file -> no eligibility claim
+  const winText = fmtEligDate(window.start) + " to " + fmtEligDate(window.end)
+  if (!firstAired) {
+    return {
+      status: "unverifiable",
+      window,
+      campaignDate: null,
+      reason: "Add this campaign's first-aired date to confirm it falls in the " + winText + " eligibility window.",
+    }
+  }
+  if (firstAired >= window.start && firstAired <= window.end) {
+    return { status: "in_window", window, campaignDate: firstAired, reason: "First ran " + fmtEligDate(firstAired) + ", inside the " + winText + " eligibility window." }
+  }
+  const before = firstAired < window.start
+  return {
+    status: "out_of_window",
+    window,
+    campaignDate: firstAired,
+    reason: before
+      ? "First ran " + fmtEligDate(firstAired) + ", before this cycle's eligibility window opens (" + fmtEligDate(window.start) + "). Eligible a future cycle, not this one."
+      : "First ran " + fmtEligDate(firstAired) + ", after this cycle's eligibility window closed (" + fmtEligDate(window.end) + ").",
+  }
+}
+// 'no_window' is an EXPLICIT "nothing was checked" state, never conflated with
+// 'ok' (engine change 27 Jul 2026).
+function blockEligibilityStatus(recommended) {
+  const elig = recommended.map(e => e.eligibility).filter(x => !!x)
+  if (elig.length === 0) return 'no_window'
+  const hasIn = elig.some(e => e.status === "in_window")
+  const hasVerify = elig.some(e => e.status === "unverifiable")
+  const hasOut = elig.some(e => e.status === "out_of_window")
+  if (hasIn) return hasVerify ? "verify" : "ok"
+  if (hasOut) return "out_of_window"
+  return "verify"
 }
 
 // ---- hand-copied: lib/fx.ts convert (USD-only path, all fixture budgets are USD) --
@@ -358,7 +449,8 @@ function derivePlanV3(input, facets, rateFacts, deadlines = DEADLINES_2026) {
     } else {
       status = 'reserve'
     }
-    placed.push({ ...entry, status, fee_usd, fee_is_estimate: is_estimate, region_dropped: false })
+    const eligibility = resolveEligibility(entry.resolution.canonicalShow, entry.campaign.first_aired, deadlines)
+    placed.push({ ...entry, status, fee_usd, fee_is_estimate: is_estimate, region_dropped: false, eligibility })
   }
   const regionDropped = regionDroppedEntries.map(entry => {
     const { fee_usd, is_estimate } = feeForResolution(entry.resolution)
@@ -382,7 +474,10 @@ function derivePlanV3(input, facets, rateFacts, deadlines = DEADLINES_2026) {
     const blockTier = entries.some(e => e.status === 'recommended')
       ? tierFor(entries.find(e => e.status === 'recommended'), 'recommended')
       : 'reserve'
-    return { show_name: showName, tier: blockTier, entries, entry_count: entries.length, budget_usd, fee_flag, cycle_status, final_date: finalDate }
+    return {
+      show_name: showName, tier: blockTier, entries, entry_count: entries.length, budget_usd, fee_flag, cycle_status, final_date: finalDate,
+      eligibility_status: blockEligibilityStatus(entries.filter(e => e.status === 'recommended')),
+    }
   })
 
   shows.sort((a, b) => Math.max(...b.entries.map(e => e.priority_score)) - Math.max(...a.entries.map(e => e.priority_score)))
@@ -414,6 +509,7 @@ const FACETS = [
   { show_name: 'MMA Smarties APAC', kind: 'work', axis: 'specialist', discipline: 'media', geo_scope: 'regional', region: 'APAC' },
   { show_name: 'MMA Smarties Global', kind: 'work', axis: 'creative_fame', geo_scope: 'global', region: 'Global' },
   { show_name: 'Spikes Asia', kind: 'work', axis: 'craft', geo_scope: 'regional', region: 'APAC' },
+  { show_name: 'London International Awards', kind: 'work', axis: 'creative_fame', geo_scope: 'global', region: 'Global' },
 ]
 
 const baseCtx = { discipline: 'media', lens: 'maximize_visibility', region: 'APAC', budgetCurrency: 'USD', asOfDate: '2026-07-16' }
@@ -698,5 +794,78 @@ function dir(overrides) {
 }
 
 // =============================================================================
+// ---- Fixture 9: eligibility window x campaign first-aired date -------------
+// Added 27 Jul 2026. The engine shipped this on 19 Jul with ZERO fixture cases,
+// so the silent-pass behaviour below (case 9e) went unnoticed for eight days.
+{
+  const eligDir = (show, cat, id) => dir({ direction_id: id, best_show: show, best_category: cat, sort_order: id })
+  const mkCampaign = (firstAired, show) => ({
+    project_id: 900,
+    campaign_name: 'Eligibility probe',
+    entry_readiness: 8.0,
+    scored_show: show,
+    first_aired: firstAired,
+    directions: [eligDir(show, 'Film', 1)],
+  })
+  const planFor = (firstAired, show) => derivePlanV3(
+    { campaigns: [mkCampaign(firstAired, show)], budget: 5000, budgetCurrency: 'USD', region: 'Global', discipline: 'creative', lens: 'maximize_visibility', asOfDate: '2026-07-27' },
+    FACETS, RATE_FACTS,
+  )
+  const LIA = 'London International Awards'
+
+  // 9a. In-window: LIA's real window is 1 Jul 2025 to 31 Aug 2026.
+  const inPlan = planFor('2026-01-15', LIA)
+  const inBlock = inPlan.shows.find(b => b.show_name === LIA)
+  check('9a in-window entry is flagged in_window', inBlock?.entries[0].eligibility?.status === 'in_window')
+  check('9a block rolls up to ok', inBlock?.eligibility_status === 'ok')
+
+  // 9b. Too old: before the window opens. Must NOT read as a pass.
+  const oldPlan = planFor('2024-03-01', LIA)
+  const oldBlock = oldPlan.shows.find(b => b.show_name === LIA)
+  check('9b pre-window entry is flagged out_of_window', oldBlock?.entries[0].eligibility?.status === 'out_of_window')
+  check('9b block rolls up to out_of_window', oldBlock?.eligibility_status === 'out_of_window')
+  check('9b reason points at a FUTURE cycle, not a rejection', /Eligible a future cycle/.test(oldBlock?.entries[0].eligibility?.reason ?? ''))
+  check('9b out-of-window entry is HELD, never dropped', oldBlock?.entries.length === 1)
+
+  // 9c. Too new: after the window closed.
+  const newPlan = planFor('2026-10-01', LIA)
+  const newBlock = newPlan.shows.find(b => b.show_name === LIA)
+  check('9c post-window entry is flagged out_of_window', newBlock?.entries[0].eligibility?.status === 'out_of_window')
+  check('9c reason cites the close date', /closed \(31 Aug 2026\)/.test(newBlock?.entries[0].eligibility?.reason ?? ''))
+
+  // 9d. Window on file but no date supplied: 'unverifiable', never a silent pass.
+  const noDatePlan = planFor(null, LIA)
+  const noDateBlock = noDatePlan.shows.find(b => b.show_name === LIA)
+  check('9d window-but-no-date is unverifiable', noDateBlock?.entries[0].eligibility?.status === 'unverifiable')
+  check('9d block rolls up to verify', noDateBlock?.eligibility_status === 'verify')
+
+  // 9e. THE REGRESSION THIS FILE MISSED. A show with NO published eligibility
+  // window must report 'no_window', not a bare null that renders as clean. Cannes
+  // Lions genuinely has no window in lib/shows-data.ts, so a 2024 campaign is
+  // recommended with nothing checked — the plan has to SAY so.
+  const unknownPlan = planFor('2024-03-01', 'Cannes Lions')
+  const unknownBlock = unknownPlan.shows.find(b => b.show_name === 'Cannes Lions')
+  check('9e no-window show sets no per-entry eligibility read', unknownBlock?.entries[0].eligibility === undefined)
+  check('9e no-window block reports no_window, NOT ok', unknownBlock?.eligibility_status === 'no_window')
+  check('9e no-window block is never null (null read as clean in the UI)', unknownBlock?.eligibility_status !== null)
+
+  // 9f. KNOWN DEFECT, asserted deliberately so a fix fails this check loudly.
+  // Found 27 Jul 2026 once sameShow was aligned with the real lib implementation.
+  // resolveShowV3 sets `canonicalShow: canonicalName`, and canonicalName is the RAW
+  // direction text unless an MMA_EDITION_POLICY entry rewrites it. So a year-suffixed
+  // variant resolves correctly for every sameShow LOOKUP (deadline, fee, eligibility,
+  // facet) but keeps its raw name as the show identity. Since derivePlanV3 keys the
+  // show grouping on canonicalShow.trim().toLowerCase(), "Cannes Lions" and
+  // "Cannes Lions 2026" directions in the same org produce TWO blocks for one show:
+  // split entry counts, split budgets, inflated headline_show_count. The field is
+  // misnamed for what it holds. Fix = normalise canonicalName through normaliseKbShow
+  // when no policy applies, but that changes grouping across the whole planner and
+  // interacts with the edition policy, so it needs its own session + Ben's call.
+  const aliased = planFor('2026-01-15', 'Cannes Lions 2026')
+  check('9f year-suffixed variant still RESOLVES (lookups work)', aliased.shows.length === 1)
+  check('9f DEFECT: canonicalShow keeps the raw name, not the canonical one', aliased.shows[0].show_name === 'Cannes Lions 2026')
+  check('9f the lookups it drives are unaffected (real fee found)', aliased.shows[0].budget_usd === 1275)
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail === 0 ? 0 : 1)
