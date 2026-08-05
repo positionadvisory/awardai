@@ -35,6 +35,49 @@ export const materialWordCount = (m: Material): number =>
     ? m.text_words
     : (m.extracted_text || '').trim().split(/\s+/).filter(Boolean).length
 
+// ── Material text read result (5 Aug 2026 defect / rebuilt 6 Aug 2026) ──────
+//
+// fetchMaterialText used to return a bare string and swallow the RPC error into
+// ''. That left every caller unable to tell "this file genuinely has no text"
+// from "the call failed", and the copy built on top of it ("Could not load the
+// material text - please refresh the page") was actively false in the case that
+// actually fired: an undefined material.path is DROPPED by JSON.stringify, so
+// PostgREST 404s the FUNCTION and no amount of refreshing fixes it.
+//
+// INVARIANT: ok:true always carries NON-EMPTY text. An empty read is not a
+// success with an empty payload, it is `no_text`. That is what makes the union
+// worth having -- a failed read can no longer be mistaken for empty data.
+export type MaterialTextFailure =
+  | 'no_material'   // the index/selector resolved to nothing
+  | 'no_text'       // read fine, but there is no usable text on this material
+  | 'missing_path'  // Material.path absent -- the RPC cannot be called at all
+  | 'fetch_failed'  // the RPC itself errored
+
+export type MaterialTextResult =
+  | { ok: true; text: string }
+  | { ok: false; reason: MaterialTextFailure }
+
+/** User-facing copy for a failed read. One definition so every surface says the
+ * same true thing, and so 'refresh the page' is only ever offered where a
+ * refresh could actually help. */
+export function materialTextErrorMessage(reason: MaterialTextFailure): string {
+  switch (reason) {
+    case 'no_material':
+      return 'That file is no longer attached to this project.'
+    case 'no_text':
+      return 'No text could be read from that file. If it is a scanned or image-only PDF, re-upload a text version.'
+    case 'missing_path':
+      return 'That file is missing its storage reference, so its text cannot be loaded. Re-upload the file to fix this.'
+    default:
+      return 'Could not load the material text. Please refresh the page and try again.'
+  }
+}
+
+/** Collapse a result to a context-override string. Use ONLY where an absent
+ * override is a legitimate outcome and nothing is claimed to the user. */
+export const materialTextOrUndefined = (r: MaterialTextResult): string | undefined =>
+  r.ok && r.text ? r.text : undefined
+
 export function buildAnalysisText(
   analysis: ScriptAnalysis,
   campaignName: string,

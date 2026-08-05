@@ -37,7 +37,10 @@ import GeneratingBar from '@/components/GeneratingBar'
 // refactor-r1r2-tabs-2026-07-13): page.tsx may only export default + the
 // Next.js page-export allowlist, and these were runtime value exports there.
 import { ErrorBanner } from '@/components/ErrorBanner'
-import { materialWordCount, buildAnalysisText } from '@/lib/project-page-shared'
+import {
+  materialWordCount, buildAnalysisText,
+  type MaterialTextResult, materialTextOrUndefined,
+} from '@/lib/project-page-shared'
 import {
   type Tab, type Project, type Direction, type Material, type EntryDraft, type ChatMessage, type Evaluation,
   type ScriptAnalysis, type CategorySuggestion, type TonalBrief,
@@ -60,7 +63,7 @@ interface VideoScriptTabProps {
   showsStrip: React.ReactNode
   getToken: () => Promise<string | null>
   materialHasText: (m: Material) => boolean
-  fetchMaterialText: (material: Material | undefined) => Promise<string>
+  fetchMaterialText: (material: Material | undefined) => Promise<MaterialTextResult>
   getEntryDraftContent: (directionId: number) => string
   track: (event: EngagementEventName, context?: EngagementContext) => void
   setShowRequestName: React.Dispatch<React.SetStateAction<string>>
@@ -402,7 +405,9 @@ export default function VideoScriptTab({
       if (scriptMode === 'generate' && scriptSourceType !== 'all') {
         if (scriptSourceType === 'material') {
           const mats = (project.materials || []).filter(materialHasText)
-          contextOverride = (await fetchMaterialText(mats[scriptSourceMaterialIdx])) || undefined
+          // Best-effort override: an unreadable source means no override, and
+          // nothing is claimed to the user on this path.
+          contextOverride = materialTextOrUndefined(await fetchMaterialText(mats[scriptSourceMaterialIdx]))
         } else if (scriptSourceType === 'entry' && scriptSourceEntryDirectionId > -1) {
           contextOverride = getEntryDraftContent(scriptSourceEntryDirectionId) || undefined
         }

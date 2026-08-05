@@ -179,9 +179,13 @@ export type TonalBrief = {
 
 import {
   CANONICAL_SHOWS, SHOW_CATEGORIES, SHOW_CATEGORY_ALIASES, categoriesForShow,
+  categoryPlaceholderForShow,
   NO_CATEGORY_SHOWS, NO_CATEGORY_PLACEHOLDER, showHasNoCategoryConcept,
   showHasNoCategoryList, buildNextCandidates, sameShow, isSmartiesShow,
 } from '@/lib/show-taxonomy'
+import {
+  type MaterialTextResult, materialTextErrorMessage, materialTextOrUndefined,
+} from '@/lib/project-page-shared'
 
 import ShowCombobox from '@/components/ShowCombobox'
 
@@ -229,7 +233,13 @@ function getRegionalShowWarnings(targetShows: string[]): { show: string; market:
 
 export type Material = {
   name: string
-  path: string
+  // OPTIONAL BY DESIGN (5 Aug 2026). materials is JSONB on projects and a
+  // pathless material is persistable, so `path: string` was a claim the
+  // database could violate: not one call site was ever forced to check, and
+  // three surfaces failed at runtime on hand-seeded chips. Typing it optional
+  // is what makes the compiler a guard again -- every read below is now
+  // explicitly guarded before the value reaches an RPC arg or a storage key.
+  path?: string
   type: string
   size: number
   uploaded_at: string
@@ -1683,7 +1693,21 @@ export default function ProjectPage() {
   const deleteFile = async (index: number) => {
     if (!project) return
     const material = project.materials[index]
-    await supabase.storage.from('project-materials').remove([material.path])
+    if (!material) return
+    setUploadError('')
+
+    // CALL-SITE GUARD (5 Aug 2026). material.path can be absent on a
+    // hand-seeded material, and an undefined argument to supabase.rpc() is
+    // dropped by JSON.stringify -- PostgREST then resolves a signature that
+    // does not exist and 404s the FUNCTION (PGRST202), which reads as a lost
+    // grant. It would also make the storage key literally [undefined].
+    const path = material.path
+    if (!path) {
+      setUploadError('This file is missing its storage reference, so it cannot be removed automatically. Re-upload it and remove the copy.')
+      return
+    }
+
+    await supabase.storage.from('project-materials').remove([path])
     if (material.chart_image_paths?.length) {
       await supabase.storage.from('project-materials').remove(material.chart_image_paths)
     }
@@ -1692,12 +1716,20 @@ export default function ProjectPage() {
     // on success so the in-memory list never desyncs from the DB.
     const { error: removeErr } = await supabase.rpc('remove_project_material', {
       p_project_id: project.id,
-      p_path: material.path,
+      p_path: path,
     })
-    if (!removeErr) {
-      delete materialTextCache.current[material.path]
-      setProject(p => p ? { ...p, materials: (p.materials || []).filter((_, i) => i !== index) } : p)
+    if (removeErr) {
+      // Until 5 Aug 2026 this branch did not exist and Remove was a silent
+      // no-op: the RPC was LANGUAGE sql RETURNS void, so it could not report
+      // that it had matched nothing, and the UI simply did not update. The
+      // migration harden_project_material_rpcs_path_assertions makes it RAISE
+      // on a no-match, so an error here is real and must be shown.
+      console.error('remove_project_material failed', removeErr)
+      setUploadError('Could not remove this file. Please refresh the page and try again.')
+      return
     }
+    delete materialTextCache.current[path]
+    setProject(p => p ? { ...p, materials: (p.materials || []).filter((_, i) => i !== index) } : p)
   }
 
   const getToken = async (): Promise<string | null> => {
@@ -1715,20 +1747,26 @@ export default function ProjectPage() {
   // material's text if another tab deleted a material). Fresh uploads this
   // session still carry extracted_text in memory and skip the round trip.
   const materialTextCache = useRef<Record<string, string>>({})
-  const fetchMaterialText = async (material: Material | undefined): Promise<string> => {
-    if (!material) return ''
-    if (material.extracted_text) return material.extracted_text
-    if (!material.has_text) return ''
-    const cached = materialTextCache.current[material.path]
-    if (cached !== undefined) return cached
+  const fetchMaterialText = async (material: Material | undefined): Promise<MaterialTextResult> => {
+    if (!material) return { ok: false, reason: 'no_material' }
+    if (material.extracted_text) return { ok: true, text: material.extracted_text }
+    if (!material.has_text) return { ok: false, reason: 'no_text' }
+    // CALL-SITE GUARD: see deleteFile. Without this the undefined p_path is
+    // dropped from the JSON body and the 404 lands on the function name.
+    const path = material.path
+    if (!path) return { ok: false, reason: 'missing_path' }
+    const cached = materialTextCache.current[path]
+    if (cached !== undefined) return cached ? { ok: true, text: cached } : { ok: false, reason: 'no_text' }
     const { data, error } = await supabase.rpc('get_project_material_text', {
       p_project_id: projectId,
-      p_path: material.path,
+      p_path: path,
     })
-    if (error) { console.error('material text fetch failed', error); return '' }
+    // Never collapse this into '' again: the caller could not tell a failed
+    // call from an empty document, and the copy it produced was false.
+    if (error) { console.error('material text fetch failed', error); return { ok: false, reason: 'fetch_failed' } }
     const text = (data as string | null) ?? ''
-    materialTextCache.current[material.path] = text
-    return text
+    materialTextCache.current[path] = text
+    return text ? { ok: true, text } : { ok: false, reason: 'no_text' }
   }
 
   const generateDirections = async (skipChecks = false) => {
@@ -1759,7 +1797,9 @@ export default function ProjectPage() {
       let dirContextOverride: string | undefined
       if (dirSourceType === 'material') {
         const mats = (project.materials || []).filter(materialHasText)
-        dirContextOverride = (await fetchMaterialText(mats[dirSourceMaterialIdx])) || undefined
+        // Best-effort override: an unreadable source silently means "no
+        // override" here, which is correct -- nothing is claimed to the user.
+        dirContextOverride = materialTextOrUndefined(await fetchMaterialText(mats[dirSourceMaterialIdx]))
       } else if (dirSourceType === 'entry' && dirSourceEntryDirectionId > -1) {
         dirContextOverride = getEntryDraftContent(dirSourceEntryDirectionId) || undefined
       }
@@ -2432,8 +2472,9 @@ export default function ProjectPage() {
     // detecting spinner covers the fetch — pass 1 is no longer instant on
     // first open, but the modal itself still opens immediately.
     setQuickEvalDetecting(true)
-    const text = await fetchMaterialText(material)
-    if (!text) { setQuickEvalDetecting(false); return }
+    const textRes = await fetchMaterialText(material)
+    if (!textRes.ok) { setQuickEvalDetecting(false); return }
+    const text = textRes.text
     const lowerText = text.toLowerCase()
 
     // ── PASS 1: instant client-side show name scan ──────────────────────────
@@ -2556,11 +2597,15 @@ export default function ProjectPage() {
     setQuickEvalSuggesting(true)
     setQuickEvalError('')
     try {
-      const text = await fetchMaterialText(project.materials[quickEvalMaterialIdx])
-      if (!text) {
-        setQuickEvalError('Could not load the material text — please refresh the page and try again.')
+      const textRes = await fetchMaterialText(project.materials[quickEvalMaterialIdx])
+      if (!textRes.ok) {
+        // Was a blanket 'please refresh the page', which is false for the
+        // failure that actually fires (a missing storage path). Say the true
+        // thing per reason.
+        setQuickEvalError(materialTextErrorMessage(textRes.reason))
         return
       }
+      const text = textRes.text
       const { data: sessionData } = await supabase.auth.getSession()
       const token = sessionData?.session?.access_token
       if (!token) return
@@ -2649,11 +2694,18 @@ export default function ProjectPage() {
 
     try {
       // Session 52 (P-03): on-demand text fetch (cache hit — modal open already fetched it)
-      const entryText = await fetchMaterialText(material)
-      if (!entryText) {
-        setQuickEvalError('Could not load the material text — please refresh the page and try again.')
+      const entryTextRes = await fetchMaterialText(material)
+      if (!entryTextRes.ok) {
+        setQuickEvalError(materialTextErrorMessage(entryTextRes.reason))
         return
       }
+      const entryText = entryTextRes.text
+
+      // CALL-SITE GUARD (5 Aug 2026). Both segmentation paths below send
+      // material_path to an edge function, and an undefined value is silently
+      // omitted from the JSON body. Deliberately NOT a blanket early return:
+      // the two branches differ in how much they need it (see each below).
+      const materialPath = material.path
 
       const accessToken = await getToken()
       if (!accessToken) return
@@ -2725,6 +2777,14 @@ export default function ProjectPage() {
         // segment-entry-config, or segment-smarties-entry, all extractive, no
         // fabrication); each writes one entry_drafts row per section. The matching
         // jury then scores those rows. No single 'entry' blob row on this path.
+        // Hard requirement on THIS branch: these shows score section by
+        // section, so if the document cannot be mapped there is nothing for the
+        // jury to read. Fail with a true message rather than send an undefined
+        // material_path and let the edge fn return something confusing.
+        if (!materialPath) {
+          setQuickEvalError('This file is missing its storage reference, so it cannot be mapped to the entry form. Re-upload the file and try again.')
+          return
+        }
         const segFnName = quickIsAoy ? 'segment-aoy-entry' : quickConfigMode ? 'segment-entry-config' : 'segment-smarties-entry'
         const segRes = await fetch(
           `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/${segFnName}`,
@@ -2735,7 +2795,7 @@ export default function ProjectPage() {
               'Authorization': `Bearer ${accessToken}`,
               'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
             },
-            body: JSON.stringify({ project_id: project.id, direction_id: dir.id, material_path: material.path }),
+            body: JSON.stringify({ project_id: project.id, direction_id: dir.id, material_path: materialPath }),
           }
         )
         const segData = await segRes.json()
@@ -2782,14 +2842,21 @@ export default function ProjectPage() {
         // Best-effort: {segmented:false} or any failure leaves the blob draft
         // exactly as inserted above, and the eval call below is unaffected
         // either way (evaluate-entry assembles whichever rows exist).
-        const segGenericResult = await trySegmentEntryGeneric({
-          supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-          accessToken,
-          projectId: project.id,
-          directionId: dir.id,
-          materialPath: material.path,
-        })
+        // Best-effort by design, so a missing path SKIPS segmentation rather
+        // than blocking the evaluation: the blob draft above is already written
+        // and evaluate-entry scores whichever rows exist. Guarding here (rather
+        // than at the top of the function) is what keeps a cosmetic defect from
+        // becoming a scoring outage.
+        const segGenericResult = materialPath
+          ? await trySegmentEntryGeneric({
+              supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+              anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+              accessToken,
+              projectId: project.id,
+              directionId: dir.id,
+              materialPath,
+            })
+          : { segmented: false }
         if (segGenericResult.segmented) {
           const { data: refreshedDrafts } = await supabase.rpc('get_project_entry_drafts', { p_project_id: project.id })
           if (refreshedDrafts) setEntries(refreshedDrafts)
@@ -6542,7 +6609,7 @@ export default function ProjectPage() {
                       list="quickeval-categories"
                       value={quickEvalCategory}
                       onChange={e => { setQuickEvalCategory(e.target.value); setQuickEvalDetectedFields(prev => ({ ...prev, category: false })); setQuickEvalSuggestion(null) }}
-                      placeholder={categoriesForShow(quickEvalShow).length > 0 ? 'e.g. Seasonal Marketing, Film Craft, Creative Effectiveness…' : 'Type a category if you know it (optional)'}
+                      placeholder={categoryPlaceholderForShow(quickEvalShow)}
                       className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-green-600 transition-colors"
                     />
                     <datalist id="quickeval-categories">
