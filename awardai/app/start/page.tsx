@@ -19,7 +19,8 @@ import { isAoyShow, AOY_SHOW_NAME } from '@/lib/aoy-taxonomy'
 import { resolveEntryForm } from '@/lib/entry-form'
 import { trySegmentEntryGeneric } from '@/lib/segment-entry-generic-client'
 import {
-  CANONICAL_SHOWS, categoriesForShow, showHasNoCategoryConcept,
+  CANONICAL_SHOWS, categoriesForShow, categoryPlaceholderForShow,
+  showHasNoCategoryConcept,
   showHasNoCategoryList, NO_CATEGORY_PLACEHOLDER, isSmartiesShow,
 } from '@/lib/show-taxonomy'
 import ShowCombobox from '@/components/ShowCombobox'
@@ -468,7 +469,7 @@ export default function StartPage() {
                     <input
                       type="text" list="start-categories" value={category}
                       onChange={e => { setCategory(e.target.value); setDetected(false) }}
-                      placeholder={catOptions.length > 0 ? 'e.g. Creative Effectiveness, Film Craft…' : 'Type a category if you know it (optional)'}
+                      placeholder={categoryPlaceholderForShow(show)}
                       className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-green-600 focus:outline-none"
                     />
                     <datalist id="start-categories">

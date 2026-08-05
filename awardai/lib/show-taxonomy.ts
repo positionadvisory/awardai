@@ -54,6 +54,24 @@ export const categoriesForShow = (showName: string): string[] => {
   return []
 }
 
+/* Placeholder for the free-text category input, built from the SHOW'S OWN
+ * documented categories (5 Aug 2026 / rebuilt 6 Aug 2026). The previous copy
+ * hardcoded 'Seasonal Marketing, Film Craft, Creative Effectiveness' for EVERY
+ * show; two of those three do not exist for Effie APAC, so a working picklist
+ * (20 real options bound on the live DOM) read as broken. Examples must come
+ * from categoriesForShow so they can never contradict the datalist beneath the
+ * input. Falls back to the honest optional prompt when the show has no
+ * documented list -- never invent examples for an undocumented show. */
+export const categoryPlaceholderForShow = (showName: string): string => {
+  const cats = categoriesForShow(showName)
+  if (cats.length === 0) return 'Type a category if you know it (optional)'
+  let shown = cats.slice(0, 3)
+  // Real category names run long (AOY stems, craft sub-disciplines). Drop to
+  // two examples rather than overflow a narrow input on mobile.
+  if (shown.join(', ').length > 48) shown = cats.slice(0, 2)
+  return 'e.g. ' + shown.join(', ') + (cats.length > shown.length ? '\u2026' : '')
+}
+
 // Session 99 — shows with NO category concept at all, not just an undocumented
 // list. Distinct from Clio Entertainment/Sports/Creators/ANDY/Gerety/ROI
 // Festival (categoriesForShow() also returns [] for those, but real categories

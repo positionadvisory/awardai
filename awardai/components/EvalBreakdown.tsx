@@ -30,6 +30,23 @@
 
 import React from 'react'
 
+/* The badge shown on any holistically-scored panel (SMARTIES S92, and any
+ * config show whose entry_form resolves scoring_mode 'qualitative').
+ *
+ * It used to read 'holistic score, no published section weighting', which is a
+ * claim about the SHOW and is FALSE for Effie APAC: that show publishes
+ * 23.33/23.33/23.33/30, and the section guidance in its own entry_form states
+ * those percentages to the writer. The null weights are Ben's S123 MIDDLE PATH
+ * decision not to aggregate them (Results claims need third-party verification
+ * and causation the jury model cannot check), recorded in entry_form.notes --
+ * OUR choice, not the show's silence. So the badge contradicted the guidance
+ * rendered a few inches away.
+ *
+ * The badge now describes what WE did, which is true on every qualitative show
+ * regardless of what that show publishes. Do not reintroduce a claim about the
+ * show's published weighting here: this component has no way to know it. */
+const HOLISTIC_BADGE = 'holistic score, no section weighting applied'
+
 // ── shared evaluation display types (moved from app/projects/[id]/page.tsx) ──
 
 export type EvaluationScores = {
@@ -410,7 +427,7 @@ export default function EvalBreakdown({
           <div className="mb-5">
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               <span className="text-xs font-semibold text-gray-600">SMARTIES case study{smOut.category ? `: ${smOut.category}` : ''}</span>
-              <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">holistic score, no published section weighting</span>
+              <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">{HOLISTIC_BADGE}</span>
             </div>
             <div className="space-y-2">
               {secs.map(s => {
@@ -458,7 +475,7 @@ export default function EvalBreakdown({
           <div className="mb-5">
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               <span className="text-xs font-semibold text-gray-600">{isWeighted ? 'Weighted rubric' : 'Case study'}{cat ? `: ${cat}` : ''}</span>
-              <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">{isWeighted ? 'config jury' : 'holistic score, no published section weighting'}</span>
+              <span className="text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full">{isWeighted ? 'config jury' : HOLISTIC_BADGE}</span>
             </div>
             {isWeighted && cfgOut.weight_warning && <p className="text-xs text-amber-600 mb-2">{cfgOut.weight_warning}</p>}
             <div className="space-y-2">
