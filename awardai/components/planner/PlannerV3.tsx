@@ -21,13 +21,35 @@
  *
  * The output layout here is a MINIMAL placeholder (PlannerV3Result); the
  * recommendation-first layout is V3-P3.
+ *
+ * INSTRUMENTATION (6 Aug 2026): five engagement_events fire from this file.
+ * They exist because v3 went default-on 17 Jul with zero telemetry, so adoption
+ * of the whole feature was unmeasurable. Design notes that are load-bearing:
+ *   - planner_opened carries options_count / qualifying_count. Without them a
+ *     drop-off reads as a UX problem when the real cause is an org with nothing
+ *     to plan with (live: 14 of the 18 orgs holding projects have NO campaign
+ *     at or above QUALIFY_THRESHOLD). An open with no campaigns is the single
+ *     most likely thing this instrument will find; it must be distinguishable.
+ *   - planner_plan_derived fires on ENTERING the result step, never inside the
+ *     derivation memo: `plan` recomputes on every budget keystroke and every
+ *     campaign toggle, so a memo-side fire would emit dozens of rows per
+ *     session and destroy the denominator. It also carries `source`, because a
+ *     user with a saved plan is dropped straight onto `result` by the loader
+ *     and never passes through campaigns or confirm. Counting those as
+ *     completed funnels would overstate the flow; ignoring them would
+ *     understate usage.
+ *   - Context stays counts-only. Campaign names are client-confidential
+ *     (unpublished award entries) and never go into an events table.
+ * Adding another event here needs the CHECK constraint extended FIRST: track()
+ * is fire-and-forget and swallows the insert error, so the event just vanishes.
  * =============================================================================
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
+import { useEngagement } from '@/lib/useEngagement'
 import { fetchPlannerFacets, normalizeUserRegion, type PlannerFacet, type PlannerRegion } from '@/lib/planner-facets'
 import { fetchRateFacts, type RateFact } from '@/lib/rate-facts'
 import { derivePlanV3, type PlannerV3Input } from '@/lib/planner-v3-engine'
@@ -73,6 +95,7 @@ function isCurrency(v: unknown): v is CurrencyCode {
 
 export default function PlannerV3() {
   const { user, loading: authLoading } = useAuth()
+  const { track } = useEngagement(user?.id ?? null)
 
   const [fetching, setFetching] = useState(true)
   const [orgId, setOrgId] = useState<number | null>(null)
@@ -104,6 +127,12 @@ export default function PlannerV3() {
 
   // Fixed as-of date for deterministic derivation across re-renders.
   const [asOfDate] = useState(() => new Date().toISOString().slice(0, 10))
+
+  // Instrumentation guards. React StrictMode double-invokes effects in dev, and
+  // the load effect can re-run on a user object identity change, so both of
+  // these fire-once checks are required for the counts to mean anything.
+  const openedFired = useRef(false)
+  const prevStep = useRef<Step>('campaigns')
 
   // ── Load: org, profile (+ v3 prefs), campaign options, facets, rate facts ───
   useEffect(() => {
@@ -183,14 +212,37 @@ export default function PlannerV3() {
         setSelected(new Set(opts.filter(o => o.qualifies).map(o => o.project_id)))
         setSnapshotQual(null)
       }
+
+      // planner_opened: once per mount, AFTER the load settles so the counts are
+      // real. Fires even when opts is empty, which is the case that matters most.
+      if (!openedFired.current) {
+        openedFired.current = true
+        track('planner_opened', {
+          options_count: opts.length,
+          qualifying_count: opts.filter(o => o.qualifies).length,
+          scored_count: opts.filter(o => o.entry_readiness !== null).length,
+          has_saved_plan: !!v3,
+          has_agency_profile: !!agencyProfile,
+          qualify_threshold: QUALIFY_THRESHOLD,
+          load_failed: false,
+        })
+      }
       setFetching(false)
     })().catch(() => {
-      if (!cancelled) setFetching(false)
+      if (cancelled) return
+      // A failed load still counts as an open. Without this branch a broken
+      // load is indistinguishable from nobody visiting the page.
+      if (!openedFired.current) {
+        openedFired.current = true
+        track('planner_opened', { load_failed: true })
+      }
+      setFetching(false)
     })
     return () => {
       cancelled = true
     }
-  }, [user])
+    // track is referentially stable per userId (useCallback on [userId]).
+  }, [user, track])
 
   // Live qualifying set (project_ids currently >= threshold).
   const liveQual = useMemo(() => options.filter(o => o.qualifies).map(o => o.project_id), [options])
@@ -226,6 +278,60 @@ export default function PlannerV3() {
     () => marketEligibleShows(facets, confirmValue.region, 5),
     [facets, confirmValue.region],
   )
+
+  // How many of the SELECTED campaigns carry a first-aired date. This is the
+  // capture rate for the parked `first_aired` decision (where should the date
+  // be collected), which is why it rides on both derive and save.
+  const selectedWithFirstAired = useMemo(
+    () => Array.from(selected).filter(pid => !!firstAired[pid]).length,
+    [selected, firstAired],
+  )
+
+  // ── Step-transition instrumentation ─────────────────────────────────────────
+  // Driven off `step` rather than off the click handlers so the loader's direct
+  // jump to `result` (saved-snapshot path) is captured too. The ref comparison
+  // makes each transition fire exactly once.
+  useEffect(() => {
+    if (prevStep.current === step) return
+    const from = prevStep.current
+    prevStep.current = step
+
+    if (step === 'confirm') {
+      // How much of this step we could prefill. A step that asks the user for
+      // things already on their profile is a step worth removing.
+      track('planner_confirm_reached', {
+        from,
+        selected_count: selected.size,
+        prefilled_budget: !!prefilled.budget,
+        prefilled_region: !!prefilled.region,
+        prefilled_discipline: !!prefilled.discipline,
+      })
+      return
+    }
+
+    if (step === 'result') {
+      track('planner_plan_derived', {
+        // 'flow' = walked the wizard. 'restored_snapshot' = the loader dropped
+        // them here because they already had a saved plan.
+        source: from === 'confirm' ? 'flow' : 'restored_snapshot',
+        zero_state: plan.zero_state,
+        headline_recommended_count: plan.headline_recommended_count,
+        headline_show_count: plan.headline_show_count,
+        show_block_count: plan.shows.length,
+        unresolved_count: plan.unresolved.length,
+        region_dropped_count: plan.region_dropped.length,
+        budget_total_usd: Math.round(plan.budget_total_usd),
+        budget_excluded_show_count: plan.budget_excluded_shows.length,
+        selected_count: selected.size,
+        first_aired_count: selectedWithFirstAired,
+        resolved_region: plan.resolved_region,
+        lens: confirmValue.lens,
+      })
+    }
+    // `plan` is intentionally NOT a dependency: this must fire on the step
+    // transition only, never on the memo recomputing under a budget keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, track])
 
   const toggle = (projectId: number) =>
     setSelected(prev => {
@@ -304,8 +410,24 @@ export default function PlannerV3() {
         setSaveStatus('error')
         return
       }
+      const wasResave = !!(existingPrefs && existingPrefs.v3)
       setExistingPrefs(merged)
       setSnapshotQual(liveQual)
+      // Only on a confirmed 2xx. A save event on a failed PATCH would be the
+      // worst row in the table: the one step nobody has ever reached.
+      track('planner_plan_saved', {
+        is_resave: wasResave,
+        selected_count: selected.size,
+        qualifying_count: liveQual.length,
+        zero_state: plan.zero_state,
+        headline_recommended_count: plan.headline_recommended_count,
+        headline_show_count: plan.headline_show_count,
+        budget_total_usd: Math.round(plan.budget_total_usd),
+        budget_currency: confirmValue.budgetCurrency,
+        resolved_region: plan.resolved_region,
+        lens: confirmValue.lens,
+        first_aired_count: selectedWithFirstAired,
+      })
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus('idle'), 2500)
     } catch {
@@ -337,7 +459,26 @@ export default function PlannerV3() {
             onToggle={toggle}
             qualifyThreshold={QUALIFY_THRESHOLD}
           />
-          <NextBack onNext={() => setStep('confirm')} nextLabel="Confirm budget & market" />
+          <NextBack
+            onNext={() => {
+              // The committed selection, plus whether they actually curated it
+              // or just accepted the preselected qualifying set.
+              const selectedIds = Array.from(selected)
+              track('planner_campaigns_selected', {
+                selected_count: selectedIds.length,
+                options_count: options.length,
+                qualifying_count: liveQual.length,
+                unscored_selected_count: options.filter(
+                  o => selected.has(o.project_id) && o.entry_readiness === null,
+                ).length,
+                changed_from_default:
+                  selectedIds.length !== liveQual.length ||
+                  selectedIds.some(id => liveQual.indexOf(id) === -1),
+              })
+              setStep('confirm')
+            }}
+            nextLabel="Confirm budget & market"
+          />
         </Card>
       )}
 

@@ -52,6 +52,16 @@ export type EngagementEventName =
   | 'first_run_score_shown'
   | 'first_run_sample_used'
   | 'first_run_nextstep_selected'
+  // Portfolio Planner v3 funnel (6 Aug 2026) - see engagement CHECK constraint
+  // migration add_planner_engagement_events_2026_08_06. Fired from
+  // components/planner/PlannerV3.tsx only; the v2 wizard is deliberately
+  // uninstrumented (it needs ?planner_v2=1 AND ?planner_v3=0, so it has no
+  // real traffic and would only dilute the funnel).
+  | 'planner_opened'
+  | 'planner_campaigns_selected'
+  | 'planner_confirm_reached'
+  | 'planner_plan_derived'
+  | 'planner_plan_saved'
 
 // Context stays slim: IDs, section keys, score bands, show names. Never put
 // entry text or any user-authored content in here.
