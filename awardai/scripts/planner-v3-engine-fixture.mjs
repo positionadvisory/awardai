@@ -7,7 +7,8 @@
 // lib/* files it reuses) changes, re-sync this file by hand.
 //
 // HAND-COPIED below, byte-equivalent in logic (not always byte-identical text)
-// to lib/planner-v3-engine.ts as of 27 Jul 2026 (re-synced: the 19 Jul
+// to lib/planner-v3-engine.ts as of 7 Aug 2026 (re-synced for the EligibilityRule
+// discriminator + the AOY/people not_applicable path; previously 27 Jul 2026: the 19 Jul
 // T3-ELIGIBILITY-WINDOW work shipped to the engine and was never mirrored here,
 // so "53/53 green" had been asserting a 16 Jul snapshot for eight days), plus
 // the small slices
@@ -41,6 +42,9 @@ function check(label, cond) {
 // here at all. KB_SHOW_ALIASES is TRIMMED to the entries touching fixture shows,
 // copied verbatim from lib/shows-data.ts.
 const KB_SHOW_ALIASES = {
+  // Verbatim from lib/shows-data.ts. This is the ONLY alias the live table carries
+  // for the AOY family, and it is the one that breaks a raw isAoyShow test.
+  'campaign asia aoty': 'Campaign Asia Agency of the Year',
   'mma smarties': 'MMA Smarties APAC',
   'mma smarties global': 'MMA Smarties Global',
   'smarties apac': 'MMA Smarties APAC',
@@ -70,6 +74,12 @@ function sameShow(a, b) {
 // SOLELY so the eligibility path has a show to exercise; its window/fee/date are
 // copied verbatim from lib/shows-data.ts, never invented. Every other row here
 // genuinely has no window, which is what makes 'no_window' the common case.
+// Epica Awards added 7 Aug 2026: it is the real DEADLINES_2026 row carrying a
+// NON-FIRST_PUBLICATION window, so it is what exercises the refusal path. Its
+// dates and rule are copied verbatim from lib/shows-data.ts; the `source` string
+// is TRIMMED here (the live row carries the full classification note) but nothing
+// about the window is invented. Campaign Asia AOY and Women to Watch APAC added
+// the same day, verbatim finalDate values, to exercise the not_applicable path.
 const DEADLINES_2026 = [
   { show: 'Cannes Lions', region: 'Global', finalDate: '2026-04-09' },
   { show: 'MMA Smarties APAC', region: 'APAC', finalDate: '2026-07-21' },
@@ -77,8 +87,14 @@ const DEADLINES_2026 = [
   { show: 'Spikes Asia', region: 'APAC', finalDate: '2026-05-01' },
   {
     show: 'London International Awards', region: 'Global', finalDate: '2026-08-31',
-    eligibilityWindow: { start: '2025-07-01', end: '2026-08-31', source: 'liaawards.com/enter (rules_for_entry + entry_fees), checked 8 Jul 2026: work first released/published/broadcast 1 Jul 2025-31 Aug 2026' },
+    eligibilityWindow: { start: '2025-07-01', end: '2026-08-31', rule: 'FIRST_PUBLICATION', source: 'liaawards.com/enter (rules_for_entry + entry_fees), checked 8 Jul 2026: work first released/published/broadcast 1 Jul 2025-31 Aug 2026' },
   },
+  {
+    show: 'Epica Awards', region: 'Global', finalDate: '2026-10-30',
+    eligibilityWindow: { start: '2024-07-01', end: '2026-11-15', rule: 'UNCLASSIFIED', source: 'epica-awards.com/enter rule 1, checked 17 Jul 2026 (source string trimmed for the fixture; see lib/shows-data.ts for the full rule-classification note)' },
+  },
+  { show: 'Campaign Asia Agency of the Year', region: 'APAC', finalDate: '2026-09-04' },
+  { show: 'Campaign Asia Women to Watch APAC', region: 'APAC', finalDate: '2026-07-28' },
 ]
 
 // ---- hand-copied (trimmed): lib/shows-data.ts ENTRY_FEES + resolveWinRateKey --
@@ -88,6 +104,10 @@ const ENTRY_FEES = {
   'MMA Smarties Global': { base: 495, range: '', note: '' },
   'Spikes Asia': { base: 631, range: '', note: '' },
   'London International Awards': { base: 875, range: '', note: '' },
+  // Added 7 Aug 2026. base values verbatim from lib/shows-data.ts ENTRY_FEES.
+  'Epica Awards': { base: 339, range: '', note: '' },
+  'Campaign Asia Agency of the Year': { base: 724, range: '', note: '' },
+  'Campaign Asia Women to Watch APAC': { base: 300, range: '', note: '' },
   // Effie APAC deliberately has NO fee row here to fixture the fully_unsourced path.
 }
 function resolveWinRateKey(name) {
@@ -199,11 +219,61 @@ function fmtEligDate(iso) {
   if (mo < 1 || mo > 12) return iso
   return parseInt(m[3], 10) + " " + _ELIG_MONTHS[mo - 1] + " " + m[1]
 }
+// Hand-copied 7 Aug 2026 from lib/planner-v3-engine.ts. isAoyShow is a mirror of
+// lib/aoy-taxonomy.ts's (itself a parity copy of evaluate-entry.ts's), trimmed to
+// the one function this path needs, NOT the whole parity-locked normalizer block.
+function isAoyShow(showName) {
+  const t = (showName ?? '').trim().toLowerCase()
+  return t.includes('campaign asia') && t.includes('agency of the year')
+}
+const NO_CAMPAIGN_DATE_SHOWS = [
+  'Campaign Asia Women to Watch APAC',
+  'Campaign Asia Women Leading Change',
+]
+// Tests BOTH the raw and the alias-normalised name: see the long comment on the
+// lib version. resolveShowV3 keeps the RAW direction text as canonicalShow (fixture
+// 9f), so 'campaign asia aoty' is AOY to sameShow but NOT to a raw isAoyShow.
+function eligibilityIsApplicable(canonicalShow) {
+  const normalised = normaliseKbShow(canonicalShow) ?? canonicalShow
+  if (isAoyShow(canonicalShow) || isAoyShow(normalised)) return false
+  return !NO_CAMPAIGN_DATE_SHOWS.some(n => sameShow(n, canonicalShow))
+}
+function unevaluableRuleText(rule) {
+  switch (rule) {
+    case 'RAN_DURING':
+      return "this show asks whether the work RAN during its window, not when it first ran, so a first-aired date cannot settle it"
+    case 'RESULTS_PERIOD':
+      return "this show's window bounds when the RESULTS were measured, not when the work first ran"
+    case 'PERFORMANCE_YEAR':
+      return "this show's window is an agency performance year, not a campaign date range"
+    case 'UNCLASSIFIED':
+      return "this show's own rules do not state what its date range measures, so we will not guess"
+    default:
+      return "this show's eligibility rule cannot be evaluated from a first-aired date"
+  }
+}
+
 function resolveEligibility(canonicalShow, firstAired, deadlines) {
+  if (!eligibilityIsApplicable(canonicalShow)) {
+    return {
+      status: "not_applicable",
+      window: null,
+      campaignDate: null,
+      reason: "Judged on the agency or the nominee, not on a campaign, so there is no campaign date to check against an eligibility window.",
+    }
+  }
   const found = deadlines.find(d => sameShow(d.show, canonicalShow))
   const window = found?.eligibilityWindow
   if (!window) return undefined // no window on file -> no eligibility claim
   const winText = fmtEligDate(window.start) + " to " + fmtEligDate(window.end)
+  if (window.rule !== 'FIRST_PUBLICATION') {
+    return {
+      status: "not_evaluable",
+      window,
+      campaignDate: firstAired ?? null,
+      reason: "Eligibility not checked: " + unevaluableRuleText(window.rule) + ". The published range is " + winText + ". Confirm against the entry kit.",
+    }
+  }
   if (!firstAired) {
     return {
       status: "unverifiable",
@@ -230,6 +300,8 @@ function resolveEligibility(canonicalShow, firstAired, deadlines) {
 function blockEligibilityStatus(recommended) {
   const elig = recommended.map(e => e.eligibility).filter(x => !!x)
   if (elig.length === 0) return 'no_window'
+  if (elig.every(e => e.status === "not_applicable")) return "not_applicable"
+  if (elig.every(e => e.status === "not_evaluable")) return "not_evaluable"
   const hasIn = elig.some(e => e.status === "in_window")
   const hasVerify = elig.some(e => e.status === "unverifiable")
   const hasOut = elig.some(e => e.status === "out_of_window")
@@ -510,6 +582,13 @@ const FACETS = [
   { show_name: 'MMA Smarties Global', kind: 'work', axis: 'creative_fame', geo_scope: 'global', region: 'Global' },
   { show_name: 'Spikes Asia', kind: 'work', axis: 'craft', geo_scope: 'regional', region: 'APAC' },
   { show_name: 'London International Awards', kind: 'work', axis: 'creative_fame', geo_scope: 'global', region: 'Global' },
+  // Added 7 Aug 2026. kind/axis/geo_scope verbatim from
+  // migrations/planner-facets-migration-2026-07-16.sql. `region` is set explicitly
+  // here (the live jsonb omits it on these rows) so the region gate is not what
+  // these cases end up testing.
+  { show_name: 'Epica Awards', kind: 'work', axis: 'creative_fame', discipline: 'creative', geo_scope: 'global', region: 'Global' },
+  { show_name: 'Campaign Asia Agency of the Year', kind: 'agency_title', geo_scope: 'regional', region: 'APAC' },
+  { show_name: 'Campaign Asia Women to Watch APAC', kind: 'people', geo_scope: 'regional', region: 'APAC' },
 ]
 
 const baseCtx = { discipline: 'media', lens: 'maximize_visibility', region: 'APAC', budgetCurrency: 'USD', asOfDate: '2026-07-16' }
@@ -863,6 +942,72 @@ function dir(overrides) {
   // interacts with the edition policy, so it needs its own session + Ben's call.
   const aliased = planFor('2026-01-15', 'Cannes Lions 2026')
   check('9f year-suffixed variant still RESOLVES (lookups work)', aliased.shows.length === 1)
+
+  // ── Added 7 Aug 2026 with the EligibilityRule discriminator ────────────────
+
+  // 9g. THE HAZARD THE DISCRIMINATOR EXISTS TO PREVENT. Epica's real window runs
+  // 1 Jul 2024 to 15 Nov 2026 and its rule is UNCLASSIFIED, because the show's own
+  // wording ("work used/published/broadcast") never says "first". Before this
+  // change the engine compared a first-aired date against it regardless, so a
+  // campaign that first ran in Mar 2024 read a confident out_of_window. If that
+  // window is in fact RAN_DURING, that verdict is WRONG and it cost a real entry.
+  // The engine must now refuse instead. This case fails loudly if anyone sets
+  // Epica's rule to FIRST_PUBLICATION without re-sourcing the entry kit.
+  const EPICA = 'Epica Awards'
+  const unevalPlan = planFor('2024-03-01', EPICA)
+  const unevalBlock = unevalPlan.shows.find(b => b.show_name === EPICA)
+  check('9g unevaluable rule is NOT judged out_of_window', unevalBlock?.entries[0].eligibility?.status !== 'out_of_window')
+  check('9g unevaluable rule reads not_evaluable', unevalBlock?.entries[0].eligibility?.status === 'not_evaluable')
+  check('9g block rolls up to not_evaluable, NOT ok', unevalBlock?.eligibility_status === 'not_evaluable')
+  check('9g not_evaluable is distinct from no_window', unevalBlock?.eligibility_status !== 'no_window')
+  check('9g reason says we did not check, and why', /^Eligibility not checked: .*do not state what its date range measures/.test(unevalBlock?.entries[0].eligibility?.reason ?? ''))
+  check('9g reason still surfaces the published range', /1 Jul 2024 to 15 Nov 2026/.test(unevalBlock?.entries[0].eligibility?.reason ?? ''))
+  check('9g refusal still carries the window for display', unevalBlock?.entries[0].eligibility?.window?.rule === 'UNCLASSIFIED')
+  check('9g entry is HELD, never dropped', unevalBlock?.entries.length === 1)
+
+  // 9h. A supplied date must not change a refusal into a verdict: the rule, not the
+  // presence of a date, is what makes the check impossible.
+  const unevalDated = planFor('2026-01-15', EPICA)
+  const unevalDatedBlock = unevalDated.shows.find(b => b.show_name === EPICA)
+  check('9h in-range date does NOT flip an unevaluable rule to in_window', unevalDatedBlock?.entries[0].eligibility?.status === 'not_evaluable')
+  check('9h the supplied date is still carried, not discarded', unevalDatedBlock?.entries[0].eligibility?.campaignDate === '2026-01-15')
+
+  // 9i. AGENCY-PERFORMANCE show: there is no campaign, so there is no campaign date
+  // and there never will be. Must read not_applicable, never 'no_window' ("we did
+  // not check"), which implies a gap that will one day close. AOY appears under
+  // several names live, so this also exercises the isAoyShow match rather than a
+  // literal name compare.
+  const AOY = 'Campaign Asia Agency of the Year'
+  const aoyPlan = planFor(null, AOY)
+  const aoyBlock = aoyPlan.shows.find(b => b.show_name === AOY)
+  check('9i AOY entry reads not_applicable', aoyBlock?.entries[0].eligibility?.status === 'not_applicable')
+  check('9i AOY block rolls up to not_applicable, NOT no_window', aoyBlock?.eligibility_status === 'not_applicable')
+  check('9i AOY not_applicable carries a NULL window (none to cite)', aoyBlock?.entries[0].eligibility?.window === null)
+  check('9i AOY reason names the subject, not a missing date', /Judged on the agency or the nominee/.test(aoyBlock?.entries[0].eligibility?.reason ?? ''))
+  // The alias form is the one that matters, and it FAILED on first run: the raw
+  // 'campaign asia aoty' contains 'campaign asia' but not 'agency of the year', so a
+  // raw isAoyShow test returned false and the block fell through to 'no_window'.
+  // Do not "simplify" eligibilityIsApplicable back to a single raw test.
+  const aoyAlias = planFor(null, 'campaign asia aoty')
+  const aoyAliasBlock = aoyAlias.shows[0]
+  check('9i the AOY ALIAS form resolves to a facet at all', aoyAliasBlock !== undefined)
+  check('9i the AOY ALIAS form also reads not_applicable', aoyAliasBlock?.entries[0].eligibility?.status === 'not_applicable')
+  check('9i the AOY ALIAS block does NOT read no_window', aoyAliasBlock?.eligibility_status !== 'no_window')
+
+  // 9j. PEOPLE-subject show: same category error, different family. A date supplied
+  // for a nomination show must still read not_applicable, never in_window.
+  const W2W = 'Campaign Asia Women to Watch APAC'
+  const w2wPlan = planFor('2026-01-15', W2W)
+  const w2wBlock = w2wPlan.shows.find(b => b.show_name === W2W)
+  check('9j people-subject show reads not_applicable even WITH a date', w2wBlock?.entries[0].eligibility?.status === 'not_applicable')
+  check('9j people-subject block rolls up to not_applicable', w2wBlock?.eligibility_status === 'not_applicable')
+  check('9j a date on a people show is never reported as a campaign date', w2wBlock?.entries[0].eligibility?.campaignDate === null)
+
+  // 9k. Applicability is checked BEFORE the window lookup, so a people/agency show
+  // that later gains a window still reads not_applicable rather than being scored
+  // against it. Asserted via AOY, which has a deadline row and no window: the point
+  // is that the answer is not_applicable, NOT the undefined a no-window show gets.
+  check('9k applicability outranks the window lookup', aoyBlock?.entries[0].eligibility !== undefined)
   check('9f DEFECT: canonicalShow keeps the raw name, not the canonical one', aliased.shows[0].show_name === 'Cannes Lions 2026')
   check('9f the lookups it drives are unaffected (real fee found)', aliased.shows[0].budget_usd === 1275)
 }

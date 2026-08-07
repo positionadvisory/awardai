@@ -95,6 +95,20 @@ const ELIG_COLOR: Record<EntryEligibility['status'], string> = {
   in_window: '#15803d',     // green-700
   out_of_window: '#b45309', // amber-700
   unverifiable: '#6b7280',  // gray-500
+  // Both added 7 Aug 2026 with the EligibilityRule discriminator. Deliberately the
+  // same gray as 'unverifiable': all three mean "no verdict", and colouring a
+  // refusal amber would read as a problem with the WORK rather than with our data.
+  not_evaluable: '#6b7280', // gray-500
+  not_applicable: '#6b7280', // gray-500
+}
+
+/** Prefix rendered before an eligibility reason, so a non-verdict never reads as one. */
+const ELIG_PREFIX: Record<EntryEligibility['status'], string> = {
+  in_window: '',
+  out_of_window: '',
+  unverifiable: 'Verify eligibility: ',
+  not_evaluable: 'Cannot be checked: ',
+  not_applicable: 'Not applicable: ',
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -395,6 +409,18 @@ function ShowRow({ show, currency }: { show: ShowBlock; currency: CurrencyCode }
               the entry kit before committing this work.
             </p>
           )}
+          {show.eligibility_status === 'not_evaluable' && (
+            <p className="text-xs text-gray-500 mt-0.5">
+              This show publishes a date range, but not one a first-run date can be checked against, so no eligibility
+              verdict is given here. Confirm in the entry kit before committing this work.
+            </p>
+          )}
+          {show.eligibility_status === 'not_applicable' && (
+            <p className="text-xs text-gray-500 mt-0.5">
+              Judged on the agency or the nominee rather than on a campaign, so campaign eligibility does not apply to
+              this show.
+            </p>
+          )}
         </div>
         <div className="flex-shrink-0 text-left sm:text-right">
           <p className="text-sm font-semibold text-gray-900">
@@ -451,7 +477,7 @@ function ShowRow({ show, currency }: { show: ShowBlock; currency: CurrencyCode }
                         {reserve && <span className="text-gray-400"> &middot; reserve</span>}
                         {e.eligibility && (
                           <span className="block text-[11px]" style={{ color: ELIG_COLOR[e.eligibility.status] }}>
-                            {e.eligibility.status === 'unverifiable' ? 'Verify eligibility: ' : ''}
+                            {ELIG_PREFIX[e.eligibility.status]}
                             {e.eligibility.reason}
                           </span>
                         )}

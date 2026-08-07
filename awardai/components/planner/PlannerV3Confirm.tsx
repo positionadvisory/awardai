@@ -187,10 +187,10 @@ export default function PlannerV3Confirm({ value, onChange, prefilled, campaigns
           <label className={labelClass}>When did each campaign first run? (optional)</label>
           <p className="text-xs text-gray-400 mb-2">
             Add the first public air / publish date and the plan checks each campaign against the eligibility window of
-            every show that publishes one, holding back work that is too old or too new for the open cycle. Most shows
-            do not publish a window: those are marked &ldquo;not checked&rdquo; in the plan rather than passed. Leave any
-            date blank to skip: the plan is unchanged, and the show is flagged &ldquo;verify eligibility&rdquo; instead
-            of guessing.
+            every show that publishes a first-run window, holding back work that is too old or too new for the open
+            cycle. Most shows publish no window at all, and some publish a range that measures something else entirely:
+            both are marked in the plan as unchecked rather than passed. Leave any date blank to skip: the plan is
+            unchanged, and the show is flagged &ldquo;verify eligibility&rdquo; instead of guessing.
           </p>
           <ul className="space-y-2">
             {campaigns.map(c => (

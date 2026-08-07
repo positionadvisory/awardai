@@ -20,17 +20,52 @@
 export type ShowConfidence = 'verified' | 'partial' | 'needs_check'
 
 /**
- * Official entry-eligibility window: the earliest and latest first-publication
- * dates for work entered in the 2026 cycle, per the show's own entry rules.
+ * WHICH RULE an eligibility window expresses. Added 7 Aug 2026: the window used
+ * to be implicitly first-publication-only, so storing any other kind of window in
+ * it would have made the planner confidently call eligible work INELIGIBLE, which
+ * is strictly worse than "not checked". Only FIRST_PUBLICATION is evaluable
+ * against the single first-aired date the planner collects; every other rule needs
+ * data we do not hold, and the engine refuses to render a verdict for those (see
+ * resolveEligibility in lib/planner-v3-engine.ts).
+ *
+ *  FIRST_PUBLICATION  the work must have FIRST run/published inside the window.
+ *                     Evaluable against a first-aired date.
+ *  RAN_DURING         the work must have run AT ANY POINT inside the window. A
+ *                     campaign that first aired before window.start can still
+ *                     qualify, so a first-aired comparison would wrongly reject it.
+ *  RESULTS_PERIOD     the RESULTS/effectiveness must fall inside the window
+ *                     (Effie-class). Unrelated to when the work first ran.
+ *  PERFORMANCE_YEAR   an agency-performance year (AOY-class). There is no campaign
+ *                     date at all; see the not_applicable path in the engine.
+ *  UNCLASSIFIED       we hold dates but the show's own wording does not state
+ *                     which rule they express. NEVER infer one: leave it here and
+ *                     the engine reports "cannot be checked" rather than guessing.
+ */
+export type EligibilityRule =
+  | 'FIRST_PUBLICATION'
+  | 'RAN_DURING'
+  | 'RESULTS_PERIOD'
+  | 'PERFORMANCE_YEAR'
+  | 'UNCLASSIFIED'
+
+/**
+ * Official entry-eligibility window: the earliest and latest dates bounding the
+ * work that qualifies for the 2026 cycle, per the show's own entry rules.
  * DISTINCT from the entry DEADLINE (finalDate): the deadline is when entries
- * close; this window is when the WORK must have first run/published to qualify.
+ * close; this window bounds the WORK.
  * Populate ONLY from a one-click primary source (the show's rules / entry kit).
  * Absent = NO eligibility claim for that show (never guessed).
+ *
+ * `rule` is REQUIRED on purpose. It is the whole guard: a new window row cannot be
+ * added without stating what kind of window it is, so the compiler blocks the
+ * failure mode this field exists to prevent. If the source does not say, the
+ * answer is 'UNCLASSIFIED', not the most likely-looking value.
  */
 export type EligibilityWindow = {
-  start: string   // ISO date: earliest first-publication date that qualifies
-  end: string     // ISO date: latest first-publication date that qualifies
-  source: string  // primary source + date checked
+  start: string   // ISO date: earliest qualifying date under `rule`
+  end: string     // ISO date: latest qualifying date under `rule`
+  rule: EligibilityRule  // REQUIRED. Which rule start/end express. See EligibilityRule.
+  source: string  // primary source + date checked (quote the rule wording verbatim)
 }
 
 export type ShowDeadline = {
@@ -46,7 +81,7 @@ export type ShowDeadline = {
   note: string            // Practical notes for the entry team
   confidence: ShowConfidence  // Agent gate: only 'verified' shows proceed in Full Prep
   lastVerified: string    // ISO date this row was last confirmed against official source
-  /** Optional. Official first-publication eligibility window (see EligibilityWindow). Absent = no claim. */
+  /** Optional. Official entry-eligibility window, whose rule type it carries with it (see EligibilityWindow). Absent = no claim. */
   eligibilityWindow?: EligibilityWindow
 }
 
@@ -289,7 +324,7 @@ export const DEADLINES_2026: ShowDeadline[] = [
   {
     show: 'Epica Awards', region: 'Global',
     finalDate: '2026-10-30', juryDate: '2026-11-25', ceremonyDate: '2026-12-15',
-    eligibilityWindow: { start: '2024-07-01', end: '2026-11-15', source: 'epica-awards.com/enter rule 1, checked 17 Jul 2026: work used/published/broadcast 1 Jul 2024-15 Nov 2026' },
+    eligibilityWindow: { start: '2024-07-01', end: '2026-11-15', rule: 'UNCLASSIFIED', source: 'epica-awards.com/enter rule 1, checked 17 Jul 2026: work used/published/broadcast 1 Jul 2024-15 Nov 2026. RULE UNCLASSIFIED 7 Aug 2026: the quoted wording says "used/published/broadcast", NOT "first" (contrast LIA below, which does say "first"), and the span is 28 months, both consistent with RAN_DURING rather than FIRST_PUBLICATION. Re-source rule 1 verbatim from epica-awards.com/enter and set the rule; until then the engine refuses a verdict rather than comparing a first-aired date against a window that may not be a first-publication window.' },
     earlyBird: '1 Sep 2026', standard: '4 Oct 2026', final: '30 Oct 2026 (late entry +10%, 19-30 Oct)', ceremony: '15 Dec 2026 (final results 16 Dec)',
     note: 'Added 17 Jul 2026 (surfaced prepping the Lorenz Langgartner/Serviceplan sales call — Eurobest + Epica had show_profiles but no deadline row, blocking Full Prep). Official "Key dates 2026" section live-checked 17 Jul 2026 at epica-awards.com/enter (source of every date above): early bird period ends 1 Sep; normal entry period ends 4 Oct; late entry (+10% surcharge, no separate later fee tier) runs 19–30 Oct — 30 Oct is the hard final cutoff, used as finalDate; shortlist publication 25 Nov (used as juryDate, the closest analog to a jury/results date this show publishes); ceremony 15 Dec; final results 16 Dec. ⚠️ CORRECTION vs the sales-prep session\'s working note: a "deadline extended until November 2" article surfaced in search is a 2020-dated historical Epica news post (byline Mark Tungate, 2020-10-16), not a 2026 notice — do not carry that November date forward. Judged exclusively by press/journalists (Epica\'s founding distinction vs peer-judged shows); organiser Maydream/Epica, Paris; entries accepted worldwide. Eligibility window per official rules: work used/published/broadcast 1 Jul 2024–15 Nov 2026 (an eligibility bound, not the entry deadline — do not confuse with finalDate). Canonical platform name is "Epica Awards" (confirmed live 17 Jul 2026: show_profiles id 58, SHOW_CATEGORIES key, SHOW_KEYWORD_MAP target all agree); the bare "Epica" string is only a legacy non-canonical show_rate_facts label (ids 27-28, ledger-flagged separately, unrelated to this row). show_rate_facts ids 27-28 = NONE_PUBLISHED (ledger §L11), so no win-rate/shortlist-rate figure is added here. Official Pricing section (same page) also gives sourced 2026 entry fees — flat company registration €200 (early-bird period figure not separately stated) + per-entry Print €339 / Film & Radio €390 / Alternative & Digital €439 / Integrated €649 — NOT added to ENTRY_FEES this pass: the fee is entry-type-based, not deadline-tiered, so a single canonical "base" needs a product call on which type to anchor; flagged as a follow-up, full sourced figures kept here for whoever does that pass.',
     confidence: 'verified', lastVerified: '2026-07-17',
@@ -363,7 +398,7 @@ export const DEADLINES_2026: ShowDeadline[] = [
   {
     show: 'London International Awards', region: 'Global',
     finalDate: '2026-08-31', juryDate: '2026-09-25', ceremonyDate: '',
-    eligibilityWindow: { start: '2025-07-01', end: '2026-08-31', source: 'liaawards.com/enter (rules_for_entry + entry_fees), checked 8 Jul 2026: work first released/published/broadcast 1 Jul 2025-31 Aug 2026' },
+    eligibilityWindow: { start: '2025-07-01', end: '2026-08-31', rule: 'FIRST_PUBLICATION', source: 'liaawards.com/enter (rules_for_entry + entry_fees), checked 8 Jul 2026: work first released/published/broadcast 1 Jul 2025-31 Aug 2026. Rule classified FIRST_PUBLICATION 7 Aug 2026 on the source\'s own word "first".' },
     earlyBird: '30 Apr 2026 (PASSED — 35% off)', standard: '1 May-30 Jun 2026 (20% off)', final: '31 Aug 2026', ceremony: 'No ceremony; results announced 28 Sep–5 Oct 2026 online',
     note: 'LIA 2026 entries open; judging 25 Sep–3 Oct 2026, Encore @ Wynn Las Vegas. Eligibility: work released 1 Jul 2025–31 Aug 2026. Fee tiers CONFIRMED (checked 8 Jul 2026, liaawards.com/enter/entry_fees): 35% early bird through 30 Apr 2026 (PASSED), 20% discount 1 May-30 Jun 2026, full rate 1 Jul 2026 through close 31 Aug 2026. Full per-medium table live on the site (~28 categories, Package Design lowest at $325/$400/$500 through Entertainment & Content Series highest at $975/$1,200/$1,500 across the three tiers). Change fees: USD 250 per entry (credit/attribution), USD 500 per entry (material changes after lock). Results announced online in stages 28 Sep–5 Oct 2026; "Of The Year" titles ~Nov 2026. No physical gala ceremony. 33 media types for 2026 (27 established + 6 new: Sports, Gaming, Cultural Catalyst, Entertainment & Content, Business Transformation, Democracy and Human Rights). 20 Jury Presidents across categories in 2026 (source: Roastbrief; the previously-listed "180+ jurors including 35+ global CCOs" figure could not be re-verified for 2026 and has been dropped). Genuinely global show — no geographic eligibility restriction. Included in WARC Creative 100 Rankings and Drum World Creative Rankings. Independently owned; founder/president Barbara Levy, chairperson Terry Savage (ex-Cannes Lions CEO, correct title is "Chairperson" not "jury president"). LIA founded 1986 — 2026 is the 40th edition (corrected from "40th anniversary 2025-2026," which was wrong).',
     confidence: 'verified', lastVerified: '2026-07-08',

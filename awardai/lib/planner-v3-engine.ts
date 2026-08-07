@@ -104,7 +104,7 @@ import {
 } from '@/lib/show-taxonomy'
 import { isAoyShow, normalizeAoyCategory, AOY_CATEGORY_KEYS } from '@/lib/aoy-taxonomy'
 import { convert, type CurrencyCode } from '@/lib/fx'
-import { DEADLINES_2026, type ShowDeadline, type EligibilityWindow, ENTRY_FEES, resolveWinRateKey } from '@/lib/shows-data'
+import { DEADLINES_2026, type ShowDeadline, type EligibilityWindow, type EligibilityRule, ENTRY_FEES, resolveWinRateKey, normaliseKbShow } from '@/lib/shows-data'
 import { getRateFact, mayDisplayNumber, type RateFact } from '@/lib/rate-facts'
 import { resolveCycleStatus, type PlannerCycleStatus } from '@/lib/planner-engine'
 import type { PlannerAgencyDiscipline, PlannerLens } from '@/lib/planner-engine'
@@ -493,16 +493,27 @@ export function recommendFor(
 export type PlannerV3Tier = 'core' | 'prestige' | 'specialist' | 'reserve'
 
 /**
- * Per-entry eligibility determination: does this campaign's first-aired date fall
- * inside the target show's official eligibility window? Set ONLY when the show has
- * a window on file (shows-data EligibilityWindow); absent = no window = no claim.
- * The engine NEVER silently passes or drops — an out-of-window entry carries
- * `reason` and is demoted out of "Enter this cycle"; a window-but-no-date entry is
- * flagged 'unverifiable' with a "verify eligibility window" reason.
+ * Per-entry eligibility determination. The engine NEVER silently passes or drops:
+ * every state carries a `reason` the UI renders verbatim.
+ *
+ *  in_window       the first-aired date falls inside a FIRST_PUBLICATION window.
+ *  out_of_window   it falls outside one. Demoted out of "Enter this cycle", never dropped.
+ *  unverifiable    evaluable window, but no first-aired date was supplied.
+ *  not_evaluable   we hold a window whose `rule` cannot be answered by a first-aired
+ *                  date (RAN_DURING, RESULTS_PERIOD, PERFORMANCE_YEAR, UNCLASSIFIED).
+ *                  Distinct from 'no window on file' (which sets no read at all) and
+ *                  from 'unverifiable' (evaluable, just missing the date). Added
+ *                  7 Aug 2026 with the EligibilityRule discriminator.
+ *  not_applicable  the show's subject is NOT a campaign (agency-performance shows,
+ *                  people/nomination shows), so there is no campaign date to check
+ *                  and never will be. A positive statement, not a failure to check.
+ *
+ * `window` is null on not_applicable: there is no window to cite, and inventing an
+ * empty one would let a caller render a date range that does not exist.
  */
 export type EntryEligibility = {
-  status: 'in_window' | 'out_of_window' | 'unverifiable'
-  window: EligibilityWindow
+  status: 'in_window' | 'out_of_window' | 'unverifiable' | 'not_evaluable' | 'not_applicable'
+  window: EligibilityWindow | null
   campaignDate: string | null
   reason: string
 }
@@ -528,12 +539,18 @@ export type ShowBlock = {
   fee_flag: 'ok' | 'partial_unsourced' | 'fully_unsourced'
   cycle_status: PlannerCycleStatus
   final_date: string | null
-  /** Roll-up of eligibility across recommended entries.
-   *  'no_window' = this show publishes no eligibility window we hold, so NOTHING was
-   *  checked. It is a distinct state from 'ok' and must be surfaced, not read as a pass:
-   *  only 2 of the DEADLINES_2026 rows carry a window, so 'no_window' is the common case
-   *  and silently rendering it as clean was an unearned assurance (fixed 27 Jul 2026). */
-  eligibility_status: 'ok' | 'out_of_window' | 'verify' | 'no_window'
+  /** Roll-up of eligibility across recommended entries. FOUR of these six states mean
+   *  "no verdict was reached", and each says something different about why. Collapsing
+   *  any of them into 'ok' is an unearned assurance (the 27 Jul 2026 'no_window' fix, and
+   *  the 7 Aug 2026 rule-discriminator fix, are the same lesson twice).
+   *  'no_window'      = this show publishes no window we hold; NOTHING was checked. The
+   *                     common case: only 2 of the DEADLINES_2026 rows carry a window.
+   *  'not_evaluable'  = we hold a window, but its rule cannot be answered by a first-aired
+   *                     date. We are refusing, not failing.
+   *  'not_applicable' = the show is not judged on a campaign at all, so no check exists
+   *                     to run. Never render this as "not checked".
+   *  'verify'         = evaluable, awaiting a date from the user. */
+  eligibility_status: 'ok' | 'out_of_window' | 'verify' | 'no_window' | 'not_evaluable' | 'not_applicable'
 }
 
 export type PlannerV3Plan = {
@@ -587,15 +604,88 @@ function fmtEligDate(iso: string): string {
   return parseInt(m[3], 10) + " " + _ELIG_MONTHS[mo - 1] + " " + m[1]
 }
 
+// Shows where a CAMPAIGN first-aired date is a category error rather than a
+// missing datum (added 7 Aug 2026). Campaign Asia AOY judges an agency's own
+// performance year, and the Women to Watch / Women Leading Change family judges a
+// PERSON: there is no campaign, so there is no date, so "not checked" is the wrong
+// thing to tell the user forever. Matched tolerantly via sameShow so name variants
+// land; the AOY family is matched by isAoyShow instead because it appears under
+// several names (16 live directions across 3 variants as of 6 Aug 2026).
+// This is deliberately a curated list, not a read of entry_form.entry_subject:
+// the engine is a pure derivation with no DB access, same as PRESTIGE_SHOW_NAMES.
+const NO_CAMPAIGN_DATE_SHOWS: string[] = [
+  'Campaign Asia Women to Watch APAC',
+  'Campaign Asia Women Leading Change',
+]
+
+/** True when a campaign first-aired date is a meaningful question for this show.
+ *
+ * BOTH the raw and the alias-normalised name are tested against isAoyShow, and that
+ * is load-bearing, not belt-and-braces. resolveShowV3 sets `canonicalShow` to the
+ * RAW direction text unless MMA_EDITION_POLICY rewrites it (the known defect
+ * asserted by fixture 9f), so an AOY direction entered under the real alias
+ * 'campaign asia aoty' resolves its facet, fee and deadline correctly through
+ * sameShow while isAoyShow on the raw string returns FALSE: it contains
+ * 'campaign asia' but not 'agency of the year'. Testing only the raw name would
+ * therefore have missed exactly the aliased AOY rows this gate exists for, and left
+ * them reading "not checked" forever. NO_CAMPAIGN_DATE_SHOWS never had the problem
+ * because sameShow alias-normalises both sides itself.
+ * Caught by fixture 9i on first run, 7 Aug 2026. */
+function eligibilityIsApplicable(canonicalShow: string): boolean {
+  const normalised = normaliseKbShow(canonicalShow) ?? canonicalShow
+  if (isAoyShow(canonicalShow) || isAoyShow(normalised)) return false
+  return !NO_CAMPAIGN_DATE_SHOWS.some(n => sameShow(n, canonicalShow))
+}
+
+/** Human-readable label for a rule we cannot evaluate, used in the refusal reason. */
+function unevaluableRuleText(rule: EligibilityRule): string {
+  switch (rule) {
+    case 'RAN_DURING':
+      return "this show asks whether the work RAN during its window, not when it first ran, so a first-aired date cannot settle it"
+    case 'RESULTS_PERIOD':
+      return "this show's window bounds when the RESULTS were measured, not when the work first ran"
+    case 'PERFORMANCE_YEAR':
+      return "this show's window is an agency performance year, not a campaign date range"
+    case 'UNCLASSIFIED':
+      return "this show's own rules do not state what its date range measures, so we will not guess"
+    default:
+      return "this show's eligibility rule cannot be evaluated from a first-aired date"
+  }
+}
+
 function resolveEligibility(
   canonicalShow: string,
   firstAired: string | null | undefined,
   deadlines: ShowDeadline[],
 ): EntryEligibility | undefined {
+  // Applicability is checked FIRST and independently of whether a window exists:
+  // for an AOY or people-subject show the answer is "this check does not apply",
+  // which is true whether or not we hold dates. Returning undefined here instead
+  // would roll up as 'no_window' = "not checked", implying a gap that will never
+  // close.
+  if (!eligibilityIsApplicable(canonicalShow)) {
+    return {
+      status: "not_applicable",
+      window: null,
+      campaignDate: null,
+      reason: "Judged on the agency or the nominee, not on a campaign, so there is no campaign date to check against an eligibility window.",
+    }
+  }
   const found = deadlines.find(d => sameShow(d.show, canonicalShow))
   const window = found?.eligibilityWindow
   if (!window) return undefined // no window on file -> no eligibility claim
   const winText = fmtEligDate(window.start) + " to " + fmtEligDate(window.end)
+  // A window whose rule a first-aired date cannot answer. Refuse, with the reason.
+  // Comparing anyway is the failure this discriminator exists to prevent: it would
+  // confidently mark ELIGIBLE work ineligible, which is worse than not checking.
+  if (window.rule !== 'FIRST_PUBLICATION') {
+    return {
+      status: "not_evaluable",
+      window,
+      campaignDate: firstAired ?? null,
+      reason: "Eligibility not checked: " + unevaluableRuleText(window.rule) + ". The published range is " + winText + ". Confirm against the entry kit.",
+    }
+  }
   if (!firstAired) {
     return {
       status: "unverifiable",
@@ -628,9 +718,18 @@ function resolveEligibility(
 // reasons still render); every recommended entry out-of-window demotes the whole
 // block; window-but-no-date only -> "verify". No window on any entry -> 'no_window'
 // (an explicit "we checked nothing" state, never conflated with 'ok').
+//
+// not_applicable and not_evaluable are tested with EVERY, not SOME, and use it
+// soundly: both are properties of the SHOW (its subject, and its window's rule),
+// and a block is one show by construction, so they cannot mix with an evaluated
+// state inside a block. Using `every` means that if that invariant ever breaks the
+// block falls through to the evaluated branches rather than silently reporting a
+// refusal for entries that were actually checked.
 function blockEligibilityStatus(recommended: PlacedEntry[]): ShowBlock['eligibility_status'] {
   const elig = recommended.map(e => e.eligibility).filter((x): x is EntryEligibility => !!x)
   if (elig.length === 0) return 'no_window'
+  if (elig.every(e => e.status === "not_applicable")) return "not_applicable"
+  if (elig.every(e => e.status === "not_evaluable")) return "not_evaluable"
   const hasIn = elig.some(e => e.status === "in_window")
   const hasVerify = elig.some(e => e.status === "unverifiable")
   const hasOut = elig.some(e => e.status === "out_of_window")
