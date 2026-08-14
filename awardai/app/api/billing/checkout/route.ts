@@ -48,6 +48,9 @@ export async function POST(req: NextRequest) {
     },
     // Card required upfront — charges automatically after trial
     payment_method_collection: 'always',
+    // Render the promo-code field on the checkout page (TNO20 and any future
+    // promotion code). Mutually exclusive with `discounts` — do not add both.
+    allow_promotion_codes: true,
     // Show T&C acceptance checkbox on checkout page; Stripe records consent timestamp
     consent_collection: {
       terms_of_service: 'required',
