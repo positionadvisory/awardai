@@ -33,6 +33,7 @@ import { ErrorBanner } from '@/components/ErrorBanner'
 import GeneratingBar from '@/components/GeneratingBar'
 import AoyEntryPicker from '@/components/AoyEntryPicker'
 import AngleCard, { AngleRow } from '@/components/angles/AngleCard'
+import { resolveBridgeShow } from '@/components/angles/angleBridge'
 import { isAoyShow } from '@/lib/aoy-taxonomy'
 import { categoriesForShow } from '@/lib/show-taxonomy'
 
@@ -406,7 +407,16 @@ export default function AnglesPage() {
               </p>
             </div>
             <div className="grid grid-cols-1 gap-4">
-              {latestBatch.map(a => <AngleCard key={a.id} angle={a} />)}
+              {latestBatch.map(a => (
+                <AngleCard
+                  key={a.id}
+                  angle={a}
+                  projectId={project.id}
+                  targetShow={resolveBridgeShow(targetShows, a.category)}
+                  userId={user?.id ?? null}
+                  directionCount={directions.length}
+                />
+              ))}
             </div>
           </div>
         ) : (
