@@ -2052,6 +2052,21 @@ export default function ProjectPage() {
     } finally { setGeneratingDraft(false); setGeneratingForDirectionId(null) }
   }
 
+  // B3 angles bridge (19 Aug 2026): /projects/[id]?draftDirection=<id> fires the
+  // SAME generateDraft flow above (per-entry-type routing untouched) once the
+  // direction's entry_form has resolved — configModeFor needs entryForms[dirId],
+  // or a config show would silently fall to the generic drafter (the S99 class).
+  // Ref-guarded one-shot; the param is cleared so a refresh cannot regenerate.
+  const bridgeDraftFiredRef = useRef(false)
+  useEffect(() => {
+    const dirId = Number(new URLSearchParams(window.location.search).get('draftDirection') || 'NaN')
+    if (bridgeDraftFiredRef.current || !Number.isFinite(dirId) || !project || !(dirId in entryForms) || !directions.some(d => d.id === dirId)) return
+    bridgeDraftFiredRef.current = true
+    window.history.replaceState(null, '', window.location.pathname)
+    setTab('directions')
+    generateDraft(dirId)
+  }, [project, directions, entryForms]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Session 76 — AOY category-fit recommender. Resolves the direction's stored
   // best_category to its market-scoped candidate set (lib/aoy-taxonomy.ts owns the
   // scoping, so South Asia / Asia-Pacific Network can never appear), then asks
