@@ -8,6 +8,7 @@ import { useEngagement } from '@/lib/useEngagement'
 import GeneratingBar from '@/components/GeneratingBar'
 import ProjectProgressSpine, { SpineStep } from '@/components/ProjectProgressSpine'
 import NextStepCard, { NextStepAction, NextStepOpportunity, NextStepDirectionRef } from '@/components/NextStepCard'
+import DraftChangeSummary from '@/components/DraftChangeSummary'
 
 // Workbench (S150): in-flight statements for the legacy per-field Refine box
 // (the campaign / non-workbench path, !wbActive). Mirrors SectionChat's
@@ -4832,6 +4833,24 @@ export default function ProjectPage() {
                     // desktop side-by-side layout or the old single stack (?sxs=0).
                     const sxsEditSurface = (
                       <>
+                        {/* What-changed summary (17 Aug 2026, Joanne Fu call) — renders
+                            directly above the current draft whenever an earlier
+                            generation exists, so a regenerated ("optimized") draft
+                            shows its delta where the transform happened. Reuses the
+                            generation grouping + resolveFieldContent the bottom
+                            compare view already uses; that view is untouched. Sits
+                            at the top of sxsEditSurface so it covers all four
+                            layout paths (workbench on/off, sxs on/off) and the AOY
+                            workbench, config canvas and legacy campaign fields. */}
+                        {historyGens.length > 0 && (historyByGen[historyGens[0]] ?? []).length > 0 && (
+                          <DraftChangeSummary
+                            generation={maxGen}
+                            previousGeneration={historyGens[0]}
+                            current={fields.map(f => ({ key: f.field_key || f.field_label || String(f.id), label: f.field_label || f.field_key || 'Section', text: resolveFieldContent(f) }))}
+                            previous={(historyByGen[historyGens[0]] ?? []).map(f => ({ key: f.field_key || f.field_label || String(f.id), label: f.field_label || f.field_key || 'Section', text: resolveFieldContent(f) }))}
+                          />
+                        )}
+
                         {/* AOY page-budget meter (Session 74) — AOY entries only.
                             Words used across the exec summary + weighted sections
                             (the endorsement gate is excluded) vs the 10-page cap. */}
