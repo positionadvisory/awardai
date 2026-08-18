@@ -508,6 +508,10 @@ export default function ProjectPage() {
 
   const [project, setProject] = useState<Project | null>(null)
   const [directions, setDirections] = useState<Direction[]>([])
+  // Arc v2 B2: persisted-angles count for the spine's Angles entry (peer-level
+  // nav to /projects/[id]/angles, decision 4 of record). Head-only count; the
+  // angles surface itself lives on its own route, never on this page.
+  const [angleCount, setAngleCount] = useState(0)
   const [entries, setEntries] = useState<EntryDraft[]>([])
   const [evaluations, setEvaluations] = useState<Record<number, { judge?: Evaluation; coach?: Evaluation }>>({})
   // Session 57: third view 'nextsteps' = the Recommended Next Steps tab
@@ -938,6 +942,18 @@ export default function ProjectPage() {
         if (error) { console.error('project_pillar_facts fetch failed', error); return }
         if (!data) return
         setPillarFactsSaved(new Set(data.map((r: { pillar: string }) => r.pillar as AoyPillar)))
+      })
+
+    // Arc v2 B2: does this project have persisted angles (spine entry state).
+    // Head-only count, zero row payload (Session 52 payload-diet compliant).
+    supabase
+      .from('angles')
+      .select('id', { count: 'exact', head: true })
+      .eq('project_id', projectId)
+      .then(({ count, error }) => {
+        if (cancelled) return
+        if (error) { console.error('angles count fetch failed', error); return }
+        setAngleCount(count ?? 0)
       })
 
     // Session 52 (P-03) payload diet:
@@ -3541,8 +3557,14 @@ export default function ProjectPage() {
     { key: 'jury', label: 'Jury Read', done: spineHasJudge,
       summary: spineBestJudge !== null ? spineBestJudge.toFixed(1) : undefined },
     { key: 'facts', label: 'Verify Facts', done: spineFactsDone },
-    { key: 'directions', label: 'Directions', done: directions.length > 0,
+    { key: 'directions', label: 'Category Recommender', done: directions.length > 0,
       summary: directions.length > 0 ? String(directions.length) : undefined },
+    // Arc v2 B2 (decision 4): Angles sits peer-level beside the recommender so
+    // a user can enter either first. It is a ROUTE, not a tab (see
+    // handleSpineStepClick); the spine WRAPS on mobile by design, so this
+    // entry cannot reproduce the draft-tab-row overflow.
+    { key: 'angles', label: 'Angles', done: angleCount > 0,
+      summary: angleCount > 0 ? String(angleCount) : undefined },
     { key: 'refine', label: 'Refine', done: spineHasCoach },
     { key: 'endorsements', label: 'Endorsements', done: spineEndorsementsDone },
     { key: 'script', label: 'Video Script', done: spineScriptDone },
@@ -3553,8 +3575,11 @@ export default function ProjectPage() {
     { key: 'brief', label: 'Brief', done: !!((project.combined_text || briefText || '').trim()) },
     { key: 'materials', label: 'Materials', done: (project.materials?.length ?? 0) > 0,
       summary: project.materials?.length ? String(project.materials.length) : undefined },
-    { key: 'directions', label: 'Directions', done: directions.length > 0,
+    { key: 'directions', label: 'Category Recommender', done: directions.length > 0,
       summary: directions.length > 0 ? String(directions.length) : undefined },
+    // Arc v2 B2 (decision 4): peer-level Angles entry — a route, not a tab.
+    { key: 'angles', label: 'Angles', done: angleCount > 0,
+      summary: angleCount > 0 ? String(angleCount) : undefined },
     { key: 'draft', label: 'Draft', done: entries.length > 0,
       summary: spineMaxDraftGen > 0 ? `Gen ${spineMaxDraftGen}` : undefined },
     { key: 'evaluated', label: 'Evaluated', done: spineHasEval,
@@ -3580,6 +3605,13 @@ export default function ProjectPage() {
     : (tab === 'entries' ? 'draft' : tab)
 
   const handleSpineStepClick = (step: SpineStep) => {
+    // Arc v2 B2: Angles lives on its own route (/projects/[id]/angles), never
+    // as a tab on this page.
+    if (step.key === 'angles') {
+      track('spine_step_clicked', { project_id: Number(projectId), step: step.key, was_empty: !step.done })
+      router.push(`/projects/${projectId}/angles`)
+      return
+    }
     const target: Tab = projectIsAoy
       ? (AOY_STEP_TO_TAB[step.key] ?? 'materials')
       : ((step.key === 'draft' || step.key === 'evaluated') ? 'entries' : (step.key as Tab))
@@ -4254,7 +4286,7 @@ export default function ProjectPage() {
             {showsStrip}
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-sm font-medium text-gray-700">Award Directions</h2>
+                <h2 className="text-sm font-medium text-gray-700">Category Recommender <span className="font-normal text-gray-400">(formerly Directions)</span></h2>
                 <p className="text-gray-400 text-xs mt-0.5">{projectIsAoy
                   ? 'Category-fit recommendations and market-scoped positioning, sharpest once your facts are confirmed.'
                   : 'AI-recommended show and category combinations. Generate a draft from any direction, then evaluate it.'}</p>
@@ -4644,6 +4676,15 @@ export default function ProjectPage() {
                             {hasEntries && !isGeneratingThis && (
                               <button onClick={() => setTab('entries')} className="text-xs text-green-700 hover:text-green-600 transition-colors">
                                 {hasEval ? 'View entry & evaluation →' : 'View entry →'}
+                              </button>
+                            )}
+                            {/* Arc v2 B2 (decision 4): the recommender-to-angles bridge —
+                                each category card links into angle exploration with its
+                                category preselected via query param. */}
+                            {(d.best_category ?? '').trim() !== '' && (
+                              <button onClick={() => router.push(`/projects/${projectId}/angles?category=${encodeURIComponent(d.best_category ?? '')}`)}
+                                className="text-xs text-green-700 hover:text-green-600 transition-colors">
+                                Explore angles in this category →
                               </button>
                             )}
                             {/* Session 76 — AOY category-fit recommender (which market-scoped
