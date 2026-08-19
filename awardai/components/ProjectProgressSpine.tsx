@@ -48,11 +48,11 @@ export default function ProjectProgressSpine({ steps, activeKey, onStepClick }: 
       >
         {steps.map((step, i) => (
           <div key={step.key} className="flex items-center">
-            {i > 0 && <span className="hidden sm:inline text-gray-300 text-xs px-1 select-none">·</span>}
+            {i > 0 && <span className="hidden sm:inline text-gray-300 text-xs px-0.5 select-none">·</span>}
             <button
               onClick={() => onStepClick(step)}
               title={step.done ? `Open ${step.label}` : `${step.label}: not started yet`}
-              className={`flex items-center gap-1.5 px-2 sm:px-3 text-sm whitespace-nowrap border-b-2 transition-colors ${
+              className={`flex items-center gap-1.5 px-2 sm:px-2.5 text-sm whitespace-nowrap border-b-2 transition-colors ${
                 activeKey === step.key
                   ? 'border-green-700 text-gray-900 font-medium'
                   : step.done
