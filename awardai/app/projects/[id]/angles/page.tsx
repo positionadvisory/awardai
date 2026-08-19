@@ -422,13 +422,13 @@ export default function AnglesPage() {
     { key: 'jury', label: 'Jury Read', done: spineHasJudge,
       summary: spineBestJudge !== null ? spineBestJudge.toFixed(1) : undefined },
     { key: 'facts', label: 'Verify Facts', done: spineFactsDone },
-    { key: 'directions', label: 'Category Recommender', done: directions.length > 0,
+    { key: 'directions', label: 'Categories', done: directions.length > 0,
       summary: directions.length > 0 ? String(directions.length) : undefined },
     { key: 'angles', label: 'Angles', done: angleTotalCount > 0,
       summary: angleTotalCount > 0 ? String(angleTotalCount) : undefined },
     { key: 'refine', label: 'Refine', done: spineHasCoach },
     { key: 'endorsements', label: 'Endorsements', done: spineEndorsementsDone },
-    { key: 'script', label: 'Video Script', done: spineScriptDone },
+    { key: 'script', label: 'Script', done: spineScriptDone },
     { key: 'presskit', label: 'Press Kit', done: spinePressKitStarted },
   ]
 
@@ -436,15 +436,17 @@ export default function AnglesPage() {
     { key: 'brief', label: 'Brief', done: !!(project.combined_text ?? '').trim() },
     { key: 'materials', label: 'Materials', done: materials.length > 0,
       summary: materials.length > 0 ? String(materials.length) : undefined },
-    { key: 'directions', label: 'Category Recommender', done: directions.length > 0,
+    { key: 'directions', label: 'Categories', done: directions.length > 0,
       summary: directions.length > 0 ? String(directions.length) : undefined },
     { key: 'angles', label: 'Angles', done: angleTotalCount > 0,
       summary: angleTotalCount > 0 ? String(angleTotalCount) : undefined },
+    // B2.2 (19 Aug 2026): Draft and Evaluated merged into one chip, kept
+    // byte-identical to the project page's copy (see that file for the
+    // full rationale comment).
     { key: 'draft', label: 'Draft', done: draftGenerations.length > 0,
-      summary: spineMaxDraftGen > 0 ? `Gen ${spineMaxDraftGen}` : undefined },
-    { key: 'evaluated', label: 'Evaluated', done: spineHasEval,
-      summary: spineBestJudge !== null ? spineBestJudge.toFixed(1) : undefined },
-    { key: 'script', label: 'Video Script', done: spineScriptDone },
+      summary: spineMaxDraftGen > 0 ? `Gen ${spineMaxDraftGen}` : undefined,
+      summary2: spineBestJudge !== null ? spineBestJudge.toFixed(1) : undefined },
+    { key: 'script', label: 'Script', done: spineScriptDone },
     { key: 'presskit', label: 'Press Kit', done: spinePressKitStarted },
   ]
 
@@ -458,7 +460,7 @@ export default function AnglesPage() {
     if (step.key === 'angles') return
     const target: ProjectTab = projectIsAoy
       ? (AOY_STEP_TO_TAB[step.key] ?? 'materials')
-      : ((step.key === 'draft' || step.key === 'evaluated') ? 'entries' : (step.key as ProjectTab))
+      : (step.key === 'draft' ? 'entries' : (step.key as ProjectTab))
     router.push(`/projects/${projectId}?tab=${target}`)
   }
 

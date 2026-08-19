@@ -3589,7 +3589,7 @@ export default function ProjectPage() {
     { key: 'jury', label: 'Jury Read', done: spineHasJudge,
       summary: spineBestJudge !== null ? spineBestJudge.toFixed(1) : undefined },
     { key: 'facts', label: 'Verify Facts', done: spineFactsDone },
-    { key: 'directions', label: 'Category Recommender', done: directions.length > 0,
+    { key: 'directions', label: 'Categories', done: directions.length > 0,
       summary: directions.length > 0 ? String(directions.length) : undefined },
     // Arc v2 B2 (decision 4): Angles sits peer-level beside the recommender so
     // a user can enter either first. It is a ROUTE, not a tab (see
@@ -3599,7 +3599,7 @@ export default function ProjectPage() {
       summary: angleCount > 0 ? String(angleCount) : undefined },
     { key: 'refine', label: 'Refine', done: spineHasCoach },
     { key: 'endorsements', label: 'Endorsements', done: spineEndorsementsDone },
-    { key: 'script', label: 'Video Script', done: spineScriptDone },
+    { key: 'script', label: 'Script', done: spineScriptDone },
     { key: 'presskit', label: 'Press Kit', done: spinePressKitStarted },
   ]
 
@@ -3607,18 +3607,24 @@ export default function ProjectPage() {
     { key: 'brief', label: 'Brief', done: !!((project.combined_text || briefText || '').trim()) },
     { key: 'materials', label: 'Materials', done: (project.materials?.length ?? 0) > 0,
       summary: project.materials?.length ? String(project.materials.length) : undefined },
-    { key: 'directions', label: 'Category Recommender', done: directions.length > 0,
+    { key: 'directions', label: 'Categories', done: directions.length > 0,
       summary: directions.length > 0 ? String(directions.length) : undefined },
     // Arc v2 B2 (decision 4): peer-level Angles entry — a route, not a tab.
     { key: 'angles', label: 'Angles', done: angleCount > 0,
       summary: angleCount > 0 ? String(angleCount) : undefined },
+    // B2.2 (19 Aug 2026, Ben): Draft and Evaluated merged into one chip.
+    // Both keys navigated to the same 'entries' tab already (see
+    // handleSpineStepClick below), so nothing is lost as navigation or as
+    // status. Done-state stays "a draft exists"; the score badge is
+    // additive and uses the exact same guard the old Evaluated step's
+    // summary used (spineBestJudge !== null), so it appears only once a
+    // judge-mode evaluation exists.
     { key: 'draft', label: 'Draft', done: entries.length > 0,
-      summary: spineMaxDraftGen > 0 ? `Gen ${spineMaxDraftGen}` : undefined },
-    { key: 'evaluated', label: 'Evaluated', done: spineHasEval,
-      summary: spineBestJudge !== null ? spineBestJudge.toFixed(1) : undefined },
+      summary: spineMaxDraftGen > 0 ? `Gen ${spineMaxDraftGen}` : undefined,
+      summary2: spineBestJudge !== null ? spineBestJudge.toFixed(1) : undefined },
     // Session 57 (Ben): Press Kit is the LAST step — the script crystalises
     // the story first; the press kit announces the finished entry.
-    { key: 'script', label: 'Video Script', done: spineScriptDone },
+    { key: 'script', label: 'Script', done: spineScriptDone },
     { key: 'presskit', label: 'Press Kit', done: spinePressKitStarted },
   ]
 
@@ -3646,7 +3652,7 @@ export default function ProjectPage() {
     }
     const target: Tab = projectIsAoy
       ? (AOY_STEP_TO_TAB[step.key] ?? 'materials')
-      : ((step.key === 'draft' || step.key === 'evaluated') ? 'entries' : (step.key as Tab))
+      : (step.key === 'draft' ? 'entries' : (step.key as Tab))
     track('spine_step_clicked', { project_id: Number(projectId), step: step.key, was_empty: !step.done })
     setTab(target)
   }
