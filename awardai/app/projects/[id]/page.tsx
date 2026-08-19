@@ -3540,15 +3540,22 @@ export default function ProjectPage() {
   // projectIsAoy. The campaign spine below is byte-unchanged. AOY has no Brief
   // step: its inputs are agency facts, not a campaign brief, and starting an
   // AOY user on Brief was the source of the lost-time feedback. Order:
-  // Materials, Jury Read, Verify Facts, Directions, Refine, Video Script,
-  // Press Kit. Endorsements (target step 6) arrives with its checklist in
-  // chunk 6. Two steps share one view (the S54/S55 draft+evaluated to Entries
-  // precedent): Jury Read and Refine route to Entries. Verify Facts has its
-  // own view since chunk 3 (AgencyFactsValidator moved out of the Directions
-  // tab into the 'facts' tab below; never gates the Jury Read score). The
-  // score-first landing (default tab) and category-before-read are chunk 2.
+  // Materials, Jury, Verify Facts, Directions, Video Script, Press Kit.
+  // Endorsements (target step 6) arrives with its checklist in chunk 6.
+  // Verify Facts has its own view since chunk 3 (AgencyFactsValidator moved
+  // out of the Directions tab into the 'facts' tab below; never gates the
+  // Jury score). The score-first landing (default tab) and
+  // category-before-read are chunk 2.
+  // B2.3b (19 Aug 2026): Refine was dropped as its own spine step. It
+  // routed to the same 'entries' view as Jury (the S54/S55 draft+evaluated
+  // precedent), so the two chips carried one destination between them —
+  // the one-row width budget forced the same merge B2.2 already made for
+  // Draft/Evaluated. The Jury chip's done-state and score badge are
+  // unchanged (spineHasJudge/spineBestJudge); Refine's own done-state
+  // (spineHasCoach, i.e. "a coach-mode evaluation exists") is dropped from
+  // the spine rather than folded in, because Refine's CTA lives on the
+  // Entries surface itself once you're there, not on this chip.
   const spineHasJudge = Object.values(evaluations).some(s => !!s.judge)
-  const spineHasCoach = Object.values(evaluations).some(s => !!s.coach)
   // Chunk 7: facts-done now accounts for People/Brand too, so the spine step
   // does not stay perpetually undone on a project with no Agency direction.
   // Non-blocking either way (spec's own rule, unchanged): this only marks the
@@ -3572,12 +3579,12 @@ export default function ProjectPage() {
   const spineAoyCategorySet = directions.some(d => (d.best_category ?? '').trim() !== '')
 
   // AOY step key -> existing Tab view. Shared keys map to themselves.
+  // 'refine' removed (B2.3b): no spine step uses that key anymore.
   const AOY_STEP_TO_TAB: Record<string, Tab> = {
     materials: 'materials',
     jury: 'entries',
     facts: 'facts',
     directions: 'directions',
-    refine: 'entries',
     endorsements: 'endorsements',
     script: 'script',
     presskit: 'presskit',
@@ -3597,7 +3604,6 @@ export default function ProjectPage() {
     // entry cannot reproduce the draft-tab-row overflow.
     { key: 'angles', label: 'Angles', done: angleCount > 0,
       summary: angleCount > 0 ? String(angleCount) : undefined },
-    { key: 'refine', label: 'Refine', done: spineHasCoach },
     { key: 'endorsements', label: 'Endorsements', done: spineEndorsementsDone },
     { key: 'script', label: 'Script', done: spineScriptDone },
     { key: 'presskit', label: 'Press Kit', done: spinePressKitStarted },

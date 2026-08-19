@@ -394,7 +394,6 @@ export default function AnglesPage() {
     .filter(e => e.evaluation_mode !== 'coach' && e.overall_score !== null && !Number.isNaN(Number(e.overall_score)))
     .map(e => Number(e.overall_score))
   const spineHasJudge = spineJudgeScores.length > 0
-  const spineHasCoach = evalSlim.some(e => e.evaluation_mode === 'coach')
   const spineHasEval = evalSlim.length > 0
   const spineBestJudge = spineJudgeScores.length > 0 ? Math.max(...spineJudgeScores) : null
   const spineMaxDraftGen = draftGenerations.length > 0 ? Math.max(...draftGenerations) : 0
@@ -405,12 +404,13 @@ export default function AnglesPage() {
   const spinePressKitStarted = pressKitCount > 0
   const spineAoyCategorySet = directions.some(d => (d.best_category ?? '').trim() !== '')
 
+  // 'refine' removed (B2.3b): no spine step uses that key anymore — see
+  // projects/[id]/page.tsx for the merge rationale, kept byte-identical here.
   const AOY_STEP_TO_TAB: Record<string, ProjectTab> = {
     materials: 'materials',
     jury: 'entries',
     facts: 'facts',
     directions: 'directions',
-    refine: 'entries',
     endorsements: 'endorsements',
     script: 'script',
     presskit: 'presskit',
@@ -426,7 +426,6 @@ export default function AnglesPage() {
       summary: directions.length > 0 ? String(directions.length) : undefined },
     { key: 'angles', label: 'Angles', done: angleTotalCount > 0,
       summary: angleTotalCount > 0 ? String(angleTotalCount) : undefined },
-    { key: 'refine', label: 'Refine', done: spineHasCoach },
     { key: 'endorsements', label: 'Endorsements', done: spineEndorsementsDone },
     { key: 'script', label: 'Script', done: spineScriptDone },
     { key: 'presskit', label: 'Press Kit', done: spinePressKitStarted },
