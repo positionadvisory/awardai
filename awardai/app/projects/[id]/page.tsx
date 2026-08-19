@@ -2067,6 +2067,23 @@ export default function ProjectPage() {
     generateDraft(dirId)
   }, [project, directions, entryForms]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // B2.1 spine parity (19 Aug 2026): /projects/[id]?tab=<key> lets the
+  // angles route's spine (its own route, B2) send the user back to a named
+  // section on THIS page, same one-shot/ref-guarded/history-cleared pattern
+  // as the draftDirection effect just above. The angles page pre-resolves
+  // the spine step key to one of these Tab values itself (its own copy of
+  // the AOY_STEP_TO_TAB mapping below, since it cannot reach this page's
+  // module-local state) — this effect only validates and applies.
+  const tabParamFiredRef = useRef(false)
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab')
+    const validTabs: Tab[] = ['brief', 'materials', 'entries', 'script', 'directions', 'facts', 'endorsements', 'presskit']
+    if (tabParamFiredRef.current || !t || !(validTabs as string[]).includes(t)) return
+    tabParamFiredRef.current = true
+    window.history.replaceState(null, '', window.location.pathname)
+    setTab(t as Tab)
+  }, [])
+
   // Session 76 — AOY category-fit recommender. Resolves the direction's stored
   // best_category to its market-scoped candidate set (lib/aoy-taxonomy.ts owns the
   // scoping, so South Asia / Asia-Pacific Network can never appear), then asks
