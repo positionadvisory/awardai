@@ -10,6 +10,19 @@
 // workspace page gets only the nav entry, the Category Recommender relabel
 // strings, and the per-card cross-link (own-session rule).
 //
+// B2.1 (18 Aug ~21:45 JST, Ben's UX review of the live surface): this route
+// was dropping the project canvas top band (header + ProjectProgressSpine)
+// for a bare "Back to project" link. Angles is a peer-level section of the
+// canvas (decision 4 of record), not a link-out page, so it now renders the
+// SAME header shape and the SAME ProjectProgressSpine component the project
+// page renders — fed by the lightest queries that can honestly answer each
+// step's done-state, never select('*'), never the heavy RPCs the project
+// page's own full workspace needs (get_project_entry_drafts, the wide
+// evaluations select). Spine steps other than Angles navigate to
+// /projects/[id]?tab=<key>, read by a query-param effect on that page
+// (mirrors the B3 draftDirection effect). Angles has no tab of its own on
+// that page — clicking it here is a no-op, it is already the open surface.
+//
 // Contract with the deployed engine (B1, edge fn `generate-angles`):
 //   POST { project_id: STRING, category, material_paths[] }, session ACCESS
 //   TOKEN as Bearer (never the anon key). 200 → { angles: { batch_id,
@@ -24,8 +37,9 @@
 // feeds generation is the user's, and legible.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
 import { appErrorFromResponse, formatError } from '@/lib/errorMessages'
@@ -36,6 +50,60 @@ import AngleCard, { AngleRow } from '@/components/angles/AngleCard'
 import { resolveBridgeShow } from '@/components/angles/angleBridge'
 import { isAoyShow } from '@/lib/aoy-taxonomy'
 import { categoriesForShow } from '@/lib/show-taxonomy'
+import ProjectProgressSpine, { SpineStep } from '@/components/ProjectProgressSpine'
+import { ENDORSEMENT_ITEMS } from '@/components/EndorsementsChecklist'
+
+// Mirrors projects/[id]/page.tsx's exported Tab union as a local literal
+// (not imported — this route should not depend on that page's module
+// graph). Angles has no tab of its own on that page; every OTHER spine step
+// resolves to one of these before navigating.
+type ProjectTab = 'brief' | 'materials' | 'entries' | 'script' | 'directions' | 'facts' | 'endorsements' | 'presskit'
+
+/* ── Avatar dropdown (top-right nav) — duplicated from projects/[id]/page.tsx.
+   It is a local, unexported function there (a page.tsx may not add value
+   exports beyond the allowlist, S161), so duplicating here is the smaller
+   diff versus pulling it into a shared component for one more caller. Keep
+   both copies in sync. ── */
+function AvatarMenu({ email, onSignOut }: { email: string; onSignOut: () => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const initial = (email || '?')[0].toUpperCase()
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-8 h-8 rounded-full bg-green-800 flex items-center justify-center text-white text-xs font-bold hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-600 focus:ring-offset-2"
+        title={email}
+      >
+        {initial}
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 8, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, boxShadow: '0 4px 16px rgba(0,0,0,0.10)', minWidth: 180, zIndex: 50, overflow: 'hidden' }}>
+          <div style={{ padding: '10px 14px', borderBottom: '1px solid #f3f4f6' }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email}</div>
+          </div>
+          <Link href="/settings/account" onClick={() => setOpen(false)} style={{ display: 'block', padding: '10px 14px', fontSize: 14, color: '#374151', textDecoration: 'none' }}
+            className="hover:bg-gray-50 transition-colors">
+            Account settings
+          </Link>
+          <Link href="/settings/team" onClick={() => setOpen(false)} style={{ display: 'block', padding: '10px 14px', fontSize: 14, color: '#374151', textDecoration: 'none', borderTop: '1px solid #f3f4f6' }}
+            className="hover:bg-gray-50 transition-colors">
+            Team
+          </Link>
+          <button onClick={() => { setOpen(false); onSignOut() }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 14px', fontSize: 14, color: '#dc2626', background: 'none', border: 'none', borderTop: '1px solid #f3f4f6', cursor: 'pointer' }}
+            className="hover:bg-red-50 transition-colors">
+            Sign out
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
 
 type ProjectLite = {
   id: number
@@ -43,6 +111,11 @@ type ProjectLite = {
   client_name: string | null
   target_shows: string[] | null
   entry_type: string | null
+  status: string
+  combined_text: string | null
+  script_text: string | null
+  agency_facts: Record<string, unknown> | null
+  endorsements_checklist: Record<string, boolean> | null
 }
 
 // Slim metadata from get_project_materials_meta (Session 52 payload diet):
@@ -61,6 +134,15 @@ type DirectionLite = {
   id: number
   best_show: string | null
   best_category: string | null
+}
+
+// B2.1: scalar-only evaluations read for the spine's Jury Read/Refine and
+// Draft/Evaluated done-states — never scores/output/section_rescores (see
+// the project page's own evaluations select for the heavy version this
+// route deliberately does not need).
+type EvalSlim = {
+  overall_score: number | null
+  evaluation_mode: string | null
 }
 
 const ANGLES_SELECT =
@@ -113,6 +195,13 @@ export default function AnglesPage() {
   const [showGenBar, setShowGenBar] = useState(false)
   const [genError, setGenError] = useState('')
 
+  // B2.1 spine parity: head-only counts / slim scalar selects, fetched
+  // alongside the existing load below. See the comments on that effect.
+  const [angleTotalCount, setAngleTotalCount] = useState(0)
+  const [evalSlim, setEvalSlim] = useState<EvalSlim[]>([])
+  const [draftGenerations, setDraftGenerations] = useState<number[]>([])
+  const [pressKitCount, setPressKitCount] = useState(0)
+
   // Preselect from the query string (the recommender's per-card cross-link
   // arrives as ?category=...). window.location.search in an effect, never
   // useSearchParams (build-time Suspense requirement).
@@ -126,7 +215,7 @@ export default function AnglesPage() {
     let cancelled = false
     Promise.all([
       supabase.from('projects')
-        .select('id, campaign_name, client_name, target_shows, entry_type')
+        .select('id, campaign_name, client_name, target_shows, entry_type, status, combined_text, script_text, agency_facts, endorsements_checklist')
         .eq('id', projectId).single(),
       supabase.rpc('get_project_materials_meta', { p_project_id: projectId }),
       supabase.from('directions')
@@ -139,7 +228,27 @@ export default function AnglesPage() {
         .order('created_at', { ascending: false })
         .order('angle_index', { ascending: true })
         .limit(40),
-    ]).then(([projRes, matsRes, dirsRes, anglesRes]) => {
+      // B2.1 spine parity (19 Aug 2026): the four reads below feed the
+      // spine's done-states and counts ONLY. Head-only count for Angles
+      // itself (the batch list above is capped at 40 rows across all
+      // batches, not an exact total) and for Press Kit (whose real
+      // pressKitStarted state lives in PressKitTab, unreachable from this
+      // route); explicit scalar columns for evaluations and entry_drafts,
+      // never the wide evaluations select or the get_project_entry_drafts
+      // RPC the project page's own full workspace needs.
+      supabase.from('angles')
+        .select('id', { count: 'exact', head: true })
+        .eq('project_id', projectId),
+      supabase.from('evaluations')
+        .select('overall_score, evaluation_mode')
+        .eq('project_id', projectId),
+      supabase.from('entry_drafts')
+        .select('draft_generation')
+        .eq('project_id', projectId),
+      supabase.from('press_kit_drafts')
+        .select('id', { count: 'exact', head: true })
+        .eq('project_id', projectId),
+    ]).then(([projRes, matsRes, dirsRes, anglesRes, angleCountRes, evalRes, draftsRes, pressKitRes]) => {
       if (cancelled) return
       if (projRes.error || !projRes.data) {
         setLoadError('Could not load this project. It may not exist, or you may not have access to it.')
@@ -157,6 +266,10 @@ export default function AnglesPage() {
       setSelectedPaths(sel)
       setDirections(((dirsRes.data as DirectionLite[] | null) ?? []))
       setAnglesRows(((anglesRes.data as AngleRow[] | null) ?? []))
+      setAngleTotalCount(angleCountRes.count ?? 0)
+      setEvalSlim(((evalRes.data as EvalSlim[] | null) ?? []))
+      setDraftGenerations((((draftsRes.data as { draft_generation: number | null }[] | null) ?? [])).map(d => d.draft_generation ?? 1))
+      setPressKitCount(pressKitRes.count ?? 0)
       setFetching(false)
     })
     return () => { cancelled = true }
@@ -209,6 +322,10 @@ export default function AnglesPage() {
       if (rows.length > 0) {
         const sorted = [...rows].sort((a, b) => a.angle_index - b.angle_index)
         setAnglesRows(prev => sorted.concat(prev))
+        // The spine's Angles count reflects the persisted table, not just
+        // this page's capped 40-row read — bump it optimistically so the
+        // step flips to done without waiting on a re-fetch.
+        setAngleTotalCount(prev => prev + rows.length)
       }
     } catch {
       setGenError(formatError({ message: 'Network error. Check your connection and try again.', retryable: true, code: 'ANGLES-NET' }))
@@ -265,20 +382,141 @@ export default function AnglesPage() {
     )
   }
 
+  // ── B2.1 spine parity (19 Aug 2026) ─────────────────────────────────────
+  // Byte-for-byte the same step keys/labels/order as projects/[id]/page.tsx's
+  // aoySpineSteps/campaignSpineSteps, fed by the slim reads above. Verify
+  // Facts is deliberately the SIMPLER of that page's two conditions
+  // (agency_facts / entry_type only — this route skips the people/brand
+  // pillar-facts branch, project_pillar_facts, entirely): the omission can
+  // only ever UNDER-mark a step done, never fabricate a checkmark, the same
+  // rule the design doc applies to figure trace badges (§3).
+  const spineJudgeScores = evalSlim
+    .filter(e => e.evaluation_mode !== 'coach' && e.overall_score !== null && !Number.isNaN(Number(e.overall_score)))
+    .map(e => Number(e.overall_score))
+  const spineHasJudge = spineJudgeScores.length > 0
+  const spineHasCoach = evalSlim.some(e => e.evaluation_mode === 'coach')
+  const spineHasEval = evalSlim.length > 0
+  const spineBestJudge = spineJudgeScores.length > 0 ? Math.max(...spineJudgeScores) : null
+  const spineMaxDraftGen = draftGenerations.length > 0 ? Math.max(...draftGenerations) : 0
+  const spineFactsDone = !!project.agency_facts || project.entry_type === 'aoy'
+  const endorsementsChecklist = (project.endorsements_checklist ?? {}) as Record<string, boolean>
+  const spineEndorsementsDone = ENDORSEMENT_ITEMS.every(i => !!endorsementsChecklist[i.key])
+  const spineScriptDone = !!project.script_text
+  const spinePressKitStarted = pressKitCount > 0
+  const spineAoyCategorySet = directions.some(d => (d.best_category ?? '').trim() !== '')
+
+  const AOY_STEP_TO_TAB: Record<string, ProjectTab> = {
+    materials: 'materials',
+    jury: 'entries',
+    facts: 'facts',
+    directions: 'directions',
+    refine: 'entries',
+    endorsements: 'endorsements',
+    script: 'script',
+    presskit: 'presskit',
+  }
+
+  const aoySpineSteps: SpineStep[] = [
+    { key: 'materials', label: 'Materials', done: materials.length > 0 && spineAoyCategorySet,
+      summary: materials.length > 0 ? String(materials.length) : undefined },
+    { key: 'jury', label: 'Jury Read', done: spineHasJudge,
+      summary: spineBestJudge !== null ? spineBestJudge.toFixed(1) : undefined },
+    { key: 'facts', label: 'Verify Facts', done: spineFactsDone },
+    { key: 'directions', label: 'Category Recommender', done: directions.length > 0,
+      summary: directions.length > 0 ? String(directions.length) : undefined },
+    { key: 'angles', label: 'Angles', done: angleTotalCount > 0,
+      summary: angleTotalCount > 0 ? String(angleTotalCount) : undefined },
+    { key: 'refine', label: 'Refine', done: spineHasCoach },
+    { key: 'endorsements', label: 'Endorsements', done: spineEndorsementsDone },
+    { key: 'script', label: 'Video Script', done: spineScriptDone },
+    { key: 'presskit', label: 'Press Kit', done: spinePressKitStarted },
+  ]
+
+  const campaignSpineSteps: SpineStep[] = [
+    { key: 'brief', label: 'Brief', done: !!(project.combined_text ?? '').trim() },
+    { key: 'materials', label: 'Materials', done: materials.length > 0,
+      summary: materials.length > 0 ? String(materials.length) : undefined },
+    { key: 'directions', label: 'Category Recommender', done: directions.length > 0,
+      summary: directions.length > 0 ? String(directions.length) : undefined },
+    { key: 'angles', label: 'Angles', done: angleTotalCount > 0,
+      summary: angleTotalCount > 0 ? String(angleTotalCount) : undefined },
+    { key: 'draft', label: 'Draft', done: draftGenerations.length > 0,
+      summary: spineMaxDraftGen > 0 ? `Gen ${spineMaxDraftGen}` : undefined },
+    { key: 'evaluated', label: 'Evaluated', done: spineHasEval,
+      summary: spineBestJudge !== null ? spineBestJudge.toFixed(1) : undefined },
+    { key: 'script', label: 'Video Script', done: spineScriptDone },
+    { key: 'presskit', label: 'Press Kit', done: spinePressKitStarted },
+  ]
+
+  const spineSteps: SpineStep[] = projectIsAoy ? aoySpineSteps : campaignSpineSteps
+
+  // Angles has no tab on the project page — it lives on this route, and this
+  // route IS the open surface, so clicking it here is a no-op. Every other
+  // step resolves to a Tab and navigates to /projects/[id]?tab=<key>, read
+  // by that page's tabParamFiredRef effect.
+  const handleSpineStepClick = (step: SpineStep) => {
+    if (step.key === 'angles') return
+    const target: ProjectTab = projectIsAoy
+      ? (AOY_STEP_TO_TAB[step.key] ?? 'materials')
+      : ((step.key === 'draft' || step.key === 'evaluated') ? 'entries' : (step.key as ProjectTab))
+    router.push(`/projects/${projectId}?tab=${target}`)
+  }
+
   return (
     <div className="min-h-screen bg-gray-100 text-gray-900 overflow-x-hidden">
+
+      {/* Header — same shape as projects/[id]/page.tsx's header (B2.1): back
+          link, name, client, status chip, avatar. Name is display-only here;
+          renaming stays on the project page, whose save handler lives there. */}
       <header className="border-b border-gray-200 bg-white py-3 sm:py-4">
-        <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 flex items-center gap-3">
-          <button onClick={() => router.push(`/projects/${projectId}`)} className="text-gray-500 hover:text-gray-900 transition-colors text-sm shrink-0">
-            ← Back to project
-          </button>
-          <span className="text-gray-300 shrink-0">|</span>
-          <div className="min-w-0">
-            <h1 className="sl-serif text-gray-900 leading-tight truncate" style={{ fontSize: '1.15rem', letterSpacing: '-0.01em' }}>{project.campaign_name}</h1>
-            {project.client_name && <p className="text-gray-500 text-xs truncate">{project.client_name}</p>}
+        <div className="w-full max-w-5xl mx-auto px-4 sm:px-6">
+
+          {/* ── Mobile layout: two rows ─────────────────────────────────────── */}
+          <div className="sm:hidden">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <button onClick={() => router.push('/projects')} className="text-gray-500 hover:text-gray-900 transition-colors text-sm">
+                ← Projects
+              </button>
+              <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${
+                project.status === 'active' ? 'bg-green-100 text-green-700' :
+                project.status === 'final' ? 'bg-green-100 text-green-800' :
+                'bg-gray-100 text-gray-500'
+              }`}>{project.status}</span>
+            </div>
+            <div className="min-w-0">
+              <h1 className="sl-serif text-gray-900 leading-tight truncate" style={{ fontSize: '1.15rem', letterSpacing: '-0.01em' }}>{project.campaign_name}</h1>
+              {project.client_name && <p className="text-gray-500 text-xs truncate">{project.client_name}</p>}
+            </div>
           </div>
+
+          {/* ── Desktop layout: single row ──────────────────────────────────── */}
+          <div className="hidden sm:flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <button onClick={() => router.push('/projects')} className="text-gray-500 hover:text-gray-900 transition-colors text-sm shrink-0">
+                ← Projects
+              </button>
+              <span className="text-gray-300 shrink-0">|</span>
+              <div className="min-w-0">
+                <h1 className="sl-serif text-gray-900 leading-tight truncate" style={{ fontSize: '1.15rem', letterSpacing: '-0.01em' }}>{project.campaign_name}</h1>
+                {project.client_name && <p className="text-gray-500 text-xs truncate">{project.client_name}</p>}
+              </div>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                project.status === 'active' ? 'bg-green-100 text-green-700' :
+                project.status === 'final' ? 'bg-green-100 text-green-800' :
+                'bg-gray-100 text-gray-500'
+              }`}>{project.status}</span>
+              <AvatarMenu email={user?.email ?? ''} onSignOut={async () => { await supabase.auth.signOut(); window.location.href = '/login' }} />
+            </div>
+          </div>
+
         </div>
       </header>
+
+      {/* Session 54 spine, B2.1 parity: same component, same props shape the
+          project page feeds it, Angles step active/current on this route. */}
+      <ProjectProgressSpine steps={spineSteps} activeKey="angles" onStepClick={handleSpineStepClick} />
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
         <div className="mb-6">
