@@ -27,6 +27,9 @@ export type SpineStep = {
   label: string        // display label
   done: boolean        // filled (✓) vs empty (○)
   summary?: string     // one-datum summary shown when done, e.g. "4", "Gen 2", "6.8"
+  summary2?: string    // B2.2: second badge, additive only (e.g. latest-eval score
+                        // alongside the Draft step's generation badge). Never shown
+                        // without summary; renders as a second pill.
 }
 
 type Props = {
@@ -68,6 +71,11 @@ export default function ProjectProgressSpine({ steps, activeKey, onStepClick }: 
               {step.done && step.summary && (
                 <span className="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full leading-none">
                   {step.summary}
+                </span>
+              )}
+              {step.done && step.summary2 && (
+                <span className="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full leading-none">
+                  {step.summary2}
                 </span>
               )}
             </button>
