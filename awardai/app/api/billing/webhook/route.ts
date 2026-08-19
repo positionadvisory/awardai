@@ -28,6 +28,31 @@ const GRACE_MS   = GRACE_DAYS * 24 * 60 * 60 * 1000
 
 const BILLING_URL = 'https://gotshortlisted.com/settings/account'
 
+// ── 20 Aug 2026 audit: tier-change-only guard for limit columns ──────────────
+// max_projects (and any similar entitlement column this file writes) is
+// sometimes hand-set away from the plan default for a specific org - e.g. a
+// negotiated seat count recorded on the row, not in code. Every write below
+// used to re-stamp the tier default on ANY event that landed an org on that
+// tier, even one that changed nothing about the tier. Proven: org 36 was
+// manually set to max_projects=5, then a cancel-at-period-end scheduling
+// action fired customer.subscription.updated with status still 'active' -
+// same tier, zero-content change - and it silently overwrote the 5 back to
+// the old pro default. Fix: read the org's CURRENT plan before deciding, and
+// only include max_projects in the update when the tier value in THIS event
+// actually differs from what's already on the row. plan / payment_failed_at
+// / status fields continue to update unconditionally per existing logic.
+async function getOrgPlan(admin: SupabaseClient, orgId: number): Promise<string | null> {
+  const { data } = await admin.from('organizations').select('plan').eq('id', orgId).single()
+  return (data as { plan: string } | null)?.plan ?? null
+}
+
+// Pro plan default project cap - this is what the pricing page sells. Any org
+// with a different cap (WPP Media Vietnam, org 24, at 20) is a recorded
+// per-org exception living in that org's DB row, protected by the guard
+// above. Never add an org_id branch here.
+const PRO_MAX_PROJECTS  = 5
+const FREE_MAX_PROJECTS = 5
+
 // Resolve org_id from an invoice: subscription metadata is the source of truth
 // (set via subscription_data.metadata at checkout). Try the mirrored
 // subscription_details first, fall back to retrieving the subscription.
@@ -150,12 +175,15 @@ export async function POST(req: NextRequest) {
         }
       }
       if (!orgId) break
-      const { error: updErr } = await admin.from('organizations').update({
+      const numericOrgId = parseInt(orgId)
+      const priorPlan = await getOrgPlan(admin, numericOrgId)
+      const update: Record<string, unknown> = {
         plan:               'pro',
         stripe_customer_id: session.customer as string,
-        max_projects:       999,
         payment_failed_at:  null,
-      }).eq('id', parseInt(orgId))
+      }
+      if (priorPlan !== 'pro') update.max_projects = PRO_MAX_PROJECTS
+      const { error: updErr } = await admin.from('organizations').update(update).eq('id', numericOrgId)
       // Throw on update failure so the outer catch releases the idempotency
       // claim and Stripe retries, instead of recording a silent 200 no-op.
       if (updErr) throw new Error(`checkout.session.completed update failed for org ${orgId}: ${updErr.message}`)
@@ -166,24 +194,23 @@ export async function POST(req: NextRequest) {
       const sub   = event.data.object as Stripe.Subscription
       const orgId = sub.metadata?.org_id
       if (!orgId) break
+      const numericOrgId = parseInt(orgId)
 
       if (['active', 'trialing'].includes(sub.status)) {
-        await admin.from('organizations').update({
-          plan:              'pro',
-          max_projects:      999,
-          payment_failed_at: null,
-        }).eq('id', parseInt(orgId))
+        const priorPlan = await getOrgPlan(admin, numericOrgId)
+        const update: Record<string, unknown> = { plan: 'pro', payment_failed_at: null }
+        if (priorPlan !== 'pro') update.max_projects = PRO_MAX_PROJECTS
+        await admin.from('organizations').update(update).eq('id', numericOrgId)
       } else if (sub.status === 'past_due') {
         // Session 49: do NOT downgrade on past_due. Grace is owned by the
         // invoice.payment_failed handler below. Downgrading here was the old
         // instant-cutoff behavior - do not reinstate it.
       } else {
         // canceled / unpaid / incomplete_expired / paused
-        await admin.from('organizations').update({
-          plan:              'free',
-          max_projects:      5,
-          payment_failed_at: null,
-        }).eq('id', parseInt(orgId))
+        const priorPlan = await getOrgPlan(admin, numericOrgId)
+        const update: Record<string, unknown> = { plan: 'free', payment_failed_at: null }
+        if (priorPlan !== 'free') update.max_projects = FREE_MAX_PROJECTS
+        await admin.from('organizations').update(update).eq('id', numericOrgId)
       }
       break
     }
@@ -192,11 +219,11 @@ export async function POST(req: NextRequest) {
       const sub   = event.data.object as Stripe.Subscription
       const orgId = sub.metadata?.org_id
       if (!orgId) break
-      await admin.from('organizations').update({
-        plan:              'free',
-        max_projects:      5,
-        payment_failed_at: null,
-      }).eq('id', parseInt(orgId))
+      const numericOrgId = parseInt(orgId)
+      const priorPlan = await getOrgPlan(admin, numericOrgId)
+      const update: Record<string, unknown> = { plan: 'free', payment_failed_at: null }
+      if (priorPlan !== 'free') update.max_projects = FREE_MAX_PROJECTS
+      await admin.from('organizations').update(update).eq('id', numericOrgId)
       break
     }
 
@@ -221,11 +248,14 @@ export async function POST(req: NextRequest) {
         // Guard: if already free, this is a repeat retry (or a failed initial
         // checkout) - do nothing, especially do not re-send the email.
         if (org.plan === 'free') break
+        // Tier-change guard: org.plan !== 'free' is already proven by the
+        // check above, so this write always represents an actual pro-to-free
+        // transition - max_projects is safe to include unconditionally here.
         // Stamp payment_failed_at (not null) so a later successful retry
         // restores pro via the invoice.paid handler below.
         await admin.from('organizations').update({
           plan:              'free',
-          max_projects:      5,
+          max_projects:      FREE_MAX_PROJECTS,
           payment_failed_at: new Date().toISOString(),
         }).eq('id', orgId)
         await sendOwnerEmail(admin, orgId,
@@ -258,12 +288,13 @@ export async function POST(req: NextRequest) {
         break
       }
 
-      // Subsequent retry failure - enforce grace if expired
+      // Subsequent retry failure - enforce grace if expired. org.plan !== 'free'
+      // is already the tier-change guard here (pro-to-free transition).
       const failedAt = new Date(org.payment_failed_at as string).getTime()
       if (Date.now() - failedAt > GRACE_MS && org.plan !== 'free') {
         await admin.from('organizations').update({
           plan:         'free',
-          max_projects: 5,
+          max_projects: FREE_MAX_PROJECTS,
           // keep payment_failed_at set - cleared on successful payment
         }).eq('id', orgId)
         await sendOwnerEmail(admin, orgId,
@@ -287,17 +318,18 @@ export async function POST(req: NextRequest) {
 
       const { data: org } = await admin
         .from('organizations')
-        .select('payment_failed_at')
+        .select('plan, payment_failed_at')
         .eq('id', orgId)
         .single()
 
-      // Only act when recovering from a failure state - normal renewals no-op
+      // Only act when recovering from a failure state - normal renewals no-op.
+      // Tier-change guard: a grace-period recovery (org stayed 'pro' the whole
+      // time, only payment_failed_at was stamped) is NOT a tier change and
+      // must not touch max_projects.
       if (org?.payment_failed_at) {
-        await admin.from('organizations').update({
-          plan:              'pro',
-          max_projects:      999,
-          payment_failed_at: null,
-        }).eq('id', orgId)
+        const update: Record<string, unknown> = { plan: 'pro', payment_failed_at: null }
+        if (org.plan !== 'pro') update.max_projects = PRO_MAX_PROJECTS
+        await admin.from('organizations').update(update).eq('id', orgId)
       }
       break
     }
@@ -308,11 +340,10 @@ export async function POST(req: NextRequest) {
       if (!invoice.subscription) break
       const orgId = await orgIdFromInvoice(stripe, invoice)
       if (!orgId) break
-      await admin.from('organizations').update({
-        plan:              'free',
-        max_projects:      5,
-        payment_failed_at: null,
-      }).eq('id', orgId)
+      const priorPlan = await getOrgPlan(admin, orgId)
+      const update: Record<string, unknown> = { plan: 'free', payment_failed_at: null }
+      if (priorPlan !== 'free') update.max_projects = FREE_MAX_PROJECTS
+      await admin.from('organizations').update(update).eq('id', orgId)
       break
     }
 
