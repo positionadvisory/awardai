@@ -3586,9 +3586,9 @@ export default function ProjectPage() {
   const aoySpineSteps: SpineStep[] = [
     { key: 'materials', label: 'Materials', done: (project.materials?.length ?? 0) > 0 && spineAoyCategorySet,
       summary: project.materials?.length ? String(project.materials.length) : undefined },
-    { key: 'jury', label: 'Jury Read', done: spineHasJudge,
+    { key: 'jury', label: 'Jury', done: spineHasJudge,
       summary: spineBestJudge !== null ? spineBestJudge.toFixed(1) : undefined },
-    { key: 'facts', label: 'Verify Facts', done: spineFactsDone },
+    { key: 'facts', label: 'Facts', done: spineFactsDone },
     { key: 'directions', label: 'Categories', done: directions.length > 0,
       summary: directions.length > 0 ? String(directions.length) : undefined },
     // Arc v2 B2 (decision 4): Angles sits peer-level beside the recommender so

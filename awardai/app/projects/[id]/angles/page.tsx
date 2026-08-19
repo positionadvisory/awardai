@@ -419,9 +419,9 @@ export default function AnglesPage() {
   const aoySpineSteps: SpineStep[] = [
     { key: 'materials', label: 'Materials', done: materials.length > 0 && spineAoyCategorySet,
       summary: materials.length > 0 ? String(materials.length) : undefined },
-    { key: 'jury', label: 'Jury Read', done: spineHasJudge,
+    { key: 'jury', label: 'Jury', done: spineHasJudge,
       summary: spineBestJudge !== null ? spineBestJudge.toFixed(1) : undefined },
-    { key: 'facts', label: 'Verify Facts', done: spineFactsDone },
+    { key: 'facts', label: 'Facts', done: spineFactsDone },
     { key: 'directions', label: 'Categories', done: directions.length > 0,
       summary: directions.length > 0 ? String(directions.length) : undefined },
     { key: 'angles', label: 'Angles', done: angleTotalCount > 0,
