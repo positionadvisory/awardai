@@ -9,6 +9,7 @@ import GeneratingBar from '@/components/GeneratingBar'
 import ProjectProgressSpine, { SpineStep } from '@/components/ProjectProgressSpine'
 import NextStepCard, { NextStepAction, NextStepOpportunity, NextStepDirectionRef } from '@/components/NextStepCard'
 import DraftChangeSummary from '@/components/DraftChangeSummary'
+import DraftFindings, { type DraftFinding, type HedgedFigure } from '@/components/DraftFindings'
 
 // Workbench (S150): in-flight statements for the legacy per-field Refine box
 // (the campaign / non-workbench path, !wbActive). Mirrors SectionChat's
@@ -620,6 +621,18 @@ export default function ProjectPage() {
   // Track which direction the error belongs to so the Entries-tab card can show
   // its own banner without duplicating it on every evaluation card.
   const [generateDraftErrorDirId, setGenerateDraftErrorDirId] = useState<number | null>(null)
+  // Findings render (23 Aug 2026, entry-room step one): what the fabrication
+  // guard and the NOFACTS relaxation actually returned for the LAST generation
+  // attempt. One attempt at a time by design; reset at the START of the next
+  // run (S79 rule), never in finally. blocked=true carries the 422 findings[];
+  // blocked=false carries the success notice + hedged figures.
+  const [draftFindingsData, setDraftFindingsData] = useState<{
+    dirId: number
+    blocked: boolean
+    findings: DraftFinding[]
+    hedgedFigures: HedgedFigure[]
+    notice: string | null
+  } | null>(null)
   const [generatingForDirectionId, setGeneratingForDirectionId] = useState<number | null>(null)
 
   // Evaluation
@@ -1987,6 +2000,7 @@ export default function ProjectPage() {
     setGeneratingDraft(true)
     setGenerateDraftError('')
     setGenerateDraftErrorDirId(null)
+    setDraftFindingsData(null)
     setGeneratingForDirectionId(directionId)
     try {
       const accessToken = await getToken()
@@ -2031,7 +2045,33 @@ export default function ProjectPage() {
       if (!res.ok || data.error) {
         setGenerateDraftError(formatError(appErrorFromResponse(data, res.status, 'DRAFT')))
         setGenerateDraftErrorDirId(directionId)
+        // Findings render (23 Aug 2026): a 422 from any drafter carries the
+        // guard's findings[] and the hedged-figures list; show them instead of
+        // leaving the user with only the generic banner. Defensive coercion:
+        // older deploys or other error codes carry neither.
+        const blockedFindings: DraftFinding[] = Array.isArray(data.findings)
+          ? (data.findings as unknown[]).filter((f): f is DraftFinding => Boolean(f && typeof (f as DraftFinding).issue === 'string')).map(f => ({ section: String(f.section ?? ''), issue: String(f.issue), detail: String(f.detail ?? '') }))
+          : []
+        const blockedHedged: HedgedFigure[] = Array.isArray(data.hedged_figures)
+          ? (data.hedged_figures as unknown[]).filter((h): h is HedgedFigure => Boolean(h && typeof (h as HedgedFigure).val === 'string')).map(h => ({ val: String(h.val), caveat: String(h.caveat ?? '') }))
+          : []
+        if (blockedFindings.length > 0) {
+          setDraftFindingsData({ dirId: directionId, blocked: true, findings: blockedFindings, hedgedFigures: blockedHedged, notice: null })
+        }
         return
+      }
+      // Findings render (23 Aug 2026): the success payload carries the hedged
+      // figures the guard licensed (use them, keep the caveat) and, since the
+      // NOFACTS relaxation, a notice when the draft was built without validated
+      // agency facts. Show both beside the new draft.
+      {
+        const okHedged: HedgedFigure[] = Array.isArray(data.hedged_figures)
+          ? (data.hedged_figures as unknown[]).filter((h): h is HedgedFigure => Boolean(h && typeof (h as HedgedFigure).val === 'string')).map(h => ({ val: String(h.val), caveat: String(h.caveat ?? '') }))
+          : []
+        const okNotice = typeof data.notice === 'string' && data.notice ? data.notice : null
+        if (okHedged.length > 0 || okNotice) {
+          setDraftFindingsData({ dirId: directionId, blocked: false, findings: [], hedgedFigures: okHedged, notice: okNotice })
+        }
       }
       if (data.entry_drafts?.length) {
         // Append new generation — old drafts remain in state for history display
@@ -4552,6 +4592,9 @@ export default function ProjectPage() {
 
             {generateError && <ErrorBanner error={generateError} />}
             {generateDraftError && <ErrorBanner error={generateDraftError} />}
+            {generateDraftError && draftFindingsData?.blocked && (
+              <DraftFindings blocked findings={draftFindingsData.findings} hedgedFigures={draftFindingsData.hedgedFigures} />
+            )}
 
             {!project.combined_text && !(project.materials || []).some(materialHasText) && directions.length === 0 && (
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
@@ -4928,6 +4971,15 @@ export default function ProjectPage() {
                             current={fields.map(f => ({ key: f.field_key || f.field_label || String(f.id), label: f.field_label || f.field_key || 'Section', text: resolveFieldContent(f) }))}
                             previous={(historyByGen[historyGens[0]] ?? []).map(f => ({ key: f.field_key || f.field_label || String(f.id), label: f.field_label || f.field_key || 'Section', text: resolveFieldContent(f) }))}
                           />
+                        )}
+
+                        {/* Findings render (23 Aug 2026, entry-room step one): the
+                            guard's own output for the draft just generated. On
+                            success: the hedged figures it licensed plus the NOFACTS
+                            notice. Sits with DraftChangeSummary at the top of
+                            sxsEditSurface so it covers all four layout paths. */}
+                        {draftFindingsData && !draftFindingsData.blocked && draftFindingsData.dirId === dirId && (
+                          <DraftFindings blocked={false} findings={draftFindingsData.findings} hedgedFigures={draftFindingsData.hedgedFigures} notice={draftFindingsData.notice} />
                         )}
 
                         {/* AOY page-budget meter (Session 74) — AOY entries only.
@@ -5785,6 +5837,9 @@ export default function ProjectPage() {
                                   </p>
                                   {generateDraftError && generateDraftErrorDirId === dirId && (
                                     <div className="mt-3"><ErrorBanner error={generateDraftError} /></div>
+                                  )}
+                                  {generateDraftError && generateDraftErrorDirId === dirId && draftFindingsData?.blocked && draftFindingsData.dirId === dirId && (
+                                    <div className="mt-3"><DraftFindings blocked findings={draftFindingsData.findings} hedgedFigures={draftFindingsData.hedgedFigures} /></div>
                                   )}
                                 </div>
                               }
