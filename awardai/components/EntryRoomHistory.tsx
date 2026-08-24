@@ -34,6 +34,12 @@ export type MinimalDraftField = {
   field_label: string
   section_weight?: number | null
   text: string // already resolved by the page's resolveFieldContent
+  // Entry Room slice 2d (24 Aug 2026): the drafter's own generation-time
+  // change note for this section, when this version's row carried one.
+  // Optional/nullable -- absent on every version predating this column
+  // (100% of existing history at deploy time), on gen 1, and whenever the
+  // drafter had nothing to ground a note in. DISPLAY CONTEXT ONLY.
+  changeNote?: string | null
 }
 
 export type MinimalEvaluation = {
@@ -126,6 +132,17 @@ export function ReadOnlyVersionFields({ fields, sectionScores, diffByKey, inline
               )}
               {score != null && (
                 <span className={`text-xs font-semibold rounded-full px-2 py-0.5 border flex-shrink-0 ${scoreBg(score)} ${scoreColor(score)}`}>{score}/10</span>
+              )}
+              {/* Slice 2d: small note affordance on the card header, title-only
+                  (no extra state) -- absent entirely when this version predates
+                  the column, which is the deliberate empty-state floor. */}
+              {f.changeNote && (
+                <span
+                  className="text-xs px-1.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 font-medium flex-shrink-0 cursor-help"
+                  title={f.changeNote}
+                >
+                  note
+                </span>
               )}
             </div>
             {f.text ? (

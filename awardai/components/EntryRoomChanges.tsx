@@ -58,6 +58,14 @@ export type WhatChangedSection = {
   key: string
   label: string
   text: string
+  // Entry Room "computed diff" arc, slice 2d (24 Aug 2026): the drafter's own
+  // generation-time explanation of why THIS section changed vs the previous
+  // generation, sourced only from feedback/gap context already in that
+  // generation's prompt (see entry_drafts.change_note). Optional/nullable:
+  // absent on gen 1, on any pre-2d generation, and whenever the drafter had
+  // nothing to ground a note in. DISPLAY CONTEXT ONLY -- never read by any
+  // scorer/eval, never used in diff computation itself.
+  changeNote?: string | null
 }
 
 export type ChangeStatus = 'new' | 'removed' | 'rewritten' | 'unchanged'
@@ -107,6 +115,12 @@ export type SectionChangeRow = {
   // fake ±word-count line or confetti marks.
   substantiallyRewritten: boolean
   diff: SectionDiffResult | null
+  // Entry Room slice 2d: the CURRENT generation's own change_note for this
+  // section, carried through from WhatChangedSection.changeNote. Only ever
+  // set on 'new' or 'rewritten' rows (there is a current-generation section
+  // to explain); 'unchanged' and 'removed' rows never carry one. DISPLAY
+  // CONTEXT ONLY.
+  changeNote?: string | null
 }
 
 function toWords(text: string): string[] {
@@ -524,6 +538,7 @@ export function computeSectionChanges(
         diff: computeTokenDiff
           ? { blocks: wrapOpsAsBlocks(diffTokenSequences([], tokenize(cur.text))), rewritten: false, prevText: null }
           : null,
+        changeNote: cur.changeNote ?? null,
       })
       continue
     }
@@ -543,6 +558,7 @@ export function computeSectionChanges(
       changedPct,
       substantiallyRewritten,
       diff: computeTokenDiff ? computeSectionDiff(prev.text, cur.text, substantiallyRewritten) : null,
+      changeNote: cur.changeNote ?? null,
     })
   }
   for (let i = 0; i < previous.length; i++) {
@@ -625,6 +641,16 @@ export function WhatChangedPanel({
               {(r.status === 'new' || r.status === 'removed') && r.wordDelta !== 0 && (
                 <span className="text-xs text-gray-400 tabular-nums">
                   {r.wordDelta > 0 ? '+' : ''}{r.wordDelta} words
+                </span>
+              )}
+              {/* Slice 2d: the drafter's own generation-time change note, when it
+                  had one to ground. Floor for every row predating this column
+                  (100% of history at deploy time) is simply not rendering this
+                  span -- the existing computed-diff badges above are already a
+                  complete, deliberate-looking row without it. */}
+              {r.changeNote && (
+                <span className="w-full basis-full text-xs text-gray-500 italic mt-0.5">
+                  {r.changeNote}
                 </span>
               )}
             </li>

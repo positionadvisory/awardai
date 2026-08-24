@@ -453,6 +453,15 @@ export type EntryDraft = {
   draft_generation: number       // which generation this draft belongs to (1 = first, 2 = first improvement, etc.)
   sort_order?: number | null
   created_at?: string
+  // Entry Room "computed diff" arc, slice 2d (24 Aug 2026): the drafter's own
+  // generation-time explanation of why THIS section changed on an
+  // improvement generation, sourced only from feedback/gap context already
+  // in that generation's prompt (see get_project_entry_drafts /
+  // entry_drafts.change_note). NULL on gen 1, on any pre-2d generation, on a
+  // static/administrative row, and whenever the drafter had nothing to
+  // ground a note in. DISPLAY CONTEXT ONLY -- never an input to any scorer
+  // or eval, never fed back into a future generation's prompt as fact.
+  change_note?: string | null
 }
 
 export type Evaluation = {
@@ -1405,7 +1414,7 @@ export default function ProjectPage() {
       const keyFor = (f: EntryDraft) => f.field_key || f.field_label || String(f.id)
       const curFields = dirEntries
         .filter(e => (e.draft_generation ?? 1) === activeGen)
-        .map(f => ({ key: keyFor(f), label: f.field_label || f.field_key || 'Section', text: resolveFieldContent(f) }))
+        .map(f => ({ key: keyFor(f), label: f.field_label || f.field_key || 'Section', text: resolveFieldContent(f), changeNote: f.change_note ?? null }))
       const prevFields = dirEntries
         .filter(e => (e.draft_generation ?? 1) === previousGeneration)
         .map(f => ({ key: keyFor(f), label: f.field_label || f.field_key || 'Section', text: resolveFieldContent(f) }))
@@ -5076,6 +5085,7 @@ export default function ProjectPage() {
                       field_label: vf.field_label,
                       section_weight: vf.section_weight,
                       text: resolveFieldContent(vf),
+                      changeNote: vf.change_note ?? null,
                     }))
                     // Per-version eval lookup (re-keyed by generation, not discarded to
                     // maxGen-only like `evaluations`). thisVersionEval is keyed to
@@ -5473,6 +5483,19 @@ export default function ProjectPage() {
                                     {field.section_weight != null && (
                                       <span className="text-xs px-2 py-0.5 rounded-full bg-green-50 border border-green-200 text-green-700 font-medium tabular-nums">
                                         {field.section_weight}% of score
+                                      </span>
+                                    )}
+                                    {/* Entry Room slice 2d (24 Aug 2026): small note affordance,
+                                        title-only tooltip (no extra state). Absent entirely for
+                                        every section predating this column, which is the
+                                        deliberate empty-state floor -- not broken, just no note
+                                        to show yet. */}
+                                    {field.change_note && (
+                                      <span
+                                        className="text-xs px-1.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 font-medium cursor-help"
+                                        title={field.change_note}
+                                      >
+                                        note
                                       </span>
                                     )}
                                     {(field.version_b || field.version_c) && !wbActive && (
