@@ -10,6 +10,10 @@ import ProjectProgressSpine, { SpineStep } from '@/components/ProjectProgressSpi
 import NextStepCard, { NextStepAction, NextStepOpportunity, NextStepDirectionRef } from '@/components/NextStepCard'
 import DraftChangeSummary from '@/components/DraftChangeSummary'
 import DraftFindings, { type DraftFinding, type HedgedFigure } from '@/components/DraftFindings'
+import {
+  VersionSelector, HistoricalViewBanner, ReadOnlyVersionFields, VersionDeltaChip,
+  computeVersionDeltaState, type MinimalDraftField, type MinimalEvaluation,
+} from '@/components/EntryRoomHistory'
 
 // Workbench (S150): in-flight statements for the legacy per-field Refine box
 // (the campaign / non-workbench path, !wbActive). Mirrors SectionChat's
@@ -662,6 +666,13 @@ export default function ProjectPage() {
   // holds explicit user toggles that override the focused-card default.
   const [focusedEntryDirId, setFocusedEntryDirId] = useState<number | null>(null)
   const [entryCardExpanded, setEntryCardExpanded] = useState<Record<number, boolean>>({})
+  // Entry Room Slice 1 (24 Aug 2026) — version selector state: which
+  // generation each direction is VIEWING. null/undefined = current (maxGen).
+  // Per-generation eval lookup, additive alongside `evaluations` (which stays
+  // maxGen-only — everything that already reads `evaluations`/`evalBoth` is
+  // untouched by this). Keyed direction_id -> draft_generation -> mode.
+  const [viewingGen, setViewingGen] = useState<Record<number, number | null>>({})
+  const [evaluationsByGen, setEvaluationsByGen] = useState<Record<number, Record<number, { judge?: Evaluation; coach?: Evaluation }>>>({})
 
   // Phase 2 — field refinement via edit-entry Edge Function
   const [refineMessage, setRefineMessage] = useState<Record<number, string>>({})
@@ -1060,6 +1071,23 @@ export default function ProjectPage() {
         setEvaluations(evalMap)
         setEvalHistory(historyMap)
         setEvalDisplayMode(displayModeMap)
+
+        // Entry Room Slice 1 (24 Aug 2026) — re-key by generation, additive.
+        // Same first-seen-by-created_at-DESC-wins rule as evalMap above, just
+        // never collapsed to only maxGen. Feeds the version selector's
+        // per-version eval lookup (VersionDeltaChip) without touching evalMap/
+        // historyMap or anything that already reads them.
+        const byGen: Record<number, Record<number, { judge?: Evaluation; coach?: Evaluation }>> = {}
+        for (const ev of evals) {
+          const info = draftInfo[ev.entry_draft_id]
+          if (!info) continue
+          const { direction_id, draft_generation } = info
+          const mode: 'judge' | 'coach' = ev.evaluation_mode === 'coach' ? 'coach' : 'judge'
+          if (!byGen[direction_id]) byGen[direction_id] = {}
+          if (!byGen[direction_id][draft_generation]) byGen[direction_id][draft_generation] = {}
+          if (!byGen[direction_id][draft_generation][mode]) byGen[direction_id][draft_generation][mode] = ev
+        }
+        setEvaluationsByGen(byGen)
 
         // Session 52 (P-03): eval_chat_history is no longer in the bulk fetch —
         // backfill it only for the ACTIVE judge eval of each direction (the only
@@ -4951,6 +4979,55 @@ export default function ProjectPage() {
                     const summaryScore = (evalBoth.judge ?? evalBoth.coach)?.overall_score ?? null
                     const dirFit = d?.win_likelihood ?? null
 
+                    // ── Entry Room Slice 1 (24 Aug 2026) — version selector ──────────
+                    // One state per direction (viewingGen), default = maxGen labeled
+                    // "current". allGens covers every generation that has EVER existed
+                    // for this direction, current or historical, so the selector always
+                    // lists the true range even if the user is mid-view on an old one.
+                    const allGens: number[] = Array.from(new Set(allDirEntries.map(e => e.draft_generation ?? 1)))
+                    const activeGen = viewingGen[dirId] ?? maxGen
+                    const isHistorical = activeGen !== maxGen
+                    // historyByGen only holds gens < maxGen (by construction above); the
+                    // current generation's own fields are `fields`.
+                    const viewFields: EntryDraft[] = isHistorical ? (historyByGen[activeGen] ?? []) : fields
+                    const readOnlyFields: MinimalDraftField[] = viewFields.map(vf => ({
+                      id: vf.id,
+                      field_key: vf.field_key,
+                      field_label: vf.field_label,
+                      section_weight: vf.section_weight,
+                      text: resolveFieldContent(vf),
+                    }))
+                    // Per-version eval lookup (re-keyed by generation, not discarded to
+                    // maxGen-only like `evaluations`). thisVersionEval is keyed to
+                    // whichever lens (judge/coach) is currently active for this card.
+                    const genEvalSlot = evaluationsByGen[dirId]?.[activeGen] ?? {}
+                    const thisVersionEval: MinimalEvaluation = genEvalSlot[activeMode] ?? null
+                    // Section-level scores for the version being viewed, keyed by
+                    // field_key — evaluations.scores is keyed by field_key regardless
+                    // of show type (AOY/SMARTIES/config), so this is safe generically.
+                    // Renders NO badge where a section has no score, never a zero.
+                    const viewSectionScores: Record<string, number | null> = {}
+                    for (const vf of viewFields) {
+                      viewSectionScores[vf.field_key] = thisVersionEval?.scores?.[vf.field_key] ?? null
+                    }
+                    // Newest STRICTLY-EARLIER generation that has an eval in this mode —
+                    // may skip generations that were never evaluated at all.
+                    const priorEvaluatedGenNum: number | null = (() => {
+                      const earlier = allGens.filter(g => g < activeGen).sort((a, b) => b - a)
+                      for (const g of earlier) {
+                        if (evaluationsByGen[dirId]?.[g]?.[activeMode]) return g
+                      }
+                      return null
+                    })()
+                    const priorVersionEval: MinimalEvaluation = priorEvaluatedGenNum != null
+                      ? (evaluationsByGen[dirId]?.[priorEvaluatedGenNum]?.[activeMode] ?? null)
+                      : null
+                    const versionDelta = computeVersionDeltaState({
+                      gen: activeGen,
+                      thisEval: thisVersionEval,
+                      priorEvaluatedEval: priorVersionEval,
+                    })
+
                     // S153: extract the movable blocks so one copy can render either the
                     // desktop side-by-side layout or the old single stack (?sxs=0).
                     const sxsEditSurface = (
@@ -6229,6 +6306,19 @@ export default function ProjectPage() {
                             >
                               ← View in Directions
                             </button>
+                            {/* Entry Room Slice 1 (24 Aug 2026) — version selector.
+                                Only shown once a second generation exists; default
+                                (activeGen === maxGen) is unlabeled "current" state. */}
+                            {isExpanded && allGens.length > 1 && (
+                              <div className="ml-6 mt-1.5">
+                                <VersionSelector
+                                  generations={allGens}
+                                  maxGen={maxGen}
+                                  activeGen={activeGen}
+                                  onSelect={(gen) => setViewingGen(prev => ({ ...prev, [dirId]: gen === maxGen ? null : gen }))}
+                                />
+                              </div>
+                            )}
                           </div>
 
                           {/* Right: action buttons — only when expanded; a collapsed
@@ -6498,7 +6588,38 @@ export default function ProjectPage() {
                         {configModeFor(dirId, d?.best_show) && coachingError && coachingForDirectionId === dirId && (
                           <div className="px-5 py-3 border-b border-gray-200"><ErrorBanner error={coachingError} /></div>
                         )}
-                        {sideBySidePreview ? (
+                        {isHistorical ? (
+                          <>
+                            <HistoricalViewBanner
+                              gen={activeGen}
+                              totalGens={allGens.length}
+                              onReturn={() => setViewingGen(prev => ({ ...prev, [dirId]: null }))}
+                            />
+                            <div className="flex flex-col lg:flex-row lg:gap-6 lg:items-start px-5 py-5">
+                              <div className="w-full min-w-0 lg:flex-1">
+                                <ReadOnlyVersionFields fields={readOnlyFields} sectionScores={viewSectionScores} />
+                              </div>
+                              <div className="w-full min-w-0 lg:w-[360px] lg:flex-shrink-0 lg:sticky lg:top-4 lg:self-start">
+                                <div className="bg-white border border-gray-200 rounded-xl p-4">
+                                  <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                                    <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                      {activeMode === 'coach' ? 'Coach review' : 'Jury evaluation'} — v{activeGen}
+                                    </span>
+                                    <VersionDeltaChip state={versionDelta.state} delta={versionDelta.delta} priorGen={priorEvaluatedGenNum} />
+                                  </div>
+                                  {thisVersionEval ? (
+                                    <div className="flex items-baseline gap-2">
+                                      <span className={`text-3xl font-bold tabular-nums ${scoreColor(thisVersionEval.overall_score)}`}>{thisVersionEval.overall_score.toFixed(1)}</span>
+                                      <span className="text-sm text-gray-400">/10</span>
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm text-gray-400">No evaluation was run on this version.</p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </>
+                        ) : sideBySidePreview ? (
                           <>
                             <div className="flex flex-col lg:flex-row lg:gap-6 lg:items-start">
                               <div className="w-full min-w-0 lg:flex-1">
