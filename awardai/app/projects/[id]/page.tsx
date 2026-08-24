@@ -5050,15 +5050,6 @@ export default function ProjectPage() {
                           />
                         )}
 
-                        {/* Findings render (23 Aug 2026, entry-room step one): the
-                            guard's own output for the draft just generated. On
-                            success: the hedged figures it licensed plus the NOFACTS
-                            notice. Sits with DraftChangeSummary at the top of
-                            sxsEditSurface so it covers all four layout paths. */}
-                        {draftFindingsData && !draftFindingsData.blocked && draftFindingsData.dirId === dirId && (
-                          <DraftFindings blocked={false} findings={draftFindingsData.findings} hedgedFigures={draftFindingsData.hedgedFigures} notice={draftFindingsData.notice} />
-                        )}
-
                         {/* AOY page-budget meter (Session 74) — AOY entries only.
                             Words used across the exec summary + weighted sections
                             (the endorsement gate is excluded) vs the 10-page cap. */}
@@ -6151,6 +6142,19 @@ export default function ProjectPage() {
                               </div>
                             )}
                           </div>
+                        )}
+
+                        {/* Findings render (23 Aug 2026, entry-room step one; moved
+                            24 Aug 2026, Entry Room Slice 1b, from sxsEditSurface into
+                            the rail per UX/Entry-Room-Mockup-2026-08-23.html — the
+                            guard's own output belongs beside the jury read, not in the
+                            edit column. Sits OUTSIDE the hasJudge/hasCoach gate above
+                            (as its own sxsEvalTop sibling) because findings from a
+                            freshly generated draft can exist before any evaluation has
+                            run; gating it on an eval would hide it at the moment it
+                            matters most. */}
+                        {draftFindingsData && !draftFindingsData.blocked && draftFindingsData.dirId === dirId && (
+                          <DraftFindings blocked={false} findings={draftFindingsData.findings} hedgedFigures={draftFindingsData.hedgedFigures} notice={draftFindingsData.notice} />
                         )}
                       </>
                     )
