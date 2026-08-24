@@ -26,7 +26,7 @@
 
 import React from 'react'
 import { scoreColor, scoreBg } from './EvalBreakdown'
-import { DiffProse, type DiffOp } from './EntryRoomChanges'
+import { DiffProse, type SectionDiffResult } from './EntryRoomChanges'
 
 export type MinimalDraftField = {
   id: number
@@ -103,7 +103,7 @@ export function ReadOnlyVersionFields({ fields, sectionScores, diffByKey, inline
   // inline-changes toggle state. Both optional and additive -- omitting them
   // renders exactly as before (plain resolved text), so this stays safe for
   // any other caller of this component.
-  diffByKey?: Record<string, DiffOp[] | null>
+  diffByKey?: Record<string, SectionDiffResult | null>
   inlineChangesOn?: boolean
 }) {
   if (fields.length === 0) {
