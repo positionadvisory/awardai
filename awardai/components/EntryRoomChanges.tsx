@@ -100,13 +100,16 @@ function changedShare(a: string[], b: string[]): number {
   return Math.round((1 - common / larger) * 100)
 }
 
-// Guards the O(n*m) LCS table. A section is a paragraph or two -- a few
-// hundred word+space tokens at most in practice. 1600x1600 is ~2.5M Int32
-// cells (~10MB), trivial, and comfortably covers real sections while
-// refusing to build an unbounded table for a pasted wall of text. Above the
-// guard, diff returns null and callers fall back to plain text -- the badge
-// (changedShare-based) still renders regardless, so the floor never breaks.
-const MAX_DIFF_TOKENS = 1600
+// Guards the O(n*m) LCS table. Checked against real org 2 AOY data (24 Aug
+// 2026): the longest section seen was ~1,416 words (~2,830 word+space
+// tokens), so the guard needs real headroom, not just "a paragraph or two."
+// 4000x4000 Uint16Array cells (LCS lengths never exceed min(n,m) <= 4000, so
+// 16 bits is enough) is ~32MB, and the page only ever runs this for the ONE
+// expanded/focused direction (see computeTokenDiff below) -- not every
+// multi-generation direction on the page. Above the guard, diff returns
+// null and callers fall back to plain text -- the badge (changedShare-based)
+// still renders regardless, so the floor never breaks.
+const MAX_DIFF_TOKENS = 4000
 
 // Classic LCS word diff: DP table + backtrack. Index loops only -- no
 // [...new Set()] spread, no for...of over Set/Map, no /u regex (downlevel
@@ -117,8 +120,8 @@ export function diffTokenSequences(prevTokens: string[], curTokens: string[]): D
   if (n > MAX_DIFF_TOKENS || m > MAX_DIFF_TOKENS) return null
   if (n === 0 && m === 0) return []
 
-  const dp: Int32Array[] = new Array(n + 1)
-  for (let i = 0; i <= n; i++) dp[i] = new Int32Array(m + 1)
+  const dp: Uint16Array[] = new Array(n + 1)
+  for (let i = 0; i <= n; i++) dp[i] = new Uint16Array(m + 1)
   for (let i = n - 1; i >= 0; i--) {
     for (let j = m - 1; j >= 0; j--) {
       if (prevTokens[i] === curTokens[j]) {
@@ -190,7 +193,16 @@ function badgeText(status: ChangeStatus): string {
 // handed to it; callers are responsible for picking that one pair (the page
 // memoizes per-direction on [entries, viewingGen] so this only ever runs for
 // the currently-viewed pair per direction, never for every historical pair).
-export function computeSectionChanges(current: WhatChangedSection[], previous: WhatChangedSection[]): SectionChangeRow[] {
+export function computeSectionChanges(
+  current: WhatChangedSection[],
+  previous: WhatChangedSection[],
+  // Entry Room Slice 2: the page computes this for every multi-generation
+  // direction's active pair (cheap: status/wordDelta/changedPct are all
+  // O(n)), but the O(n*m) token-level diff is only worth paying for the
+  // direction actually on screen. Default true so any other caller gets the
+  // full behaviour unless it opts out.
+  computeTokenDiff: boolean = true,
+): SectionChangeRow[] {
   const prevByKey: Record<string, WhatChangedSection> = {}
   for (let i = 0; i < previous.length; i++) prevByKey[previous[i].key] = previous[i]
   const matchedPrevKeys: Record<string, boolean> = {}
@@ -206,7 +218,7 @@ export function computeSectionChanges(current: WhatChangedSection[], previous: W
         status: 'new',
         wordDelta: toWords(cur.text).length,
         changedPct: 100,
-        diff: diffTokenSequences([], tokenize(cur.text)),
+        diff: computeTokenDiff ? diffTokenSequences([], tokenize(cur.text)) : null,
       })
       continue
     }
@@ -223,7 +235,7 @@ export function computeSectionChanges(current: WhatChangedSection[], previous: W
       status: 'rewritten',
       wordDelta: curWords.length - prevWords.length,
       changedPct: changedShare(prevWords, curWords),
-      diff: diffTokenSequences(tokenize(prev.text), tokenize(cur.text)),
+      diff: computeTokenDiff ? diffTokenSequences(tokenize(prev.text), tokenize(cur.text)) : null,
     })
   }
   for (let i = 0; i < previous.length; i++) {

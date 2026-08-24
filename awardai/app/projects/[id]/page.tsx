@@ -1366,7 +1366,26 @@ export default function ProjectPage() {
       const dId = entries[i].direction_id
       if (!seenDir[dId]) { seenDir[dId] = true; dirIds.push(dId) }
     }
+    // Which direction is the "default open" one (mirrors the render loop's
+    // effectiveFocusDirId, S91): the most recently drafted entry, unless the
+    // user explicitly focused another. Collapsed cards never mount their
+    // body (isExpanded && (...) further down), so paying for the O(n*m)
+    // token-level diff on them would be pure waste -- only the direction(s)
+    // actually on screen get it; everything else still gets the cheap
+    // O(n) status/wordDelta/changedPct rows (computeTokenDiff=false).
+    let newestEntryDirId: number | null = null
+    if (entries.length > 0) {
+      let newest = entries[0]
+      for (let i = 1; i < entries.length; i++) {
+        if (new Date(entries[i].created_at ?? 0).getTime() > new Date(newest.created_at ?? 0).getTime()) newest = entries[i]
+      }
+      newestEntryDirId = newest.direction_id
+    }
+    const effectiveFocusDirId = (focusedEntryDirId != null && dirIds.indexOf(focusedEntryDirId) !== -1)
+      ? focusedEntryDirId
+      : newestEntryDirId
     for (const dirId of dirIds) {
+      const isExpandedForDiff = entryCardExpanded[dirId] ?? (dirId === effectiveFocusDirId)
       const dirEntries = entries.filter(e => e.direction_id === dirId)
       if (dirEntries.length === 0) continue
       const maxGen = Math.max(...dirEntries.map(e => e.draft_generation ?? 1))
@@ -1390,10 +1409,10 @@ export default function ProjectPage() {
       const prevFields = dirEntries
         .filter(e => (e.draft_generation ?? 1) === previousGeneration)
         .map(f => ({ key: keyFor(f), label: f.field_label || f.field_key || 'Section', text: resolveFieldContent(f) }))
-      result[dirId] = { rows: computeSectionChanges(curFields, prevFields), generation: activeGen, previousGeneration }
+      result[dirId] = { rows: computeSectionChanges(curFields, prevFields, isExpandedForDiff), generation: activeGen, previousGeneration }
     }
     return result
-  }, [entries, viewingGen])
+  }, [entries, viewingGen, entryCardExpanded, focusedEntryDirId])
 
   // Get current-generation fields for a direction, ordered by sort_order
   const getCurrentDraftFields = (dirId: number): EntryDraft[] => {
