@@ -10,7 +10,7 @@ import ProjectProgressSpine, { SpineStep } from '@/components/ProjectProgressSpi
 import NextStepCard, { NextStepAction, NextStepOpportunity, NextStepDirectionRef } from '@/components/NextStepCard'
 import {
   WhatChangedPanel, FirstVersionNotice, DiffProse, computeSectionChanges,
-  type SectionChangeRow, type DiffOp,
+  type SectionChangeRow, type SectionDiffResult,
 } from '@/components/EntryRoomChanges'
 import DraftFindings, { type DraftFinding, type HedgedFigure } from '@/components/DraftFindings'
 import {
@@ -5116,7 +5116,7 @@ export default function ProjectPage() {
                     // !isHistorical, so activeGen === maxGen here).
                     const curDirChanges = changesByDirection[dirId]
                     const inlineOnHere = !!inlineChangesOn[dirId]
-                    const diffByKeyHere: Record<string, DiffOp[] | null> = {}
+                    const diffByKeyHere: Record<string, SectionDiffResult | null> = {}
                     if (curDirChanges) {
                       for (const r of curDirChanges.rows) diffByKeyHere[r.key] = r.diff
                     }
