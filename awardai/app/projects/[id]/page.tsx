@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useRef, Fragment } from 'react'
+import { useEffect, useState, useRef, useMemo, Fragment } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
@@ -8,7 +8,10 @@ import { useEngagement } from '@/lib/useEngagement'
 import GeneratingBar from '@/components/GeneratingBar'
 import ProjectProgressSpine, { SpineStep } from '@/components/ProjectProgressSpine'
 import NextStepCard, { NextStepAction, NextStepOpportunity, NextStepDirectionRef } from '@/components/NextStepCard'
-import DraftChangeSummary from '@/components/DraftChangeSummary'
+import {
+  WhatChangedPanel, FirstVersionNotice, DiffProse, computeSectionChanges,
+  type SectionChangeRow, type DiffOp,
+} from '@/components/EntryRoomChanges'
 import DraftFindings, { type DraftFinding, type HedgedFigure } from '@/components/DraftFindings'
 import {
   VersionSelector, HistoricalViewBanner, ReadOnlyVersionFields, VersionDeltaChip,
@@ -673,6 +676,14 @@ export default function ProjectPage() {
   // untouched by this). Keyed direction_id -> draft_generation -> mode.
   const [viewingGen, setViewingGen] = useState<Record<number, number | null>>({})
   const [evaluationsByGen, setEvaluationsByGen] = useState<Record<number, Record<number, { judge?: Evaluation; coach?: Evaluation }>>>({})
+
+  // Entry Room Slice 2 (24 Aug 2026) -- inline word-level ins/del toggle, per
+  // direction. Deliberately plain React state, not persisted anywhere: cold
+  // load always starts false (OFF); generateDraft flips it true for the
+  // direction that just generated, so a fresh draft opens with its changes
+  // already highlighted for THIS session only, per the design contract.
+  const [inlineChangesOn, setInlineChangesOn] = useState<Record<number, boolean>>({})
+
 
   // Phase 2 — field refinement via edit-entry Edge Function
   const [refineMessage, setRefineMessage] = useState<Record<number, string>>({})
@@ -1339,6 +1350,69 @@ export default function ProjectPage() {
     if (d.selected === 'c' && d.version_c?.trim()) return d.version_c.trim()
     return d.version_a?.trim() || ''
   }
+
+  // Entry Room Slice 2 -- per-direction "what changed" rows for the ONE
+  // generation pair currently being looked at (current view -> maxGen vs the
+  // nearest earlier generation; a historical view -> the viewed generation vs
+  // ITS nearest earlier generation). Recomputed only when entries or
+  // viewingGen change, and only for the single active pair per direction --
+  // never for every historical pair a direction has ever had. Pure (no
+  // side effects), safe under StrictMode's double-invoke.
+  const changesByDirection = useMemo(() => {
+    const result: Record<number, { rows: SectionChangeRow[]; generation: number; previousGeneration: number | null }> = {}
+    const dirIds: number[] = []
+    const seenDir: Record<number, boolean> = {}
+    for (let i = 0; i < entries.length; i++) {
+      const dId = entries[i].direction_id
+      if (!seenDir[dId]) { seenDir[dId] = true; dirIds.push(dId) }
+    }
+    // Which direction is the "default open" one (mirrors the render loop's
+    // effectiveFocusDirId, S91): the most recently drafted entry, unless the
+    // user explicitly focused another. Collapsed cards never mount their
+    // body (isExpanded && (...) further down), so paying for the O(n*m)
+    // token-level diff on them would be pure waste -- only the direction(s)
+    // actually on screen get it; everything else still gets the cheap
+    // O(n) status/wordDelta/changedPct rows (computeTokenDiff=false).
+    let newestEntryDirId: number | null = null
+    if (entries.length > 0) {
+      let newest = entries[0]
+      for (let i = 1; i < entries.length; i++) {
+        if (new Date(entries[i].created_at ?? 0).getTime() > new Date(newest.created_at ?? 0).getTime()) newest = entries[i]
+      }
+      newestEntryDirId = newest.direction_id
+    }
+    const effectiveFocusDirId = (focusedEntryDirId != null && dirIds.indexOf(focusedEntryDirId) !== -1)
+      ? focusedEntryDirId
+      : newestEntryDirId
+    for (const dirId of dirIds) {
+      const isExpandedForDiff = entryCardExpanded[dirId] ?? (dirId === effectiveFocusDirId)
+      const dirEntries = entries.filter(e => e.direction_id === dirId)
+      if (dirEntries.length === 0) continue
+      const maxGen = Math.max(...dirEntries.map(e => e.draft_generation ?? 1))
+      const gens: number[] = []
+      const seenGen: Record<number, boolean> = {}
+      for (const e of dirEntries) {
+        const g = e.draft_generation ?? 1
+        if (!seenGen[g]) { seenGen[g] = true; gens.push(g) }
+      }
+      const activeGen = viewingGen[dirId] ?? maxGen
+      const earlierGens = gens.filter(g => g < activeGen).sort((a, b) => b - a)
+      const previousGeneration = earlierGens.length > 0 ? earlierGens[0] : null
+      if (previousGeneration == null) {
+        result[dirId] = { rows: [], generation: activeGen, previousGeneration: null }
+        continue
+      }
+      const keyFor = (f: EntryDraft) => f.field_key || f.field_label || String(f.id)
+      const curFields = dirEntries
+        .filter(e => (e.draft_generation ?? 1) === activeGen)
+        .map(f => ({ key: keyFor(f), label: f.field_label || f.field_key || 'Section', text: resolveFieldContent(f) }))
+      const prevFields = dirEntries
+        .filter(e => (e.draft_generation ?? 1) === previousGeneration)
+        .map(f => ({ key: keyFor(f), label: f.field_label || f.field_key || 'Section', text: resolveFieldContent(f) }))
+      result[dirId] = { rows: computeSectionChanges(curFields, prevFields, isExpandedForDiff), generation: activeGen, previousGeneration }
+    }
+    return result
+  }, [entries, viewingGen, entryCardExpanded, focusedEntryDirId])
 
   // Get current-generation fields for a direction, ordered by sort_order
   const getCurrentDraftFields = (dirId: number): EntryDraft[] => {
@@ -2106,6 +2180,12 @@ export default function ProjectPage() {
         setEntries(prev => [...prev, ...data.entry_drafts])
         // Note: evaluations are NOT cleared — they belong to their specific generation rows
         track('draft_generated', { project_id: Number(projectId), direction_id: directionId, generation: data.entry_drafts[0]?.draft_generation ?? null })
+        // Entry Room Slice 2 (24 Aug 2026): a generation that just completed in
+        // THIS session opens with inline changes already ON, across all three
+        // drafter paths (AOY/SMARTIES/config-form all route through this same
+        // generateDraft function, differing only in draftFnName above) — cold
+        // reload always resets to OFF (plain React state, nothing persisted).
+        setInlineChangesOn(prev => ({ ...prev, [directionId]: true }))
       }
       // The newly drafted entry becomes the focused card: first in order,
       // expanded, scrolled to and flashed (justScoredDirId effect). S91 — fixes
@@ -5030,23 +5110,38 @@ export default function ProjectPage() {
 
                     // S153: extract the movable blocks so one copy can render either the
                     // desktop side-by-side layout or the old single stack (?sxs=0).
+                    // Entry Room Slice 2 (24 Aug 2026): this direction's currently-active
+                    // generation pair (maxGen vs its nearest earlier generation on this,
+                    // the non-historical branch — sxsEditSurface only renders when
+                    // !isHistorical, so activeGen === maxGen here).
+                    const curDirChanges = changesByDirection[dirId]
+                    const inlineOnHere = !!inlineChangesOn[dirId]
+                    const diffByKeyHere: Record<string, DiffOp[] | null> = {}
+                    if (curDirChanges) {
+                      for (const r of curDirChanges.rows) diffByKeyHere[r.key] = r.diff
+                    }
                     const sxsEditSurface = (
                       <>
-                        {/* What-changed summary (17 Aug 2026, Joanne Fu call) — renders
-                            directly above the current draft whenever an earlier
-                            generation exists, so a regenerated ("optimized") draft
-                            shows its delta where the transform happened. Reuses the
-                            generation grouping + resolveFieldContent the bottom
-                            compare view already uses; that view is untouched. Sits
-                            at the top of sxsEditSurface so it covers all four
+                        {/* What-changed panel (Entry Room Slice 2, 24 Aug 2026, supersedes
+                            the 17 Aug 2026 DraftChangeSummary) — renders directly above the
+                            current draft whenever an earlier generation exists, so a
+                            regenerated ("optimized") draft shows its delta where the
+                            transform happened. Built from STORED entry_drafts rows
+                            (changesByDirection, memoized on [entries, viewingGen]), so it
+                            survives reload and works identically for AOY, SMARTIES and
+                            config-form directions — it does not care which canvas renders
+                            below. Sits at the top of sxsEditSurface so it covers all four
                             layout paths (workbench on/off, sxs on/off) and the AOY
-                            workbench, config canvas and legacy campaign fields. */}
-                        {historyGens.length > 0 && (historyByGen[historyGens[0]] ?? []).length > 0 && (
-                          <DraftChangeSummary
-                            generation={maxGen}
-                            previousGeneration={historyGens[0]}
-                            current={fields.map(f => ({ key: f.field_key || f.field_label || String(f.id), label: f.field_label || f.field_key || 'Section', text: resolveFieldContent(f) }))}
-                            previous={(historyByGen[historyGens[0]] ?? []).map(f => ({ key: f.field_key || f.field_label || String(f.id), label: f.field_label || f.field_key || 'Section', text: resolveFieldContent(f) }))}
+                            workbench, config canvas and legacy campaign fields. The inline
+                            toggle here also drives the ins/del marks in the legacy
+                            per-field prose further down (diffByKeyHere / inlineOnHere). */}
+                        {curDirChanges && curDirChanges.previousGeneration != null && (
+                          <WhatChangedPanel
+                            generation={curDirChanges.generation}
+                            previousGeneration={curDirChanges.previousGeneration}
+                            rows={curDirChanges.rows}
+                            inlineOn={inlineOnHere}
+                            onToggleInline={() => setInlineChangesOn(prev => ({ ...prev, [dirId]: !prev[dirId] }))}
                           />
                         )}
 
@@ -5476,7 +5571,15 @@ export default function ProjectPage() {
                                     title={wbActive ? undefined : 'Click to edit'}
                                   >
                                     <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-                                      {content || <span className="italic text-gray-400">Not yet generated</span>}
+                                      {content ? (
+                                        <DiffProse
+                                          text={content}
+                                          diff={diffByKeyHere[field.field_key || field.field_label || String(field.id)] ?? null}
+                                          inlineOn={inlineOnHere}
+                                        />
+                                      ) : (
+                                        <span className="italic text-gray-400">Not yet generated</span>
+                                      )}
                                     </p>
                                     {field.custom_text?.trim() && (
                                       <span className="text-xs text-blue-600 font-medium mt-0.5 block">✎ manually edited</span>
@@ -6599,9 +6702,33 @@ export default function ProjectPage() {
                               totalGens={allGens.length}
                               onReturn={() => setViewingGen(prev => ({ ...prev, [dirId]: null }))}
                             />
+                            {/* Entry Room Slice 2 (24 Aug 2026): viewing vK diffs vK against
+                                the nearest generation earlier than vK (not necessarily
+                                maxGen-1) -- curDirChanges already resolves to that pair
+                                because it's keyed off activeGen, which IS vK on this branch.
+                                v1 (curDirChanges.previousGeneration === null) gets the
+                                explicit "first version" state, never an empty/broken panel. */}
+                            {curDirChanges && (
+                              curDirChanges.previousGeneration != null ? (
+                                <WhatChangedPanel
+                                  generation={curDirChanges.generation}
+                                  previousGeneration={curDirChanges.previousGeneration}
+                                  rows={curDirChanges.rows}
+                                  inlineOn={inlineOnHere}
+                                  onToggleInline={() => setInlineChangesOn(prev => ({ ...prev, [dirId]: !prev[dirId] }))}
+                                />
+                              ) : (
+                                <FirstVersionNotice />
+                              )
+                            )}
                             <div className="flex flex-col lg:flex-row lg:gap-6 lg:items-start px-5 py-5">
                               <div className="w-full min-w-0 lg:flex-1">
-                                <ReadOnlyVersionFields fields={readOnlyFields} sectionScores={viewSectionScores} />
+                                <ReadOnlyVersionFields
+                                  fields={readOnlyFields}
+                                  sectionScores={viewSectionScores}
+                                  diffByKey={diffByKeyHere}
+                                  inlineChangesOn={inlineOnHere}
+                                />
                               </div>
                               <div className="w-full min-w-0 lg:w-[360px] lg:flex-shrink-0 lg:sticky lg:top-4 lg:self-start">
                                 <div className="bg-white border border-gray-200 rounded-xl p-4">
