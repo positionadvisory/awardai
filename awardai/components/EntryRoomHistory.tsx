@@ -26,6 +26,7 @@
 
 import React from 'react'
 import { scoreColor, scoreBg } from './EvalBreakdown'
+import { DiffProse, type DiffOp } from './EntryRoomChanges'
 
 export type MinimalDraftField = {
   id: number
@@ -94,9 +95,16 @@ export function HistoricalViewBanner({ gen, totalGens, onReturn }: { gen: number
 
 // ── read-only field cards (no refine, no variant picker, no editing) ────────
 
-export function ReadOnlyVersionFields({ fields, sectionScores }: {
+export function ReadOnlyVersionFields({ fields, sectionScores, diffByKey, inlineChangesOn }: {
   fields: MinimalDraftField[]
   sectionScores?: Record<string, number | null>
+  // Entry Room Slice 2 (24 Aug 2026): per-field_key word-level diff against the
+  // nearest earlier generation to the one being viewed here, and the
+  // inline-changes toggle state. Both optional and additive -- omitting them
+  // renders exactly as before (plain resolved text), so this stays safe for
+  // any other caller of this component.
+  diffByKey?: Record<string, DiffOp[] | null>
+  inlineChangesOn?: boolean
 }) {
   if (fields.length === 0) {
     return (
@@ -121,7 +129,9 @@ export function ReadOnlyVersionFields({ fields, sectionScores }: {
               )}
             </div>
             {f.text ? (
-              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{f.text}</p>
+              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                <DiffProse text={f.text} diff={diffByKey?.[f.field_key || f.field_label || String(f.id)] ?? null} inlineOn={!!inlineChangesOn} />
+              </p>
             ) : (
               <p className="text-sm text-gray-400 italic">Empty</p>
             )}
