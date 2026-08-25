@@ -5380,6 +5380,8 @@ export default function ProjectPage() {
                                   onSaveSection={saveSectionFields}
                                   dirId={dirId}
                                   juryBySection={juryBySection}
+                                  sectionDiffs={diffByKeyHere}
+                                  inlineChangesOn={inlineOnHere}
                                   chatBusyRowId={chatBusyField?.id ?? null}
                                   chatErrors={chatErrors}
                                   onRestoreRevision={restoreConfigRevision}
