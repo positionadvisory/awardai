@@ -45,6 +45,7 @@ import {
   type EntryTableRow,
 } from '@/lib/entry-form'
 import SectionChat, { type ChatTurn } from '@/components/SectionChat'
+import { DiffProse, type SectionDiffResult } from './EntryRoomChanges'
 
 // Workbench-for-SMARTIES wave 1 (S151). A revision entry for the TYPED canvas.
 // Unlike the AOY SectionRevision (free text only), this ALSO snapshots
@@ -113,6 +114,12 @@ interface ConfigEntryCanvasProps {
     rowId: number,
     revisionIndex: number
   ) => Promise<{ fieldValues: EntryFieldValues; composedText: string } | null>
+  /** Slice 2f (25 Aug 2026): per-section word diff vs the previous generation,
+   * computed by the page (computeSectionChanges over the COMPOSED text), keyed
+   * by section.key. Optional: absent => canvas renders exactly as before. */
+  sectionDiffs?: Record<string, SectionDiffResult | null>
+  /** Mirrors the What Changed panel's "Inline changes" toggle. */
+  inlineChangesOn?: boolean
 }
 
 // Stable id for a new list item (see the §10 decision). Short + collision-safe
@@ -167,6 +174,7 @@ function revShortTs(ts: string): string {
 export default function ConfigEntryCanvas({
   spec, rows, scoringMode, onSaveSection,
   dirId, juryBySection, onSendChat, chatBusyRowId, chatErrors, onRestoreRevision,
+  sectionDiffs, inlineChangesOn,
 }: ConfigEntryCanvasProps) {
   const sections = useMemo(
     () => (spec.sections ?? []).slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
@@ -358,6 +366,25 @@ export default function ConfigEntryCanvas({
             {(section.instructions || section.guidance) && (
               <p className="text-xs text-gray-400 leading-relaxed mb-4">{section.instructions || section.guidance}</p>
             )}
+
+            {/* Slice 2f (25 Aug 2026): inline word diff vs the previous generation,
+                rendered over the COMPOSED section text. The classic prose canvas has
+                had this since slice 2; this canvas never received the diff, so on
+                every v2 config show the What Changed panel promised marks the
+                sections could not paint. Display context only; renders only while
+                the panel's "Inline changes" toggle is ON. */}
+            {inlineChangesOn && sectionDiffs?.[section.key] && (row?.custom_text?.trim() || row?.version_a) ? (
+              <div className="mb-4 rounded-lg border border-yellow-200 bg-yellow-50/40 px-3 py-2.5">
+                <p className="text-xs font-medium text-yellow-800 mb-1.5">What changed in this section</p>
+                <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">
+                  <DiffProse
+                    text={row?.custom_text?.trim() || row?.version_a || ''}
+                    diff={sectionDiffs[section.key] ?? null}
+                    inlineOn
+                  />
+                </p>
+              </div>
+            ) : null}
 
             {legacyProse && (
               <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50/50 px-3 py-2.5">
