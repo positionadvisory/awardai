@@ -6498,6 +6498,22 @@ export default function ProjectPage() {
                               </button>
                             </div>
 
+                            {/* Slice 2e (25 Aug 2026): error surface for the plain Re-Draft.
+                                generateDraft sets generateDraftError + blocked findings for BOTH
+                                buttons, but until now the only render sites lived inside the
+                                evaluation card's improveCtaSlot — a plain Re-Draft that 422'd on
+                                the fabrication gate showed nothing at all (90s spinner, then
+                                idle; found in the 25 Aug demo-seeding session). Same gating as
+                                the improveCtaSlot copy; both can render if the eval rail is open,
+                                which is acceptable duplication vs a silent failure. State clears
+                                on the next generateDraft call. */}
+                            {generateDraftError && generateDraftErrorDirId === dirId && (
+                              <div className="w-full max-w-md"><ErrorBanner error={generateDraftError} /></div>
+                            )}
+                            {generateDraftError && generateDraftErrorDirId === dirId && draftFindingsData?.blocked && draftFindingsData.dirId === dirId && (
+                              <div className="w-full max-w-md"><DraftFindings blocked findings={draftFindingsData.findings} hedgedFigures={draftFindingsData.hedgedFigures} /></div>
+                            )}
+
                             {/* Row 2 — Share Draft + Share Eval (downloads) */}
                             {((d && getCurrentDraftFields(dirId).length > 0) || (evaluation && d)) && (
                             <div className="flex items-center gap-2 flex-wrap justify-start sm:justify-end">
