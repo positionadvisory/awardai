@@ -701,7 +701,7 @@ export default function EvalBreakdown({
         </div>
       )}
 
-      {/* Fix-this chips — user selects which issues to prioritise */}
+      {/* Fix-this chips — user selects which issues to prioritize */}
       {fixChips && (() => {
         const chipItems = deriveFixChipItems(evaluation)
         if (chipItems.length === 0) return null
@@ -737,7 +737,7 @@ export default function EvalBreakdown({
               })}
             </div>
             {selected.length > 0 && (
-              <p className="text-xs text-green-700 mt-2">{selected.length} issue{selected.length > 1 ? 's' : ''} selected — the draft will prioritise these above all others.</p>
+              <p className="text-xs text-green-700 mt-2">{selected.length} issue{selected.length > 1 ? 's' : ''} selected — the draft will prioritize these above all others.</p>
             )}
             </>)}
           </div>
