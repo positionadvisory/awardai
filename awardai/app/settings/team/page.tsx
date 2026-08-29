@@ -1,5 +1,18 @@
 'use client'
 // Deploy to: app/settings/team/page.tsx
+//
+// 29 Aug 2026 (INVITE-PATH-REPAIR, second PR / R4). The success card here told
+// the sender to "copy this link and send it to them", which was true for the
+// whole life of the feature because the email was a stub. PR #93 made the send
+// real, so that instruction became a false one: the colleague already has the
+// email by the time this renders, and an owner following the copy would send a
+// second copy of a link that had already arrived.
+//
+// /api/invite/create now returns `emailed` and, when delivery failed, an
+// `emailWarning`. This page reads both, so it reports what actually happened
+// rather than one hardcoded outcome. The copy-link path stays, demoted to a
+// secondary action on the success case and promoted back to the primary
+// instruction on the degraded one, which is exactly when it is needed.
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -44,6 +57,13 @@ export default function TeamSettingsPage() {
   const [inviting,    setInviting]    = useState(false)
   const [inviteLink,  setInviteLink]  = useState('')
   const [inviteError, setInviteError] = useState('')
+  // What actually happened on the last invite, for honest confirmation copy.
+  const [invitedTo,    setInvitedTo]    = useState('')
+  const [invitedSent,  setInvitedSent]  = useState(false)
+  const [inviteWarning, setInviteWarning] = useState('')
+  const [inviteResent, setInviteResent] = useState(false)
+  const [linkCopied,   setLinkCopied]   = useState(false)
+  const [showLink,     setShowLink]     = useState(false)
 
   // ── Redirect if not logged in ─────────────────────────────────────────
   useEffect(() => {
@@ -102,6 +122,11 @@ export default function TeamSettingsPage() {
     setInviting(true)
     setInviteError('')
     setInviteLink('')
+    setInviteWarning('')
+    setInvitedSent(false)
+    setInviteResent(false)
+    setLinkCopied(false)
+    setShowLink(false)
     try {
       const { data: { session } } = await supabase.auth.getSession()
       const token = session?.access_token
@@ -119,6 +144,13 @@ export default function TeamSettingsPage() {
       if (!res.ok) { setInviteError(data.error ?? 'Invite failed'); return }
 
       setInviteLink(data.link)
+      // `emailed` is absent on any older deploy of the route; treat that as a
+      // failed send rather than claiming one, so the copy can only understate.
+      setInvitedSent(data.emailed === true)
+      setInviteWarning(data.emailWarning ?? '')
+      setInviteResent(data.note === 'Existing pending invite')
+      setInvitedTo(inviteEmail.trim().toLowerCase())
+      setShowLink(data.emailed !== true)
       setInviteEmail('')
       fetchTeam()
     } catch {
@@ -217,28 +249,79 @@ export default function TeamSettingsPage() {
               <p style={{ color: '#dc2626', fontSize: 13, marginTop: 10 }}>{inviteError}</p>
             )}
 
-            {/* Invite link — copy & share manually until email is wired up */}
+            {/* Result of the last invite. Reports the real outcome: the email
+                either went or it did not, and the copy-link fallback is
+                foregrounded only in the case where it is the actual remedy. */}
             {inviteLink && (
-              <div style={{ marginTop: 14, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '12px 14px' }}>
-                <p style={{ fontSize: 13, color: '#15803d', fontWeight: 600, marginBottom: 6 }}>
-                  ✓ Invite created — copy this link and send it to them:
-                </p>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <code style={{ flex: 1, fontSize: 12, color: '#374151', wordBreak: 'break-all', background: '#fff', padding: '6px 10px', borderRadius: 6, border: '1px solid #d1fae5' }}>
-                    {inviteLink}
-                  </code>
+              <div style={{
+                marginTop: 14,
+                background: invitedSent ? '#f0fdf4' : '#fffbeb',
+                border: invitedSent ? '1px solid #bbf7d0' : '1px solid #fde68a',
+                borderRadius: 8,
+                padding: '12px 14px',
+              }}>
+                {invitedSent ? (
+                  <>
+                    <p style={{ fontSize: 13, color: '#15803d', fontWeight: 600, margin: 0 }}>
+                      ✓ Invitation {inviteResent ? 're-sent' : 'sent'} to {invitedTo}
+                    </p>
+                    <p style={{ fontSize: 12, color: '#166534', margin: '6px 0 0', lineHeight: 1.6 }}>
+                      They have an email with a link to join {orgName || 'your team'}.
+                      {inviteResent ? ' It carries the same link as before.' : ''}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p style={{ fontSize: 13, color: '#92400e', fontWeight: 600, margin: 0 }}>
+                      Invite created, but the email did not send
+                    </p>
+                    <p style={{ fontSize: 12, color: '#78350f', margin: '6px 0 0', lineHeight: 1.6 }}>
+                      {inviteWarning || 'The invitation is valid. Send this link to them yourself.'}
+                    </p>
+                  </>
+                )}
+
+                {!showLink && (
                   <button
-                    onClick={() => { navigator.clipboard.writeText(inviteLink); }}
-                    style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #bbf7d0', background: '#fff', fontSize: 12, cursor: 'pointer', color: '#15803d', fontWeight: 600, whiteSpace: 'nowrap' }}
+                    onClick={() => setShowLink(true)}
+                    style={{
+                      marginTop: 10, padding: 0, border: 'none', background: 'none',
+                      color: '#15803d', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                      textDecoration: 'underline',
+                    }}
                   >
-                    Copy
+                    Copy the link instead
                   </button>
-                </div>
+                )}
+
+                {showLink && (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10 }}>
+                    <code style={{ flex: 1, fontSize: 12, color: '#374151', wordBreak: 'break-all', background: '#fff', padding: '6px 10px', borderRadius: 6, border: '1px solid #e5e7eb' }}>
+                      {inviteLink}
+                    </code>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(inviteLink)
+                        setLinkCopied(true)
+                        setTimeout(() => setLinkCopied(false), 2000)
+                      }}
+                      style={{
+                        padding: '6px 12px', borderRadius: 6,
+                        border: invitedSent ? '1px solid #bbf7d0' : '1px solid #fde68a',
+                        background: '#fff', fontSize: 12, cursor: 'pointer',
+                        color: invitedSent ? '#15803d' : '#92400e',
+                        fontWeight: 600, whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {linkCopied ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
             <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 12, marginBottom: 0 }}>
-              Links expire after 7 days. The recipient will join your team when they sign up or log in with the invited email.
+              We email the invitation. Links expire after 7 days, and the recipient joins your team when they sign up or log in with the invited address.
             </p>
           </div>
         )}
