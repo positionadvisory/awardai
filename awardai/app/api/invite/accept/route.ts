@@ -164,3 +164,128 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ ok: true, org_id: invitation.org_id })
 }
+
+// ── GET: validate BEFORE the click (R3 + R5) ──────────────────────────────
+//
+// 29 Aug 2026. The invite page used to render "You've been invited to
+// Shortlist / Click below to join your team's workspace" on load without
+// making a single network request (D3: 29 requests, all chunks and fonts).
+// It said that to an expired invite, a used invite, a made-up token, and to
+// someone signed in as the wrong person. The user found out only by clicking
+// and taking a 403 whose copy named the problem and no fix (D4).
+//
+// This GET is the companion the page needed. RLS will not serve invitations
+// to a non-member client-side, so the lookup has to happen on the service
+// role here, exactly as the POST does.
+//
+// It also answers the R5 question: accepting MOVES the caller, because
+// profiles.org_id is scalar. There is one org per user, no join table and no
+// switcher. If the org they are leaving holds projects, the POST deliberately
+// declines to delete it, so it survives with nobody able to reach it. The
+// caller is entitled to know that before clicking, not after.
+//
+// Auth is required. Without it a valid token would disclose the invited
+// address and the org name to anyone who came by the link.
+
+export async function GET(req: NextRequest) {
+  const authHeader = req.headers.get('Authorization') ?? ''
+  const jwt = authHeader.replace('Bearer ', '')
+  if (!jwt) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const userClient = createClient(SUPABASE_URL, ANON_KEY, {
+    global: { headers: { Authorization: authHeader } },
+  })
+  const { data: { user }, error: authError } = await userClient.auth.getUser(jwt)
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const token = req.nextUrl.searchParams.get('token')
+  if (!token) return NextResponse.json({ error: 'Token required' }, { status: 400 })
+
+  const admin = createClient(SUPABASE_URL, SERVICE_KEY)
+  const sessionEmail = (user.email ?? '').toLowerCase()
+
+  const { data: invitation } = await admin
+    .from('invitations')
+    .select('id, org_id, role, email, accepted_at, expires_at')
+    .eq('token', token)
+    .maybeSingle()
+
+  if (!invitation) {
+    return NextResponse.json({ status: 'not_found', sessionEmail })
+  }
+
+  const invitedEmail = (invitation.email ?? '').toLowerCase()
+  const samePerson   = invitedEmail === sessionEmail
+
+  const { data: org } = await admin
+    .from('organizations')
+    .select('name')
+    .eq('id', invitation.org_id)
+    .maybeSingle()
+
+  const base = {
+    invitedEmail,
+    sessionEmail,
+    orgName:   org?.name ?? 'this team',
+    role:      invitation.role,
+    expiresAt: invitation.expires_at,
+  }
+
+  const { data: caller } = await admin
+    .from('profiles')
+    .select('org_id')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  // Mirrors the POST's accepted_at branch: the handle_new_user trigger
+  // consumes the invitation at signup, so an invitee arriving here already
+  // placed is a SUCCESS, not a used link.
+  if (invitation.accepted_at) {
+    if (samePerson && caller?.org_id === invitation.org_id) {
+      return NextResponse.json({ status: 'already_member', ...base })
+    }
+    return NextResponse.json({ status: 'used', ...base })
+  }
+
+  if (new Date(invitation.expires_at) < new Date()) {
+    return NextResponse.json({ status: 'expired', ...base })
+  }
+
+  if (!samePerson) {
+    return NextResponse.json({ status: 'email_mismatch', ...base })
+  }
+
+  // R5. Only a workspace holding projects is worth a warning: an empty
+  // auto-created org is deleted by the POST and nothing is lost.
+  let leavingOrg: { name: string; projectCount: number; memberCount: number } | null = null
+
+  if (caller?.org_id && caller.org_id !== invitation.org_id) {
+    const { count: projectCount } = await admin
+      .from('projects')
+      .select('id', { count: 'exact', head: true })
+      .eq('org_id', caller.org_id)
+
+    if ((projectCount ?? 0) > 0) {
+      const { data: currentOrg } = await admin
+        .from('organizations')
+        .select('name')
+        .eq('id', caller.org_id)
+        .maybeSingle()
+
+      const { count: memberCount } = await admin
+        .from('profiles')
+        .select('id', { count: 'exact', head: true })
+        .eq('org_id', caller.org_id)
+
+      leavingOrg = {
+        name:         currentOrg?.name ?? 'your current workspace',
+        projectCount: projectCount ?? 0,
+        memberCount:  memberCount ?? 0,
+      }
+    }
+  }
+
+  return NextResponse.json({ status: 'ok', ...base, leavingOrg })
+}
