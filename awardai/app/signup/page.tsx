@@ -25,6 +25,7 @@
 
 import { useState, Suspense } from 'react'
 import { supabase } from '@/lib/supabase'
+import { getRedirectParam } from '@/lib/safeRedirect'
 
 /* ── Shared atoms (mirror login-page.tsx / public-landing-page.tsx) ────────── */
 
@@ -160,7 +161,7 @@ function SignupContent() {
 
     // Confirmation OFF: Supabase returns a live session -> straight into the app.
     if (data.session) {
-      window.location.href = '/upgrade'
+      window.location.href = getRedirectParam() ?? '/upgrade'
       return
     }
 
@@ -193,7 +194,7 @@ function SignupContent() {
     }
 
     // Verified and signed in. Review Pro benefits before Stripe.
-    window.location.href = '/upgrade'
+    window.location.href = getRedirectParam() ?? '/upgrade'
   }
 
   const resendCode = async () => {

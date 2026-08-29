@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { getRedirectParam, withRedirect } from '@/lib/safeRedirect'
 
 /* ── Shared atoms (mirrors public-landing-page.tsx) ──────────────────────── */
 
@@ -37,11 +38,15 @@ export default function LoginPage() {
   const [error, setError]             = useState('')
   const [notice, setNotice]           = useState('')
   const [inputFocus, setInputFocus]   = useState<string | null>(null)
+  // Carry ?redirect= onto the signup link: an invitee usually has no account yet,
+  // and losing the param here strands them on /upgrade with the invite abandoned.
+  const [signupHref, setSignupHref]   = useState('/signup')
 
   // On load: surface a friendly message for expired/invalid email links,
   // catch a password-recovery session arriving in the URL, and bounce
   // already-signed-in users straight to the app.
   useEffect(() => {
+    setSignupHref(withRedirect('/signup'))
     const hash = window.location.hash || ''
 
     if (hash.includes('error')) {
@@ -70,7 +75,7 @@ export default function LoginPage() {
       setMode('recovery-set')
     } else {
       supabase.auth.getSession().then(({ data }) => {
-        if (data.session) window.location.href = '/projects'
+        if (data.session) window.location.href = getRedirectParam() ?? '/projects'
       })
     }
 
@@ -92,7 +97,7 @@ export default function LoginPage() {
     e.preventDefault(); setLoading(true); setError(''); setNotice('')
     const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
     if (err) { setError(err.message); setLoading(false); return }
-    window.location.href = '/projects'
+    window.location.href = getRedirectParam() ?? '/projects'
   }
 
   const requestSignInCode = async (e: React.FormEvent) => {
@@ -116,7 +121,7 @@ export default function LoginPage() {
       type:  'email',
     })
     if (err) { setError(err.message); setLoading(false); return }
-    window.location.href = '/projects'
+    window.location.href = getRedirectParam() ?? '/projects'
   }
 
   const requestResetCode = async (e: React.FormEvent) => {
@@ -143,7 +148,7 @@ export default function LoginPage() {
     if (vErr) { setError(vErr.message); setLoading(false); return }
     const { error: uErr } = await supabase.auth.updateUser({ password: newPassword })
     if (uErr) { setError(uErr.message); setLoading(false); return }
-    window.location.href = '/projects'
+    window.location.href = getRedirectParam() ?? '/projects'
   }
 
   // Recovery link landed here and Supabase already opened a recovery session:
@@ -154,7 +159,7 @@ export default function LoginPage() {
     setLoading(true); setError(''); setNotice('')
     const { error: uErr } = await supabase.auth.updateUser({ password: newPassword })
     if (uErr) { setError(uErr.message); setLoading(false); return }
-    window.location.href = '/projects'
+    window.location.href = getRedirectParam() ?? '/projects'
   }
 
   /* ── Field + link helpers ──────────────────────────────────────────────── */
@@ -340,7 +345,7 @@ export default function LoginPage() {
             Don&apos;t have an account?
           </p>
           <a
-            href="/signup"
+            href={signupHref}
             style={{ display: 'inline-block', fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--bone)', textDecoration: 'none', border: '1px solid rgba(245,238,224,0.2)', padding: '10px 24px', transition: 'border-color 180ms ease' }}
             className="sl-mono"
           >
