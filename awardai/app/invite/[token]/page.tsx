@@ -24,7 +24,7 @@ export default function InvitePage() {
         setState('ready')
       } else {
         // Not logged in — send to login with return URL
-        router.replace(`/login?redirect=/invite/${token}`)
+        router.replace(`/login?redirect=${encodeURIComponent(`/invite/${token}`)}`)
       }
     }
     check()
