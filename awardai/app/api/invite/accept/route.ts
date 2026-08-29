@@ -7,6 +7,11 @@
 // Session 51: seat limit re-checked at acceptance (an invite may have been
 // created before the cap existed, or several may be pending at once).
 // Also: the empty-org cleanup now checks for projects before deleting (audit DM-09).
+//
+// 29 Aug 2026 (INVITE-PATH-REPAIR): an invitee who signs up from the link has
+// already been placed in the org by the handle_new_user trigger by the time this
+// route runs, so "already accepted" is the NORMAL outcome for the signup path,
+// not an error. See the accepted_at branch below. Email comparisons lowercased.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
@@ -47,12 +52,40 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invite not found or already used' }, { status: 404 })
   }
   if (invitation.accepted_at) {
+    // 29 Aug 2026. The handle_new_user trigger has an "invited path": on signup
+    // it looks up a pending unexpired invitation for the new email, inserts the
+    // profile straight into the inviting org with the invited role, and stamps
+    // accepted_at, all inside the signup transaction. That runs BEFORE this
+    // route is ever called. So a legitimate invitee who signed up from the link
+    // arrives here already accepted and already placed, and a bare 409 showed
+    // them "This invite has already been used" as the final screen of a join
+    // that had in fact succeeded. Observed end to end on the preview that day.
+    //
+    // Treat that one case as success: same person, already in the invite's org.
+    // A replay by anyone else, or by someone not in that org, still 409s.
+    const { data: caller } = await admin
+      .from('profiles')
+      .select('org_id')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    const samePerson =
+      (invitation.email ?? '').toLowerCase() === (user.email ?? '').toLowerCase()
+
+    if (samePerson && caller?.org_id === invitation.org_id) {
+      return NextResponse.json({
+        ok: true,
+        org_id: invitation.org_id,
+        note: 'Already a member of this team',
+      })
+    }
+
     return NextResponse.json({ error: 'This invite has already been used' }, { status: 409 })
   }
   if (new Date(invitation.expires_at) < new Date()) {
     return NextResponse.json({ error: 'This invite has expired' }, { status: 410 })
   }
-  if (invitation.email !== user.email) {
+  if ((invitation.email ?? '').toLowerCase() !== (user.email ?? '').toLowerCase()) {
     return NextResponse.json({ error: 'This invite was sent to a different email address' }, { status: 403 })
   }
 
