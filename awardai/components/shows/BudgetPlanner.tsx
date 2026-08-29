@@ -431,6 +431,16 @@ export default function BudgetPlanner({ directions, orgId, prefilledShow }: Prop
                               {fit}% fit
                             </span>
                           )}
+                          {/* No published close: a real state, not silence.
+                              Added 29 Aug 2026 alongside the getDeadlineUrgency
+                              split. Without it a show whose close is genuinely
+                              unpublished renders the same as one with months to
+                              run, which is the whole defect. */}
+                          {urgency.level === 'no_published_close' && (
+                            <span className="text-xs px-2 py-0.5 rounded-full border bg-gray-50 text-gray-600 border-gray-200">
+                              No published close
+                            </span>
+                          )}
                           {/* Deadline badge */}
                           {urgency.daysLeft !== null && (
                             <span className={`text-xs px-2 py-0.5 rounded-full border ${

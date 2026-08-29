@@ -91,7 +91,25 @@ export type EntryFeeData = {
   note: string
 }
 
-export type UrgencyLevel = 'critical' | 'tight' | 'prepare' | 'ok' | 'past'
+/**
+ * 29 Aug 2026: 'unknown' and 'no_published_close' added.
+ *
+ * getDeadlineUrgency used to return 'ok' with a null date and an empty message
+ * for THREE different situations: a show with plenty of time, a show this file
+ * has never heard of, and a show whose entry close is genuinely not published.
+ * Rendering the last two as 'ok' is an unearned assurance -- "no data" painted
+ * identically to "plenty of time" -- and it is the same defect the planner's
+ * eligibility roll-up learned twice. Splitting them lets a caller tell the
+ * difference; 'ok' now means only what it says.
+ */
+export type UrgencyLevel =
+  | 'critical'
+  | 'tight'
+  | 'prepare'
+  | 'ok'
+  | 'past'
+  | 'unknown'             // no row in DEADLINES_2026 for this show name
+  | 'no_published_close'  // row exists; the show publishes no entry deadline
 
 export type DeadlineUrgency = {
   level: UrgencyLevel
@@ -331,10 +349,10 @@ export const DEADLINES_2026: ShowDeadline[] = [
   },
   {
     show: 'Eurobest', region: 'Europe',
-    finalDate: '', juryDate: '', ceremonyDate: '',
-    earlyBird: 'Typically ~14 Aug (based on 2025)', standard: '', final: 'Typically ~16 Oct — 2026 date not yet published', ceremony: 'Typically ~early Dec (2025: 4 Dec); 2026 date TBC',
-    note: 'Added 17 Jul 2026 (surfaced prepping the Lorenz Langgartner/Serviceplan sales call — Eurobest + Epica had show_profiles but no deadline row, blocking Full Prep). Live-checked eurobest.com/support/dates-and-fees 17 Jul 2026: page still serves "Eurobest 2025 key dates and fees" (entries opened 14 Aug 2025; late fee after 18 Sep; second late fee after 2 Oct; deadline 16 Oct 2025; ceremony 4 Dec 2025) — 2026 dates NOT yet posted, so finalDate/juryDate/ceremonyDate are left blank (empty string = unknown, per file convention) rather than guessed. The month-level framing above is the 2025 cadence only, for planning context — re-check eurobest.com before running Full Prep on this show. Cannes Lions affiliate (Lions by Informa), Europe\'s regional edition. Canonical platform name is "Eurobest" (confirmed live 17 Jul 2026: show_profiles id 57, SHOW_CATEGORIES key, SHOW_KEYWORD_MAP target all agree — no name-drift issue on this show). ⚠️ show_rate_facts ids 29-31 already hold sourced win/shortlist rates (ledger §L11): shortlist_rate 20.00% FESTIVAL_STATED standing, win_rate 9.10%/9.02% SOURCED 2023/2024 — a WIN_RATES-style "Eurobest: 9" figure anywhere in this file would be the known metric-confusion flag (the 9 matches the real win rate, mislabeled as the shortlist rate); confirmed none present in this file as of this edit. No 2026 entry fee published yet either (2025 fee table was per-award, €490–€845 depending on category and deadline tier) — leaving ENTRY_FEES unset until 2026 figures post.',
-    confidence: 'needs_check', lastVerified: '2026-07-17',
+    finalDate: '2026-10-15', juryDate: '', ceremonyDate: '',
+    earlyBird: 'No tier is named early bird. Fee until 17 Sep 2026', standard: 'Fee after 17 Sep 2026; third tier after 1 Oct 2026', final: '15 Oct 2026', ceremony: 'No 2026 ceremony date published',
+    note: 'DATES FILLED 29 Aug 2026 from dynamic_shows row 1, verified 24 Aug 2026 against eurobest.com/support/dates-and-fees (ledger O1a + O2e). Entries OPENED 20 Aug 2026. ENTRY DEADLINE Thu 15 Oct 2026, the only entry deadline on the page. The 17 Sep and 1 Oct dates are FEE-TIER BOUNDARIES printed as the fee table column headers, not deadlines. Withdrawal/refund date 18 Sep 2026, after which no refund; withdrawing on or before refunds the fee minus a EUR165 processing fee. The 5-19 Nov 2026 "authorisation to submit" window is an approvals process, not a materials deadline. Eligibility 1 Aug 2025-30 Sep 2026, which ENDS FIFTEEN DAYS BEFORE entry closes, so work first running in early October is ineligible while entry is still open; not added as an eligibilityWindow here because the source wording for the rule type was not re-read this pass and this file refuses to infer one. Fees per entry across 24 tracks: tier 1 EUR500-700, tier 2 EUR605-805, tier 3 EUR665-865. Organiser page defect, recorded not acted on: the page title still reads "Eurobest 2025 key dates and fees" while every body date is 2026. Prior note follows. Added 17 Jul 2026 (surfaced prepping the Lorenz Langgartner/Serviceplan sales call — Eurobest + Epica had show_profiles but no deadline row, blocking Full Prep). Live-checked eurobest.com/support/dates-and-fees 17 Jul 2026: page still serves "Eurobest 2025 key dates and fees" (entries opened 14 Aug 2025; late fee after 18 Sep; second late fee after 2 Oct; deadline 16 Oct 2025; ceremony 4 Dec 2025) — 2026 dates NOT yet posted, so finalDate/juryDate/ceremonyDate are left blank (empty string = unknown, per file convention) rather than guessed. The month-level framing above is the 2025 cadence only, for planning context — re-check eurobest.com before running Full Prep on this show. Cannes Lions affiliate (Lions by Informa), Europe\'s regional edition. Canonical platform name is "Eurobest" (confirmed live 17 Jul 2026: show_profiles id 57, SHOW_CATEGORIES key, SHOW_KEYWORD_MAP target all agree — no name-drift issue on this show). ⚠️ show_rate_facts ids 29-31 already hold sourced win/shortlist rates (ledger §L11): shortlist_rate 20.00% FESTIVAL_STATED standing, win_rate 9.10%/9.02% SOURCED 2023/2024 — a WIN_RATES-style "Eurobest: 9" figure anywhere in this file would be the known metric-confusion flag (the 9 matches the real win rate, mislabeled as the shortlist rate); confirmed none present in this file as of this edit. No 2026 entry fee published yet either (2025 fee table was per-award, €490–€845 depending on category and deadline tier) — leaving ENTRY_FEES unset until 2026 figures post.',
+    confidence: 'verified', lastVerified: '2026-08-24',
   },
 
   // ── NEEDS CHECK — agent will pause, user must operate manually ──────────────
@@ -376,9 +394,9 @@ export const DEADLINES_2026: ShowDeadline[] = [
   },
   {
     show: 'ICCO Global Awards', region: 'Global',
-    finalDate: '', juryDate: '', ceremonyDate: '',
-    earlyBird: '2026 dates not yet published — 2025 pattern: early bird 25 Jul', standard: '', final: '2026 date TBC — 2025 final was 29 Aug', ceremony: 'Nov 2026 at ICCO Global Summit (city TBC); 2025 was 12 Nov Mumbai',
-    note: 'ICCO Global Awards — annual global PR awards run by ICCO (International Communications Consultancy Organisation), the umbrella federation of 30+ national PR associations. Active since 2015. Open globally — PR consultancies, freelancers, in-house teams, digital agencies, and media owners; ICCO membership not required. Judged purely on effectiveness and results (founding charter). Ceremony held at the ICCO Global Summit (city rotates; 2025 was Mumbai). 30+ categories across campaign, specialist, industry, geographic (Europe / APAC+MEA), and consultancy-performance tracks. Entry fees (2024): €250–500 EUR depending on membership status and deadline tier (early bird €250 member / €350 non-member; final €400 / €500); 2025/2026 fees unconfirmed. Jury: ~20 senior global leaders (2025), diverse EMEA/APAC/LATAM representation. Winner patterns: independent and mid-size consultancies from non-Anglo markets dominate — Lounge Group (Europe), Gambit (AMEA), Netprofile Finland, Kurio. Holding companies do not dominate. Date volatility warning: 2025 entry window moved ~2 months earlier vs 2024 — monitor iccopr.com/global-awards/ for 2026 announcement.',
+    finalDate: '2026-08-28', juryDate: '2026-09-15', ceremonyDate: '2026-11-12',
+    earlyBird: '15 Jun 2026 (PASSED) — EUR250 member / EUR350 non-member', standard: 'No middle tier; two tiers only', final: '28 Aug 2026 — EUR300 member / EUR400 non-member', ceremony: '12 Nov 2026, Milan',
+    note: 'DATES FILLED 29 Aug 2026 from dynamic_shows row 16, verified 28 Aug 2026 by both raw fetch and a rendered browser read of iccoglobal.com/global-awards/. The 2026 cycle CLOSED Fri 28 Aug 2026, so this row is deliberately past-dated rather than blank: a closed cycle with a real date is honest, a blank one reads as no information. Jury evaluation 15-25 Sep 2026 (juryDate holds the phase start). Shortlist 1 Oct 2026. Ceremony 12 Nov 2026, Milan. Fees are TWO tiers only, EUR250-400; the 2024 three-tier table with a EUR400/500 top tier DOES NOT EXIST in 2026. DOMAIN: the canonical page is iccoglobal.com/global-awards/; the old awards.iccopr.com microsite is frozen on the 2024 cycle and still serves 2024 fees, so any scraper keyed on it returns two-cycle-old figures forever. Eligibility Jan 2025-Apr 2026, which ends FOUR MONTHS BEFORE entry closed; not added as an eligibilityWindow because the rule type was not established. Prior note follows. ICCO Global Awards — annual global PR awards run by ICCO (International Communications Consultancy Organisation), the umbrella federation of 30+ national PR associations. Active since 2015. Open globally — PR consultancies, freelancers, in-house teams, digital agencies, and media owners; ICCO membership not required. Judged purely on effectiveness and results (founding charter). Ceremony held at the ICCO Global Summit (city rotates; 2025 was Mumbai). 30+ categories across campaign, specialist, industry, geographic (Europe / APAC+MEA), and consultancy-performance tracks. Entry fees (2024): €250–500 EUR depending on membership status and deadline tier (early bird €250 member / €350 non-member; final €400 / €500); 2025/2026 fees unconfirmed. Jury: ~20 senior global leaders (2025), diverse EMEA/APAC/LATAM representation. Winner patterns: independent and mid-size consultancies from non-Anglo markets dominate — Lounge Group (Europe), Gambit (AMEA), Netprofile Finland, Kurio. Holding companies do not dominate. Date volatility warning: 2025 entry window moved ~2 months earlier vs 2024 — monitor iccopr.com/global-awards/ for 2026 announcement.',
     confidence: 'needs_check', lastVerified: '2026-06-05',
   },
   {
@@ -397,11 +415,11 @@ export const DEADLINES_2026: ShowDeadline[] = [
   },
   {
     show: 'London International Awards', region: 'Global',
-    finalDate: '2026-08-31', juryDate: '2026-09-25', ceremonyDate: '',
+    finalDate: '', juryDate: '2026-09-25', ceremonyDate: '',
     eligibilityWindow: { start: '2025-07-01', end: '2026-08-31', rule: 'FIRST_PUBLICATION', source: 'liaawards.com/enter (rules_for_entry + entry_fees), checked 8 Jul 2026: work first released/published/broadcast 1 Jul 2025-31 Aug 2026. Rule classified FIRST_PUBLICATION 7 Aug 2026 on the source\'s own word "first".' },
-    earlyBird: '30 Apr 2026 (PASSED — 35% off)', standard: '1 May-30 Jun 2026 (20% off)', final: '31 Aug 2026', ceremony: 'No ceremony; results announced 28 Sep–5 Oct 2026 online',
-    note: 'LIA 2026 entries open; judging 25 Sep–3 Oct 2026, Encore @ Wynn Las Vegas. Eligibility: work released 1 Jul 2025–31 Aug 2026. Fee tiers CONFIRMED (checked 8 Jul 2026, liaawards.com/enter/entry_fees): 35% early bird through 30 Apr 2026 (PASSED), 20% discount 1 May-30 Jun 2026, full rate 1 Jul 2026 through close 31 Aug 2026. Full per-medium table live on the site (~28 categories, Package Design lowest at $325/$400/$500 through Entertainment & Content Series highest at $975/$1,200/$1,500 across the three tiers). Change fees: USD 250 per entry (credit/attribution), USD 500 per entry (material changes after lock). Results announced online in stages 28 Sep–5 Oct 2026; "Of The Year" titles ~Nov 2026. No physical gala ceremony. 33 media types for 2026 (27 established + 6 new: Sports, Gaming, Cultural Catalyst, Entertainment & Content, Business Transformation, Democracy and Human Rights). 20 Jury Presidents across categories in 2026 (source: Roastbrief; the previously-listed "180+ jurors including 35+ global CCOs" figure could not be re-verified for 2026 and has been dropped). Genuinely global show — no geographic eligibility restriction. Included in WARC Creative 100 Rankings and Drum World Creative Rankings. Independently owned; founder/president Barbara Levy, chairperson Terry Savage (ex-Cannes Lions CEO, correct title is "Chairperson" not "jury president"). LIA founded 1986 — 2026 is the 40th edition (corrected from "40th anniversary 2025-2026," which was wrong).',
-    confidence: 'verified', lastVerified: '2026-07-08',
+    earlyBird: '30 Apr 2026 (PASSED — 35% off)', standard: '1 May-30 Jun 2026 (20% off)', final: 'No published close. LIA states "until Entry System Closes" and charges no late fee.', ceremony: 'No ceremony; results announced 28 Sep–5 Oct 2026 online',
+    note: '⚠️ finalDate CLEARED 29 Aug 2026. This row carried finalDate 2026-08-31 marked verified, byte-identical to its own eligibilityWindow.end, because the ELIGIBILITY cut-off had been written into the DEADLINE field. The two fields are distinct and this file says so at the EligibilityWindow type. Re-checked live 29 Aug 2026: liaawards.com/enter/rules_for_entry publishes exactly one 31 Aug 2026 date and it is the eligibility bound ("Work released, published or broadcast ... beginning 1st July 2025 through 31st August 2026"); liaawards.com/enter/entry_fees prints the fee ladder as 35% to 30 Apr, 20% 1 May-30 Jun, then "Entry Fees from 1st July 2026 until Entry System Closes" with "No Upload Fees. No Late Fees." No close date is published anywhere on either page. dynamic_shows row 12 reached the same conclusion on 25 Aug and its NULL deadline_date is correct. Consequence of the old value: getDeadlineUrgency returned critical "2 days to deadline" on 29 Aug and would have flipped to "Deadline passed" on 1 Sep while entries were still open, and the same figure reached a customer call and the daily brief as "final entry deadline: Monday, August 31, 2026". LIA 2026 entries open; judging 25 Sep–3 Oct 2026, Encore @ Wynn Las Vegas. Eligibility: work released 1 Jul 2025–31 Aug 2026. Fee tiers CONFIRMED (checked 8 Jul 2026, liaawards.com/enter/entry_fees): 35% early bird through 30 Apr 2026 (PASSED), 20% discount 1 May-30 Jun 2026, full rate 1 Jul 2026 through close 31 Aug 2026. Full per-medium table live on the site (~28 categories, Package Design lowest at $325/$400/$500 through Entertainment & Content Series highest at $975/$1,200/$1,500 across the three tiers). Change fees: USD 250 per entry (credit/attribution), USD 500 per entry (material changes after lock). Results announced online in stages 28 Sep–5 Oct 2026; "Of The Year" titles ~Nov 2026. No physical gala ceremony. 33 media types for 2026 (27 established + 6 new: Sports, Gaming, Cultural Catalyst, Entertainment & Content, Business Transformation, Democracy and Human Rights). 20 Jury Presidents across categories in 2026 (source: Roastbrief; the previously-listed "180+ jurors including 35+ global CCOs" figure could not be re-verified for 2026 and has been dropped). Genuinely global show — no geographic eligibility restriction. Included in WARC Creative 100 Rankings and Drum World Creative Rankings. Independently owned; founder/president Barbara Levy, chairperson Terry Savage (ex-Cannes Lions CEO, correct title is "Chairperson" not "jury president"). LIA founded 1986 — 2026 is the 40th edition (corrected from "40th anniversary 2025-2026," which was wrong).',
+    confidence: 'partial', lastVerified: '2026-08-29',
   },
   {
     show: 'ADFEST', region: 'APAC',
@@ -452,6 +470,41 @@ export const DEADLINES_2026: ShowDeadline[] = [
     note: 'Dedicated site: campaignwomentowatch.com. ⚠️ PAID SUBMISSION — not a free nominations list. Early bird 8 Jun (HKD 3,600), standard 14 Jul (HKD 3,900), final 28 Jul (HKD 4,100). Fees are non-refundable and include one-year Campaign Asia-Pacific membership. Winners announced 6 Oct 2026. Shortlist date not published. Organiser: Campaign Asia-Pacific / Haymarket Asia (wtw@haymarket.asia). Geographic scope: Asia-Pacific; nominees must be based in APAC. ⚠️ Early bird deadline imminent — check each June for opening.',
     confidence: 'verified', lastVerified: '2026-06-03',
   },
+
+  // ── Added 29 Aug 2026 ──────────────────────────────────────────────────────
+  // Three shows that carried a live 2026/27 entry window in dynamic_shows and no
+  // row here at all, so the product showed their entrants no deadline whatsoever
+  // while the cycles were open. Each has a show_profiles row with its show-level
+  // NULL row intact, so each resolves its own judge rather than the generic
+  // six-dimension fallback. Campaign Agency of the Year UK Awards was the fourth
+  // candidate and is deliberately NOT added: it has zero show_profiles rows, so
+  // adding it would hand entrants the generic judge, and it is an AOY show, which
+  // brings the eight-file AOY parity contract into scope. That one is a build.
+
+  {
+    show: 'The Drum Awards Festival', region: 'Global',
+    finalDate: '2026-09-03', juryDate: '', ceremonyDate: '2026-11-30',
+    earlyBird: '11 Jun 2026 (PASSED) — GBP495 + VAT', standard: '30 Jul 2026 — GBP595 + VAT', final: '3 Sep 2026 — GBP714 + VAT (extended tier, current rate)', ceremony: '30 Nov - 3 Dec 2026, The Drum Labs, London (PR night is 3 Dec)',
+    note: 'Added 29 Aug 2026 from dynamic_shows row 4, verified 28 Aug 2026 against thedrumawards.com/live/en/page/faq and /page/terms-and-conditions. Cycle OPEN; the site banner reads "Extended Deadline - Thursday, 3 September, 2026". The earlier 11 Jun and 30 Jul dates were each a real published entry deadline closing its own fee tier; 31 Jul is a FEE-TIER BOUNDARY, not a deadline. Payment cut-off is the entry deadline itself: "Payments must be received by the entry deadline to qualify for judging". Shortlist announced 15 Oct 2026 15:00 BST, held in this note rather than juryDate because a shortlist announcement is not a jury convening date and this file does not file one field as another. PR is a full track with its own jury and its own ceremony night; there is no separate live Drum PR programme (thedrumprawards.com is stale legacy copy reading "now open for 2020"). B2B categories moved out to B2B World Fest. The 2026 PR sub-category list is LOGIN-WALLED and therefore unread, NOT absent; the 2025 awarded set must not be published as 2026. AI DISCLOSURE IS MANDATORY and non-compliance can disqualify: entrants must disclose AI use and "specify the nature and extent of AI involvement and identify any tools used". Amendment fee GBP50 + VAT per request after the deadline; no refunds after it. Ceremony tickets GBP128 + VAT are not an entry cost, do not conflate. Eligibility is CONFLICTED between two organiser sources (FAQ entry rule says campaigns live between September 2025 and September 2026; The Drum news says August 2025), unresolved, so no eligibilityWindow is set here.',
+    confidence: 'verified', lastVerified: '2026-08-28',
+  },
+
+  {
+    show: 'ADCE Awards', region: 'Europe',
+    finalDate: '2026-09-25', juryDate: '', ceremonyDate: '2026-11-20',
+    earlyBird: 'No tiered pricing. Flat per-entry fee, unusual for this class', standard: 'Flat: EUR250 member countries / EUR450 non-member', final: '25 Sep 2026', ceremony: '20 Nov 2026, DHub Barcelona, during ADCE Creative Week',
+    note: 'Added 29 Aug 2026 from dynamic_shows row 23, verified 24 Aug 2026 (ledger O2b). THREE SEPARATE DATES, do not collapse them: entries close Fri 25 Sep 2026; PAYMENT is due 8 Oct 2026; PHYSICAL SUBMISSIONS are due 9 Oct 2026 before 18:00h at the Barcelona office. finalDate holds the entry close only. CITE THE ENTRY PORTAL, NOT THE MARKETING SITE: adceurope.awardhub.org/dates/ prints all four dates with the year, while adceurope.org/awards/ carries only "Entries are now open until September 25th" with no year, which is a surface-choice defect and not a defect in the date. Flat per-entry pricing with no late window: member countries EUR250 standard, EUR200 small agencies up to 10 staff, EUR175 freelancers, EUR125 Ukraine; non-member countries EUR450 / 360 / 315. Plus a 2% card processing fee. Only four national gateway competitions were open as of 13 Aug 2026, and Italy ADCI closes 2 Oct, AFTER ADCE own deadline. The "an ADCE win pays double a national win" line is sourced but scope-bound: the One Club national tier is a closed five-club list (ABS, ADCN, CCA, CCP, LADC) that excludes Hungary, and those are One Club points, not MAKSZ M-Lista points.',
+    confidence: 'verified', lastVerified: '2026-08-24',
+  },
+
+  {
+    show: 'The Indie Awards', region: 'Global',
+    finalDate: '2026-12-03', juryDate: '', ceremonyDate: '2027-01-14',
+    earlyBird: 'Super early bird GBP150 to 26 Sep 2026; early bird GBP250 to 26 Oct 2026', standard: 'GBP350 after 26 Oct 2026', final: '3 Dec 2026 (published; organizer intends an extension to 7 Dec)', ceremony: '14 Jan 2027, The Hickman, London, 17:00-19:00',
+    note: 'Added 29 Aug 2026 from dynamic_shows row 22, verified 27 Aug 2026 against indieawards.global and /how-to-enter-2027. 2027 cycle OPENED 26 Aug 2026. CONFIDENCE IS DELIBERATELY partial, NOT verified, and the reason is the close date rather than the sourcing: 3 Dec 2026 is what the organizer publishes, but Alice Carr at thenetworkone stated by email on 26 Aug 2026 that a pre-planned extension to 7 Dec exists, which is an organizer intention and not a published deadline. The precedent is real: the 2026 cycle published a 3 Dec 2025 close and actually closed 7 Jan 2026, a five-week slip. An extension only ever moves the date LATER, so the published date is a safe floor and is what is stored. Shortlist 5 Jan 2027. thenetworkone members get one free entry. Site defect, do not surface as fact: the published timeline reads "judging starts 10th December 2027", one year off; treat as 2026 for internal planning. Entry fee is intentionally absent from ENTRY_FEES: three conflicting figures exist across cycles and none is promotable until the organizer confirms.',
+    confidence: 'partial', lastVerified: '2026-08-27',
+  },
+
 ]
 
 // ── ENTRY_FEES ────────────────────────────────────────────────────────────────
@@ -516,20 +569,45 @@ export function resolveWinRateKey(name: string | null | undefined): string | nul
  * Get urgency information for a show's upcoming deadline.
  */
 export function getDeadlineUrgency(showName: string | null | undefined): DeadlineUrgency {
-  if (!showName) return { level: 'ok', daysLeft: null, deadlineDate: null, message: '' }
+  if (!showName) {
+    return { level: 'unknown', daysLeft: null, deadlineDate: null, message: 'No show selected.' }
+  }
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
-  const lower = showName.toLowerCase()
-  const show = DEADLINES_2026.find(
-    d =>
-      d.show.toLowerCase() === lower ||
-      d.show.toLowerCase().includes(lower) ||
-      lower.includes(d.show.toLowerCase())
-  )
+  const lower = showName.trim().toLowerCase()
 
-  if (!show || !show.finalDate) return { level: 'ok', daysLeft: null, deadlineDate: null, message: '' }
+  // Exact match FIRST. The matcher used to test all three conditions per element
+  // in array order, so an earlier row that merely CONTAINED the query beat a
+  // later row that equalled it: whichever exact-named show sat lower in the
+  // array lost to any substring neighbour above it. Two passes fixes that
+  // without touching the tolerance the callers rely on.
+  const show =
+    DEADLINES_2026.find(d => d.show.toLowerCase() === lower) ??
+    DEADLINES_2026.find(
+      d =>
+        d.show.toLowerCase().includes(lower) ||
+        lower.includes(d.show.toLowerCase())
+    )
+
+  // Three states that used to be one. See UrgencyLevel.
+  if (!show) {
+    return {
+      level: 'unknown',
+      daysLeft: null,
+      deadlineDate: null,
+      message: `No deadline data on file for "${showName}".`,
+    }
+  }
+  if (!show.finalDate) {
+    return {
+      level: 'no_published_close',
+      daysLeft: null,
+      deadlineDate: null,
+      message: `${show.show} publishes no entry close date. Check the show's own entry page before planning around one.`,
+    }
+  }
 
   const deadline = new Date(show.finalDate + 'T00:00:00')
   const daysLeft = Math.round((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
