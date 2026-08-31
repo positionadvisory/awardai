@@ -73,7 +73,7 @@ function AvatarMenu({ email, onSignOut }: { email: string; onSignOut: () => void
 import ShowsDrawer from '@/components/shows/ShowsDrawer'
 import { MATERIALS_EVAL_STATEMENTS, JURY_EVAL_STATEMENTS, COACH_REVIEW_STATEMENTS } from '@/lib/generatingStatements'
 import { appErrorFromResponse, formatError } from '@/lib/errorMessages'
-import { normaliseKbShow, DEADLINES_2026 } from '@/lib/shows-data'
+import { normaliseKbShow, DEADLINES_2026, KB_SHOW_ALIASES, getDeadlineUrgency } from '@/lib/shows-data'
 import { isAoyShow, AOY_SHOW_NAME, aoyResolveStored, aoyTrackById, buildAoyBestCategory, pillarForKey, normalizeAoyCategory, type AoyPillar } from '@/lib/aoy-taxonomy'
 // Workbench P2 Chunk 1 (S138): source-agnostic section-workbench surface. Rendered
 // read-only behind ?workbench=1 this phase; the write-path cutover is P2 Chunk 4.
@@ -578,6 +578,23 @@ export default function ProjectPage() {
   // Directions generation
   const [generating, setGenerating] = useState(false)
   const [generateError, setGenerateError] = useState('')
+  // Directions the model generated for a show Shortlist does not carry. The
+  // edge function returns these instead of inserting them (see
+  // generate-directions v33): a directions row is the object the whole
+  // downstream pipeline hangs off, so persisting an unsupported show behind a
+  // status column would need a guard in every consumer. They are rendered, not
+  // dropped -- silently returning three cards where four were generated is the
+  // four-no-verdict-states failure, and 27 of the 42 rows this bug produced
+  // named real programmes, so the suppressed content is genuinely useful.
+  type RejectedDirection = {
+    name: string
+    best_show: string
+    best_category: string
+    angle: string
+    reason: 'not_carried' | 'excluded'
+    message: string
+  }
+  const [rejectedDirections, setRejectedDirections] = useState<RejectedDirection[]>([])
   const [geoWarnings, setGeoWarnings] = useState<{ show: string; market: string; rule: string }[]>([])
   const [showGeoWarningModal, setShowGeoWarningModal] = useState(false)
   const [smartDirectionsLoading, setSmartDirectionsLoading] = useState<Record<number, 'alternatives' | 'other_shows' | null>>({})
@@ -1945,7 +1962,7 @@ export default function ProjectPage() {
         dirContextOverride = getEntryDraftContent(dirSourceEntryDirectionId) || undefined
       }
 
-      const body: Record<string, unknown> = { project_id: project.id }
+      const body: Record<string, unknown> = { project_id: project.id, ...showCatalogueForRequest() }
       if (dirContextOverride?.trim()) body.context_override = dirContextOverride
 
       const res = await fetch(
@@ -1962,6 +1979,7 @@ export default function ProjectPage() {
         return
       }
       const newDirs: Direction[] = data.directions || []
+      setRejectedDirections(Array.isArray(data.rejected) ? data.rejected : [])
       setDirections(prev => [...newDirs, ...prev])
       setNewDirectionIds(prev => new Set(Array.from(prev).concat(newDirs.map(d => d.id))))
       if (newDirs.length > 0) track('directions_generated', { project_id: Number(projectId), count: newDirs.length })
@@ -1969,6 +1987,33 @@ export default function ProjectPage() {
       setGenerateError(formatError({ message: 'Network error — check your connection and try again.', retryable: true, code: 'DIR-NET' }))
     } finally { setGenerating(false) }
   }
+
+  // The carried-show catalogue sent to generate-directions and
+  // detect-entry-context. A Deno edge function cannot import lib/, and no DB
+  // table equals DEADLINES_2026, so the catalogue and the alias table ride in on
+  // the request; the edge function keeps a hardcoded exclusion floor that this
+  // cannot widen. See the header comment in edge-functions/generate-directions.ts.
+  //
+  // CANONICAL_SHOWS, not kbShows. kbShows is the PICKER's list and is much
+  // wider: it merges every show name that has ever appeared in the KB corpus
+  // plus the dynamic_shows rows, most of which carry no deadline, no fee and no
+  // category list. Sending it would re-open the hole this closes.
+  //
+  // Plus the project's own target_shows, and that union is load-bearing. The
+  // picker can offer a show that is not in DEADLINES_2026 (the nine
+  // dynamic_shows rows with no deadline data), so a user CAN deliberately target
+  // a show the catalogue alone would reject. Rejecting a direction for a show
+  // the user explicitly chose would be the platform overruling an explicit
+  // choice, which is a worse failure than the one being fixed. The exclusion
+  // floor still applies to a targeted show, because that floor records shows we
+  // have established are not running.
+  // Plain function, not useCallback: it is only ever called inside async
+  // handlers, never passed as a prop, so memoising it would add a dependency
+  // array to keep in sync for no benefit.
+  const showCatalogueForRequest = () => ({
+    canonical_shows: Array.from(new Set([...CANONICAL_SHOWS, ...targetShows.filter(t => t && t.trim())])),
+    show_aliases: KB_SHOW_ALIASES,
+  })
 
   // Generate smart directions from a specific evaluation
   const generateSmartDirections = async (
@@ -1991,6 +2036,7 @@ export default function ProjectPage() {
             project_id: project.id,
             evaluation_id: evaluationId,
             suggest_mode: mode,
+            ...showCatalogueForRequest(),
           }),
         }
       )
@@ -1998,6 +2044,14 @@ export default function ProjectPage() {
       if (!res.ok || data.error) {
         setSmartDirectionsError(prev => ({ ...prev, [directionId]: data.error || `Error ${res.status}` }))
         return
+      }
+      setRejectedDirections(Array.isArray(data.rejected) ? data.rejected : [])
+      // A smart-mode run whose every suggestion was uncarried returns no
+      // directions and a non-empty `rejected`. Land the user on Directions
+      // anyway so the coverage panel is what they see, rather than leaving them
+      // on the evaluation with nothing having visibly happened.
+      if (!data.directions?.length && Array.isArray(data.rejected) && data.rejected.length > 0) {
+        setTab('directions')
       }
       // Prepend new smart directions to top of list and switch to Directions tab
       if (data.directions?.length) {
@@ -2743,7 +2797,7 @@ export default function ProjectPage() {
             'Authorization': `Bearer ${token}`,
             'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
           },
-          body: JSON.stringify({ text }),
+          body: JSON.stringify({ text, ...showCatalogueForRequest() }),
         }
       )
       if (!res.ok) {
@@ -2829,6 +2883,7 @@ export default function ProjectPage() {
             mode: 'suggest_category',
             show,
             candidate_categories: categoriesForShow(show),
+            ...showCatalogueForRequest(),
           }),
         }
       )
@@ -4708,6 +4763,63 @@ export default function ProjectPage() {
             })()}
 
             {generateError && <ErrorBanner error={generateError} />}
+
+            {/* ── Coverage gaps (31 Aug 2026) ───────────────────────────────
+                Directions the model generated for a show Shortlist does not
+                carry. Shown, never silently dropped: returning three cards
+                where four were generated is an unearned assurance, and the
+                angle underneath is real strategic work. The user cannot draft
+                against these, and the panel says so plainly rather than
+                letting them find out two steps later. */}
+            {rejectedDirections.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-amber-900 text-sm font-medium">
+                    {rejectedDirections.length === 1
+                      ? 'One more direction was found, at a show we do not cover yet'
+                      : `${rejectedDirections.length} more directions were found, at shows we do not cover yet`}
+                  </p>
+                  <button
+                    onClick={() => setRejectedDirections([])}
+                    className="text-xs text-amber-700 hover:text-amber-900 transition-colors shrink-0"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+                <p className="text-amber-700 text-xs mt-1">
+                  Shortlist holds no deadlines, fees, categories or jury intelligence for these, so they cannot be drafted or scored here. The thinking is below if it is useful to you.
+                </p>
+                <div className="mt-3 space-y-3">
+                  {rejectedDirections.map((r, i) => (
+                    <div key={`${r.best_show}-${i}`} className="bg-white border border-amber-200 rounded-lg p-3">
+                      <p className="text-gray-900 text-sm font-medium">{r.name || r.best_show}</p>
+                      <p className="text-amber-800 text-sm mt-0.5">
+                        {r.best_show}{r.best_category ? <span className="text-gray-500"> &middot; {r.best_category}</span> : null}
+                      </p>
+                      {r.angle && <p className="text-gray-700 text-sm mt-2">{r.angle}</p>}
+                      <p className="text-gray-500 text-xs mt-2">{r.message}</p>
+                      {r.reason === 'not_carried' && (
+                        <button
+                          onClick={() => {
+                            setShowRequestName(r.best_show)
+                            setShowRequestUrl('')
+                            setShowRequestMarket('')
+                            setShowRequestKitUrl('')
+                            setShowRequestDone(false)
+                            setShowRequestNoKit(false)
+                            setShowRequestModal(true)
+                          }}
+                          className="mt-2 text-xs text-green-700 hover:text-green-600 transition-colors font-medium"
+                        >
+                          Ask us to cover {r.best_show}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {generateDraftError && <ErrorBanner error={generateDraftError} />}
             {generateDraftError && draftFindingsData?.blocked && (
               <DraftFindings blocked findings={draftFindingsData.findings} hedgedFigures={draftFindingsData.hedgedFigures} />
@@ -4801,6 +4913,36 @@ export default function ProjectPage() {
                             {hasEval && dirBestEval && <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${scoreBg(dirBestEval.overall_score)} ${scoreColor(dirBestEval.overall_score)}`}>{dirBestEval.overall_score}/10</span>}
                           </div>
                           {d.best_show && <p className="text-green-700 text-sm mt-0.5">{d.best_show} · <span className="text-gray-500">{d.best_category}</span></p>}
+                          {/* Deadline signal (31 Aug 2026). getDeadlineUrgency has
+                              returned honest 'unknown' and 'no_published_close'
+                              states since 29 Aug, and was called in exactly ONE
+                              component in the whole codebase, which was not this
+                              one: the direction card had no coverage or deadline
+                              signal at all. 'ok' is deliberately not rendered --
+                              a comfortable deadline needs no badge, and the whole
+                              point of the three states is that the two honest
+                              non-answers stop reading as fine. */}
+                          {d.best_show && (() => {
+                            const u = getDeadlineUrgency(d.best_show)
+                            if (u.level === 'ok') return null
+                            const tone =
+                              u.level === 'critical' || u.level === 'past' ? 'bg-red-50 text-red-700 border-red-200'
+                              : u.level === 'tight' ? 'bg-amber-50 text-amber-800 border-amber-200'
+                              : u.level === 'prepare' ? 'bg-blue-50 text-blue-700 border-blue-200'
+                              : 'bg-gray-50 text-gray-600 border-gray-200'
+                            const label =
+                              u.level === 'past' ? 'Deadline passed'
+                              : u.level === 'critical' ? (u.daysLeft === 0 ? 'Closes today' : `${u.daysLeft} days left`)
+                              : u.level === 'tight' ? `${u.daysLeft} days left`
+                              : u.level === 'prepare' ? `${u.daysLeft} days left`
+                              : u.level === 'no_published_close' ? 'No published close'
+                              : 'No deadline on file'
+                            return (
+                              <span className={`inline-block mt-1 text-xs px-2 py-0.5 rounded-full border ${tone}`} title={u.message}>
+                                {label}
+                              </span>
+                            )
+                          })()}
                           {d.hook && <p className="text-gray-700 mt-2 italic" style={{ fontFamily: '"Instrument Serif", "Times New Roman", serif', fontSize: '0.95rem', lineHeight: 1.45 }}>&#8220;{d.hook}&#8221;</p>}
 
                           {/* ── More Openers ── */}
