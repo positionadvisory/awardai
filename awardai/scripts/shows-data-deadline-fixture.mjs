@@ -97,5 +97,66 @@ for (const [name, date] of [
   is(`${name} carries its verified close`, getDeadlineUrgency(name).deadlineDate, date)
 }
 
+// ── NO SUBSTRING CAPTURE (added 31 Aug 2026) ───────────────────────────────
+// The 24 Aug addendum predicted that "a new short show name can silently
+// capture another show's date". It was already live. getDeadlineUrgency's
+// second pass tested `d.show.includes(query) || query.includes(d.show)`, so
+// One Show Indies -- a separately carried show, active in dynamic_shows with
+// its own show_profiles row and a 38-entry category list -- inherited The One
+// Show's 20 Feb 2026 close, and resolveWinRateKey handed it the same show's
+// $625 fee. African Cristal Festival inherited Cristal Festival's row the same
+// way. The substring pass is gone; resolution is exact, then via the alias map
+// (a decision list), and a show we hold no deadline for returns 'unknown'.
+//
+// These assertions exist to stop the substring pass being reintroduced as a
+// "tolerance fix". A LONGER NAME IS A DIFFERENT SHOW until KB_SHOW_ALIASES says
+// otherwise. If one of these starts failing because we genuinely carried the
+// show, delete that line -- do not loosen the matcher.
+const { resolveWinRateKey } = await import(pathToFileURL(src).href)
+
+for (const [longer, mustNotBecome] of [
+  ['One Show Indies', '2026-02-20'],          // The One Show's close
+  ['African Cristal Festival', 'Cristal Festival'],
+]) {
+  const u = getDeadlineUrgency(longer)
+  is(`${longer} does not inherit a neighbour's deadline`, u.level, 'unknown')
+  is(`${longer} exposes no deadline date`, u.deadlineDate, null)
+  void mustNotBecome
+}
+is('One Show Indies is charged no fee it does not have', resolveWinRateKey('One Show Indies'), null)
+is('bare "Festival of Media" picks no FoM programme for the user', getDeadlineUrgency('Festival of Media').level, 'unknown')
+
+// ── The alias map IS the tolerance, and it must carry these ────────────────
+// Every name below was written by generate-directions into a live directions
+// row and resolved to nothing (31 Aug 2026 findings). They are name drift on
+// shows we DO carry, so they must resolve; the shows we do not carry must not.
+for (const [variant, canonical] of [
+  ['Cannes Lions 2026', 'Cannes Lions'],
+  ['Cannes Lions - Film', 'Cannes Lions'],
+  ['Effies', 'Effie APAC'],
+  ['Effie Awards APAC', 'Effie APAC'],
+  ['Asia Pacific Effie Awards', 'Effie APAC'],
+  ['SMARTIES APAC', 'MMA Smarties APAC'],
+  ['MMA Smarties X Global', 'MMA Smarties Global'],
+  ['The One Show', 'One Show'],
+  ['Campaign Asia Agency of the Year Awards', 'Campaign Asia Agency of the Year'],
+  ['Campaign Asia-Pacific Agency of the Year', 'Campaign Asia Agency of the Year'],
+]) {
+  const want = DEADLINES_2026.find(d => d.show === canonical)
+  if (!want) { is(`canonical exists: ${canonical}`, false, true); continue }
+  is(`variant resolves: ${variant} -> ${canonical}`, getDeadlineUrgency(variant).deadlineDate, want.finalDate ?? null)
+}
+
+// ── Shows we do NOT carry must stay uncarried ──────────────────────────────
+// Every one of these is a real programme the model recommended to a real org.
+// They must read 'unknown', never borrow a neighbour's date.
+for (const uncarried of [
+  'MMA Smarties Vietnam', 'MMA Smarties China', 'Festival of Media Global',
+  'WARC Awards for Effectiveness', 'WARC Awards for Asian Strategy',
+  'Clio Health', 'Effies North America', 'Effies EMEA',
+]) {
+  is(`uncarried show reads unknown: ${uncarried}`, getDeadlineUrgency(uncarried).level, 'unknown')
+}
+
 console.log(`\n${fail === 0 ? 'ALL PASS' : fail + ' FAILURES'}   ${pass} assertions, ${DEADLINES_2026.length} rows`)
 process.exit(fail === 0 ? 0 : 1)
