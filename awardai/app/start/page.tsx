@@ -18,6 +18,7 @@ import { useEngagement } from '@/lib/useEngagement'
 import { isAoyShow, AOY_SHOW_NAME } from '@/lib/aoy-taxonomy'
 import { resolveEntryForm } from '@/lib/entry-form'
 import { trySegmentEntryGeneric } from '@/lib/segment-entry-generic-client'
+import { KB_SHOW_ALIASES } from '@/lib/shows-data'
 import {
   CANONICAL_SHOWS, categoriesForShow, categoryPlaceholderForShow,
   showHasNoCategoryConcept,
@@ -183,7 +184,11 @@ export default function StartPage() {
         const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/detect-entry-context`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! },
-          body: JSON.stringify({ text }),
+          // v3 coverage: the carried catalogue + alias table, so the detected
+          // show comes back canonicalised with a `carried` flag instead of raw.
+          // CANONICAL_SHOWS only here: /start has no project and therefore no
+          // target_shows to union in.
+          body: JSON.stringify({ text, canonical_shows: CANONICAL_SHOWS, show_aliases: KB_SHOW_ALIASES }),
         })
         if (res.ok) {
           const d = await res.json()
