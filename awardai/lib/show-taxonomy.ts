@@ -465,17 +465,32 @@ export const SHOW_CATEGORIES: Record<string, string[]> = {
     'New Director Lotus',
     'Sustainable Lotus',
   ],
-  'Asian Marketing Effectiveness Awards': [
-    'Best Awareness Campaign', 'Best Brand Experience', 'Best Digital Campaign',
-    'Best Effectiveness Campaign', 'Best Integrated Campaign',
-    'Best Mobile Campaign', 'Best PR Campaign', 'Best Use of Data', 'Grand Prix',
-  ],
-  'Asia Pacific Effie Awards': [
-    'Best Use of Data', 'Brand Experience', 'Cultural Breakthrough',
-    'E-Commerce', 'Grand Effie', 'Insight-Driven', 'Integrated Campaign',
-    'Long-Term Effects', 'Media Innovation', 'New Product', 'Purpose',
-    'Sustained Success',
-  ],
+  // ── Two keys REMOVED 31 Aug 2026. Both made the same show return a different
+  //    category list depending on which helper you asked, which is a live
+  //    user-visible defect independent of the bug that surfaced them.
+  //
+  //    'Asia Pacific Effie Awards' held 12 categories while KB_SHOW_ALIASES maps
+  //    that exact string to 'Effie APAC', which holds 20. Eight of the twelve
+  //    were unique strings, not a subset, so this was two research vintages of
+  //    one show, neither dated and neither sourced in-file. The 20-list wins on
+  //    reachability, NOT on evidence: 'Effie APAC' is the canonical name, the
+  //    picker's name, normaliseKbShow's output and the show_profiles row, so it
+  //    is what essentially every user already sees, while the 12-list only ever
+  //    fired on a legacy free-text direction. WHICH LIST IS CORRECT IS STILL AN
+  //    OPEN RESEARCH QUESTION — do not read this deletion as verification of the
+  //    20. Removed here verbatim so nothing is lost (Gotchas: a name-drift row
+  //    can hold the richer content):
+  //      Best Use of Data, Brand Experience, Cultural Breakthrough, E-Commerce,
+  //      Grand Effie, Insight-Driven, Integrated Campaign, Long-Term Effects,
+  //      Media Innovation, New Product, Purpose, Sustained Success
+  //
+  //    'Asian Marketing Effectiveness Awards' held 9 categories for a show
+  //    KB_SHOW_ALIASES deliberately HIDES (defunct, organizer site frozen on
+  //    2016). A category list makes a hidden show look carried, and we
+  //    recommended it to a real org. Removed verbatim:
+  //      Best Awareness Campaign, Best Brand Experience, Best Digital Campaign,
+  //      Best Effectiveness Campaign, Best Integrated Campaign, Best Mobile
+  //      Campaign, Best PR Campaign, Best Use of Data, Grand Prix
   'Global Effie Awards': [
     'Best Global Campaign', 'Best Use of Insights', 'Cultural Breakthrough',
     'Grand Effie', 'Integrated Campaign', 'Long-Term Effects', 'Media Innovation',
