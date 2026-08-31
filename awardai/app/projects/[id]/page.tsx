@@ -73,7 +73,7 @@ function AvatarMenu({ email, onSignOut }: { email: string; onSignOut: () => void
 import ShowsDrawer from '@/components/shows/ShowsDrawer'
 import { MATERIALS_EVAL_STATEMENTS, JURY_EVAL_STATEMENTS, COACH_REVIEW_STATEMENTS } from '@/lib/generatingStatements'
 import { appErrorFromResponse, formatError } from '@/lib/errorMessages'
-import { normaliseKbShow, DEADLINES_2026, KB_SHOW_ALIASES, getDeadlineUrgency } from '@/lib/shows-data'
+import { normaliseKbShow, DEADLINES_2026, KB_SHOW_ALIASES, getDeadlineUrgency, categorySiblingProgramme } from '@/lib/shows-data'
 import { isAoyShow, AOY_SHOW_NAME, aoyResolveStored, aoyTrackById, buildAoyBestCategory, pillarForKey, normalizeAoyCategory, type AoyPillar } from '@/lib/aoy-taxonomy'
 // Workbench P2 Chunk 1 (S138): source-agnostic section-workbench surface. Rendered
 // read-only behind ?workbench=1 this phase; the write-path cutover is P2 Chunk 4.
@@ -4913,6 +4913,25 @@ export default function ProjectPage() {
                             {hasEval && dirBestEval && <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${scoreBg(dirBestEval.overall_score)} ${scoreColor(dirBestEval.overall_score)}`}>{dirBestEval.overall_score}/10</span>}
                           </div>
                           {d.best_show && <p className="text-green-700 text-sm mt-0.5">{d.best_show} · <span className="text-gray-500">{d.best_category}</span></p>}
+                          {/* Category-names-a-sibling-programme flag (BEST-CATEGORY-PROGRAMME-LEAK,
+                              1 Sep 2026). The show coverage constraint (31 Aug) blocks the model
+                              from naming an uncarried show in best_show; the very first post-fix
+                              run moved the leak one field over (best_show: "Clio Awards",
+                              best_category: "Clio Health: Out-of-Home" -- Clio Health is a separate
+                              Clio programme, not a category of Clio Awards). categorySiblingProgramme
+                              is display-only: it never blocks generation, it flags an
+                              already-stored direction at render time. Amber "check this before you
+                              enter" language, not red error language -- reused from the 31 Aug
+                              coverage-gap panel. */}
+                          {(() => {
+                            const siblingHead = d.best_show ? categorySiblingProgramme(d.best_show, d.best_category) : null
+                            if (!siblingHead) return null
+                            return (
+                              <p className="mt-1 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
+                                &#9888; &ldquo;{siblingHead}&rdquo; looks like its own programme, not a category of {d.best_show}. Check this with the organiser before entering.
+                              </p>
+                            )
+                          })()}
                           {/* Deadline signal (31 Aug 2026). getDeadlineUrgency has
                               returned honest 'unknown' and 'no_published_close'
                               states since 29 Aug, and was called in exactly ONE
@@ -4921,8 +4940,28 @@ export default function ProjectPage() {
                               signal at all. 'ok' is deliberately not rendered --
                               a comfortable deadline needs no badge, and the whole
                               point of the three states is that the two honest
-                              non-answers stop reading as fine. */}
+                              non-answers stop reading as fine.
+
+                              1 Sep 2026: when best_category names a sibling
+                              programme (flag above), the show's own deadline is
+                              painted here NEXT TO an entry that may actually go
+                              somewhere else -- the exact failure that flag exists
+                              to catch. Never paint that date. We hold no deadline
+                              for the sibling programme, which is the whole point,
+                              so the honest state is an unconfirmed badge, not a
+                              guess and not silence (four-no-verdict-states rule). */}
                           {d.best_show && (() => {
+                            const siblingHead = categorySiblingProgramme(d.best_show, d.best_category)
+                            if (siblingHead) {
+                              return (
+                                <span
+                                  className="inline-block mt-1 text-xs px-2 py-0.5 rounded-full border bg-amber-50 text-amber-700 border-amber-200"
+                                  title={`We can't confirm a deadline for this category: it looks like it names ${siblingHead}, not ${d.best_show}, and we hold no data for ${siblingHead}.`}
+                                >
+                                  Deadline unconfirmed &middot; check category
+                                </span>
+                              )
+                            }
                             const u = getDeadlineUrgency(d.best_show)
                             if (u.level === 'ok') return null
                             const tone =

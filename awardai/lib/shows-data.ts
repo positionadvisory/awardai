@@ -650,6 +650,77 @@ export function getDeadlineUrgency(showName: string | null | undefined): Deadlin
   return { level: 'ok', daysLeft, deadlineDate: show.finalDate, message: `${daysLeft} days to deadline (${show.final})` }
 }
 
+// ── Category names a sibling programme (BEST-CATEGORY-PROGRAMME-LEAK, 31 Aug 2026) ─
+//
+// generate-directions v33 forbids the model from naming an uncarried show in
+// best_show. The very first post-fix run showed what it does instead: blocked
+// from writing best_show: "Clio Health", it returned
+// best_show: "Clio Awards", best_category: "Clio Health: Out-of-Home". Clio
+// Health is a separate Clio programme with its own deadline, not a category of
+// Clio Awards (whose nearest real category is "Health & Wellness"). The
+// direction card then painted Clio Awards' close date next to an entry that
+// would actually go somewhere else. best_category has always been free text
+// (only AOY constrains it, v32); v33 changed the INCENTIVE, because
+// best_category is now the only field left that will accept an unlisted
+// programme.
+//
+// MEASURED, not designed then hoped: run 31 Aug 2026 against all 425 live
+// `directions` rows carrying both fields. Predicate A ("category names a
+// different CARRIED show") scored 3 hits / 0 false positives and MISSED the
+// live case, because Clio Health is not carried — rejected on that basis.
+// This predicate ("category head is a SIBLING PROGRAMME of the show") scored
+// 8 hits / 0 false positives and CATCHES the live case:
+//   Clio Awards          | Clio Advertising
+//   Clio Awards          | Clio Entertainment
+//   Clio Awards          | Clio Health
+//   Clio Awards          | Clio Music
+//   Clio Awards          | Clio Social
+//   Effie Awards APAC    | Effie APAC
+//   MMA Smarties APAC    | MMA Smarties Local Hero
+//   WARC Awards          | WARC Prize for Asian Strategy
+//
+// KNOWN FALSE NEGATIVES, ACCEPTED. This fires only when the sibling shares a
+// first word with the show, so it misses "Cannes Lions" / "Lions Health:
+// Pharma Lions ..." (head starts "Lions", show starts "Cannes") and
+// "Effies Asia-Pacific" / "Challenger Brand — Effies China: ..." (head is
+// "Challenger Brand"). Do NOT widen this to catch them: a widened predicate is
+// how the killed-number guard ended up firing on the rows that handled the
+// number correctly (Gotchas, Data/Schema, "A killed-number guard must test for
+// the number NEAR AN ASSERTION"). High precision on a display flag is worth
+// more than recall. If a strictly-better predicate is found, measure it
+// against all 425 rows and report both counts before shipping it.
+//
+// DISPLAY-ONLY. This never runs server-side and never gates generation; it
+// flags an already-stored direction at render time so a stale badge (a
+// deadline for the WRONG programme) is never shown next to it. See
+// app/projects/[id]/page.tsx.
+export function categorySiblingProgramme(
+  bestShow: string | null | undefined,
+  bestCategory: string | null | undefined,
+): string | null {
+  const show = (bestShow ?? '').trim()
+  const category = (bestCategory ?? '').trim()
+  if (!show || !category) return null
+  // A "head" only exists if the category actually contains a separator to be
+  // split on. Without this guard, a separator-free category is compared
+  // whole against the show's first word, which produced a live false
+  // positive the 31 Aug measurement's 425-row set did not yet contain: a 1
+  // Sep re-check against the (by then) 428 live rows found
+  // "Global SABRE Awards" / "Global SABRE Top 40 (via SABRE Awards EMEA
+  // regional qualification)" firing on the shared word "Global", although
+  // that category is the show's own top-level recognition list, not a
+  // sibling programme. Requiring an actual separator restores 8 hits / 0
+  // false positives on the same 428-row check.
+  if (!/[:—–]/.test(category)) return null
+  const head = category.split(/\s*[:—–]\s*/)[0].trim()
+  if (!head || head.toLowerCase() === show.toLowerCase()) return null
+  const headFirstWord = head.split(/\s+/)[0]?.toLowerCase()
+  const showFirstWord = show.split(/\s+/)[0]?.toLowerCase()
+  if (!headFirstWord || !showFirstWord) return null
+  if (headFirstWord !== showFirstWord) return null
+  return head
+}
+
 // ── KB show name normalisation ────────────────────────────────────────────────
 //
 // Maps variant/legacy show names (from campaigns.show_raw in the KB) to their
