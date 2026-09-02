@@ -20,6 +20,14 @@ function slugify(text: string): string {
     .replace(/^-|-$/g, '')
 }
 
+// datetime-local wants 'YYYY-MM-DDTHH:mm' in the BROWSER's local time. Building it
+// from the parts (not toISOString, which is UTC) keeps the shown time the one Ben
+// is looking at; new Date(value) on submit converts it back to a correct instant.
+function toLocalInputValue(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 function estimateReadingTime(content: string): number {
   const words = content.trim().split(/\s+/).length
   return Math.max(1, Math.round(words / 200))
@@ -38,6 +46,9 @@ export default function AdminArticlesNewPage() {
   const [content, setContent] = useState('')
   const [coverUrl, setCoverUrl] = useState('')
   const [publishNow, setPublishNow] = useState(true)
+  // Publish date. Empty until the client mounts, then defaults to now. Optional:
+  // clearing it makes the API fall back to now() at save time.
+  const [publishDate, setPublishDate] = useState('')
 
   // UI state
   const [submitting, setSubmitting] = useState(false)
@@ -58,6 +69,11 @@ export default function AdminArticlesNewPage() {
       setChecking(false)
     })
   }, [router])
+
+  // Default the publish date to now, once, on the client
+  useEffect(() => {
+    setPublishDate(toLocalInputValue(new Date()))
+  }, [])
 
   // Auto-generate slug from title
   useEffect(() => {
@@ -103,6 +119,9 @@ export default function AdminArticlesNewPage() {
           content: content.trim(),
           cover_image_url: coverUrl.trim() || undefined,
           published: publishNow,
+          // Optional. Omitted → the API stamps now(). Set → that instant is the
+          // published_at the listing orders and the article page displays.
+          published_at: publishDate ? new Date(publishDate).toISOString() : undefined,
         }),
       })
 
@@ -261,6 +280,8 @@ export default function AdminArticlesNewPage() {
                   { label: 'H3', action: () => insertMarkdown('\n### ', '\n') },
                   { label: 'B', action: () => insertMarkdown('**', '**'), bold: true },
                   { label: 'I', action: () => insertMarkdown('*', '*'), italic: true },
+                  { label: '❝', action: () => insertMarkdown('\n> ', '\n') },
+                  { label: '• List', action: () => insertMarkdown('\n- ', '\n') },
                   { label: '¶', action: () => insertMarkdown('\n\n', '') },
                 ].map(btn => (
                   <button
@@ -312,6 +333,39 @@ export default function AdminArticlesNewPage() {
                   fontFamily: 'inherit', outline: 'none',
                 }}
               />
+            </div>
+
+            {/* Publish date */}
+            <div>
+              <label style={{ color: '#64748b', fontSize: '12px', fontWeight: 500, display: 'block', marginBottom: '0.5rem' }}>
+                Publish date <span style={{ color: '#475569' }}>(optional — defaults to now; set it to backdate)</span>
+              </label>
+              <div style={{ display: 'flex', gap: '0.625rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                <input
+                  type="datetime-local"
+                  value={publishDate}
+                  onChange={e => setPublishDate(e.target.value)}
+                  style={{
+                    background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '10px', padding: '0.75rem 1rem', color: '#f1f5f9', fontSize: '13px',
+                    fontFamily: 'inherit', outline: 'none', colorScheme: 'dark',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setPublishDate(toLocalInputValue(new Date()))}
+                  style={{
+                    background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
+                    color: '#94a3b8', padding: '0.5rem 0.875rem', borderRadius: '8px',
+                    fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  Now
+                </button>
+              </div>
+              <p style={{ color: '#334155', fontSize: '11px', marginTop: '0.375rem' }}>
+                This is the date the listing sorts by and the article page shows.
+              </p>
             </div>
 
             {/* Publish toggle */}
@@ -410,6 +464,7 @@ export default function AdminArticlesNewPage() {
                 { label: 'Content written', done: content.trim().length > 200 },
                 { label: '3+ min read', done: readMins >= 3 },
                 { label: 'Cover image added', done: coverUrl.trim().length > 0 },
+                { label: 'Publish date set', done: publishDate.length > 0 },
               ].map(item => (
                 <div key={item.label} style={{ display: 'flex', gap: '0.625rem', alignItems: 'center', marginBottom: '0.5rem' }}>
                   <span style={{ color: item.done ? '#22c55e' : '#334155', fontSize: '14px', flexShrink: 0 }}>

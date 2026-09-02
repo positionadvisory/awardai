@@ -59,6 +59,10 @@ export async function GET() {
 // ── POST /api/articles — create or update article (admin only) ──────────────
 // Headers: Authorization: Bearer <session access token> (must resolve to ADMIN_EMAIL)
 // Body: { slug, title, subtitle?, content, cover_image_url?, published?, published_at? }
+// published_at is optional. Supplied → that instant is stored (the listing orders
+// by it and the article page displays it). Omitted while publishing → now().
+// Omitted on a draft → null. Live columns: published_at / created_at / updated_at;
+// reading_time_minutes is GENERATED ALWAYS and must never be written.
 export async function POST(req: NextRequest) {
   try {
     const unauthorized = await requireAdmin(req)
@@ -69,6 +73,19 @@ export async function POST(req: NextRequest) {
 
     if (!slug || !title || !content) {
       return NextResponse.json({ error: 'slug, title, and content are required' }, { status: 400 })
+    }
+
+    // Optional publish date (S1, 2 Sep 2026). Accepts anything Date can parse;
+    // the admin form sends an ISO string. Rejected rather than silently coerced,
+    // because an Invalid Date here writes a null published_at and the article
+    // then sorts to the bottom of the listing with no visible cause.
+    let publishedAt: string | null = null
+    if (published_at !== undefined && published_at !== null && published_at !== '') {
+      const parsed = new Date(published_at)
+      if (Number.isNaN(parsed.getTime())) {
+        return NextResponse.json({ error: 'published_at is not a valid date' }, { status: 400 })
+      }
+      publishedAt = parsed.toISOString()
     }
 
     // Auto-generate slug if not provided (from title)
@@ -90,9 +107,10 @@ export async function POST(req: NextRequest) {
           content,
           cover_image_url: cover_image_url || null,
           published: published ?? false,
-          published_at: published
-            ? (published_at || new Date().toISOString())
-            : null,
+          // An explicit date always wins, draft or not, so a draft keeps its
+          // intended date when it is later published. Publishing with no date
+          // stamps now(). A draft with no date stays null.
+          published_at: publishedAt ?? (published ? new Date().toISOString() : null),
         },
         { onConflict: 'slug' }
       )
