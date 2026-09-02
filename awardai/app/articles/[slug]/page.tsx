@@ -7,6 +7,30 @@ import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
 import { SiteNav, SiteFooter, Eyebrow } from '@/components/site/SiteChrome'
 
+// The article page must not reuse a cached database read.
+//
+// Next 14 patches global fetch and caches it in the Data Cache. supabase-js
+// uses fetch, so getArticle() below is a cached fetch. The listing escapes this
+// because `export const revalidate = 60` propagates a 60s lifetime to the
+// fetches in that page. This route had NEITHER a revalidate nor a dynamic
+// export, so its read was cached with no expiry at all.
+//
+// S1 recorded that this route "was already dynamic (no generateStaticParams),
+// so individual articles were never stale." That conclusion is wrong, and this
+// is the correction: dynamic RENDERING is not an uncached FETCH. The route
+// re-rendered on every request and re-used the same stale row forever.
+//
+// Measured 2 Sep 2026, twice. On production: a deleted article kept serving a
+// full 200 with its body, from a freshly generated response (x-vercel-cache
+// MISS, age 0), while /articles correctly showed empty. Offline against a
+// mutable fixture: three requests, one upstream read, the title never changed.
+//
+// force-dynamic sets cache: 'no-store' on the fetches in this route. The route
+// was already rendered per request, so this costs no extra render, it only
+// stops the stale read. What it buys S2: an edit to a published article
+// actually appears, and an unpublished or deleted one actually goes away.
+export const dynamic = 'force-dynamic'
+
 type Article = {
   id: string
   slug: string
@@ -21,7 +45,23 @@ type Article = {
 async function getArticle(slug: string): Promise<Article | null> {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      // Read the row fresh on every request. supabase-js goes through global
+      // fetch, and Next 14 patches global fetch and caches it. Without this the
+      // read is cached with no expiry, and the page serves whatever it saw the
+      // first time, for good.
+      //
+      // `export const dynamic = 'force-dynamic'` above is NOT sufficient on its
+      // own here: measured against a mutable fixture, the page still served the
+      // first value it read. Setting cache: 'no-store' on the client's own fetch
+      // does not depend on how Next chooses to interpret the route segment
+      // config, so it is the one that actually binds.
+      global: {
+        fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+          fetch(input, { ...init, cache: 'no-store' }),
+      },
+    }
   )
   const { data, error } = await supabase
     .from('articles')
@@ -39,13 +79,21 @@ export async function generateMetadata(
   { params }: { params: { slug: string } }
 ): Promise<Metadata> {
   const article = await getArticle(params.slug)
-  if (!article) return { title: 'Article not found — Shortlist' }
+  if (!article) return { title: 'Article not found' }
 
   const description = article.subtitle ||
     article.content.replace(/[#*\n]+/g, ' ').slice(0, 155).trim() + '…'
 
   return {
-    title: `${article.title} — Shortlist`,
+    // 'Articles — Shortlist — Shortlist' was fixed on /articles and /about in
+    // the S2-prep pass and MISSED here, because the gap review only named the
+    // listing. layout.tsx sets template: '%s — Shortlist', so a title that
+    // already carries the suffix gets a second one. Ben's /articles/test render
+    // showed 'Test — Shortlist — Shortlist' in the tab. This is the page a
+    // reader lands on from Substack or LinkedIn, so it was the worst of the
+    // three to leave doubled. openGraph.title below is NOT templated and
+    // correctly keeps the bare title.
+    title: article.title,
     description,
     openGraph: {
       title: article.title,
