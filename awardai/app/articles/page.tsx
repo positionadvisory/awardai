@@ -1,9 +1,11 @@
 // app/articles/page.tsx
 // Public articles listing — server component, SEO-friendly
 
+import { Fragment } from 'react'
 import { Metadata } from 'next'
 import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
+import { SiteNav, SiteFooter, Eyebrow } from '@/components/site/SiteChrome'
 
 // ISR (S1, 2 Sep 2026). Without this the listing is prerendered ONCE at build
 // time: a newly published article never appears until someone redeploys, which
@@ -12,8 +14,12 @@ import { createClient } from '@supabase/supabase-js'
 // already dynamic (no generateStaticParams), so only this listing was stale.
 export const revalidate = 60
 
+// TITLE (S2-prep, 2 Sep 2026): this is 'Articles', not 'Articles — Shortlist'.
+// layout.tsx sets template: '%s — Shortlist', so the old value rendered
+// "Articles — Shortlist — Shortlist" in the browser tab. openGraph.title is not
+// run through the template and keeps its own full form.
 export const metadata: Metadata = {
-  title: 'Articles — Shortlist',
+  title: 'Articles',
   description: 'Practical writing on award entries, jury thinking, and how to win more with the same work. By Ben Condit.',
   openGraph: {
     title: 'Articles — Shortlist',
@@ -60,107 +66,158 @@ function formatDate(iso: string): string {
   })
 }
 
+// Plate stamp for a row with no cover image: "SEP / 26". It varies row to row,
+// which is the whole point — 16 identical marks would rebuild the wall this
+// layout exists to break.
+function stamp(iso: string): { m: string; y: string } {
+  const d = new Date(iso)
+  return {
+    m: d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase(),
+    y: String(d.getFullYear()).slice(2),
+  }
+}
+
 export default async function ArticlesPage() {
   const articles = await getArticles()
 
   return (
-    <div style={{ background: '#0b1120', minHeight: '100vh', color: '#f1f5f9', fontFamily: 'Inter, system-ui, sans-serif' }}>
+    <div className="sl-shell">
+      <SiteNav active="articles" />
 
-      {/* Nav */}
-      <nav style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '0 1.5rem' }}>
-        <div style={{ maxWidth: '1100px', margin: '0 auto', display: 'flex', alignItems: 'center', height: '64px', gap: '2rem' }}>
-          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', textDecoration: 'none', flexShrink: 0 }}>
-            <div style={{ width: '28px', height: '28px', borderRadius: '7px', background: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ color: 'white', fontWeight: 700, fontSize: '13px' }}>S</span>
-            </div>
-            <span style={{ color: 'white', fontWeight: 600, fontSize: '15px', letterSpacing: '-0.01em' }}>Shortlist</span>
-          </Link>
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-            <Link href="/about" style={{ color: '#94a3b8', fontSize: '14px', textDecoration: 'none' }}>About</Link>
-            <Link href="/login" style={{ color: '#94a3b8', fontSize: '14px', textDecoration: 'none' }}>Sign in</Link>
-            <Link href="/login" style={{
-              background: '#16a34a', color: 'white', padding: '0.5rem 1.125rem',
-              borderRadius: '8px', fontSize: '14px', fontWeight: 500, textDecoration: 'none',
-            }}>Request access</Link>
-          </div>
-        </div>
-      </nav>
+      {/* Listing CSS.
+          The S1 render of 16 seeded rows measured 3,028px of scroll on desktop
+          and 3,497px on mobile as 16 identical ~114px rows, with no grouping and
+          nothing for the eye to stop on. Three things fix that here, in order of
+          how much they buy:
+          1. cover_image_url is RENDERED. The listing query already selected it
+             and the page threw it away; the covers exist in Posts/Articles/Headers/.
+          2. Year separators, so a 16-piece library reads as a library.
+          3. A fixed-height left cell on every row — a cover, or a stamped plate
+             when there is no cover — so the vertical rhythm no longer depends on
+             whether a given article happens to carry a subtitle. Two of the 16
+             did not, and it showed. */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        /* padding-TOP only: the shorthand would reset .sl-read's 24px side
+           padding to 0 and slide the header out of line with the rows. */
+        .sl-list-head { padding-top: clamp(56px, 8vw, 92px); }
+        .sl-list-h1 { font-size: clamp(38px, 7.2vw, 68px); line-height: 1.02; letter-spacing: -0.025em;
+          color: var(--ink); margin: 22px 0 0; font-weight: 400; }
+        .sl-list-h1 i { font-style: italic; color: var(--gold-deep); }
+        .sl-list-dek { font-family: var(--meta-font); font-style: italic;
+          font-size: clamp(19px, 2.6vw, 23px); line-height: 1.5; color: var(--muted);
+          margin: 20px 0 0; max-width: 32em; }
+        .sl-list-rule { margin: 34px 0 0; border-top: 2px solid var(--gold); }
 
-      <main style={{ maxWidth: '800px', margin: '0 auto', padding: '80px 1.5rem' }}>
+        .sl-list { margin: clamp(30px, 5vw, 44px) 0 0; }
 
-        {/* Header */}
-        <header style={{ marginBottom: '4rem' }}>
-          <span style={{ color: '#22c55e', fontSize: '12px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Articles</span>
-          <h1 style={{ fontSize: '2.5rem', fontWeight: 700, letterSpacing: '-0.03em', marginTop: '0.75rem', color: '#f1f5f9', lineHeight: 1.2 }}>
-            On awards, writing,<br />and winning.
+        .sl-year { display: flex; align-items: center; gap: 16px; padding: 30px 0 10px; }
+        .sl-year span { font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+        .sl-year i { flex: 1 1 auto; height: 1px; background: var(--rule); }
+
+        /* 148x88 plate + 20px padding puts a row at ~130px against the old
+           ~114px. The extra 16px buys the cover, the stamp and a serif title;
+           16 rows still land inside the old total because the year rules
+           replace the dead space the old list padded with. */
+        .sl-row { display: grid; grid-template-columns: 148px 1fr; gap: 26px; align-items: start;
+          padding: 20px 0; border-top: 1px solid var(--rule); text-decoration: none; color: inherit; }
+        .sl-list > .sl-row:last-child { border-bottom: 1px solid var(--rule); }
+        .sl-row:hover .sl-row-t { color: var(--gold-deep); }
+        .sl-row:hover .sl-plate { background: var(--ink-2); }
+
+        .sl-thumb { width: 148px; height: 88px; overflow: hidden; border: 1px solid var(--rule); background: var(--bone-2); }
+        .sl-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+        .sl-plate { width: 148px; height: 88px; background: var(--ink); color: var(--gold);
+          display: flex; flex-direction: column; align-items: center; justify-content: center;
+          gap: 2px; transition: background 160ms ease; }
+        .sl-plate b { font-family: var(--meta-font); font-weight: 500; font-size: 15px; letter-spacing: 0.22em;
+          text-indent: 0.22em; }
+        .sl-plate em { font-family: var(--meta-font); font-style: normal; font-size: 26px; line-height: 1;
+          color: var(--bone); }
+
+        .sl-row-t { font-size: clamp(21px, 2.9vw, 27px); line-height: 1.18; letter-spacing: -0.015em;
+          color: var(--ink); margin: 0; font-weight: 400; transition: color 160ms ease; }
+        .sl-row-s { font-size: 15px; line-height: 1.58; color: var(--muted); margin: 9px 0 0; max-width: 46em; }
+        .sl-row-m { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted);
+          margin: 14px 0 0; display: flex; gap: 14px; flex-wrap: wrap; }
+
+        .sl-empty { padding: 72px 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
+          font-family: var(--meta-font); font-style: italic; font-size: 21px; color: var(--muted); }
+
+        @media (max-width: 560px) {
+          .sl-row { grid-template-columns: 92px 1fr; gap: 18px; padding: 20px 0; }
+          .sl-thumb, .sl-plate { width: 92px; height: 72px; }
+          .sl-plate b { font-size: 11px; }
+          .sl-plate em { font-size: 19px; }
+          .sl-row-s { display: none; }
+        }
+      ` }} />
+
+      <main>
+        <header className="sl-read sl-list-head">
+          <Eyebrow>Edition 01 · Asia</Eyebrow>
+          <h1 className="sl-serif sl-list-h1">
+            On awards, writing,<br /><i>and winning.</i>
           </h1>
-          <p style={{ color: '#94a3b8', fontSize: '1rem', lineHeight: 1.7, marginTop: '1rem', maxWidth: '520px' }}>
+          <p className="sl-list-dek">
             Practical writing on award entries, jury thinking, and how to get more from the same work. By Ben Condit.
           </p>
+          <div className="sl-list-rule" />
         </header>
 
-        {/* Article list */}
-        {articles.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '4rem 0', color: '#475569' }}>
-            <p style={{ fontSize: '1rem' }}>No articles yet. Check back soon.</p>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {articles.map((article, i) => (
-              <Link
-                key={article.id}
-                href={`/articles/${article.slug}`}
-                style={{
-                  textDecoration: 'none',
-                  display: 'block',
-                  padding: '2rem 0',
-                  borderBottom: '1px solid rgba(255,255,255,0.07)',
-                  borderTop: i === 0 ? '1px solid rgba(255,255,255,0.07)' : 'none',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '2rem', flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1, minWidth: '240px' }}>
-                    <h2 style={{
-                      color: '#f1f5f9', fontSize: '1.125rem', fontWeight: 600,
-                      lineHeight: 1.4, margin: '0 0 0.5rem',
-                      transition: 'color 0.15s',
-                    }}>
-                      {article.title}
-                    </h2>
-                    {article.subtitle && (
-                      <p style={{ color: '#64748b', fontSize: '14px', lineHeight: 1.6, margin: '0 0 0.875rem' }}>
-                        {article.subtitle}
-                      </p>
+        <div className="sl-read">
+          {articles.length === 0 ? (
+            <div className="sl-list">
+              <p className="sl-empty">No articles yet. Check back soon.</p>
+            </div>
+          ) : (
+            <div className="sl-list">
+              {articles.map((article, i) => {
+                const year = new Date(article.published_at).getFullYear()
+                const prevYear = i === 0 ? null : new Date(articles[i - 1].published_at).getFullYear()
+                const s = stamp(article.published_at)
+                return (
+                  // Fragment, not a wrapper div with display:contents. Selectors
+                  // match the DOM tree, not the box tree, so a wrapper would
+                  // break `.sl-list > .sl-row:last-child` even though the boxes
+                  // look right on screen.
+                  <Fragment key={article.id}>
+                    {year !== prevYear && (
+                      <div className="sl-year">
+                        <span className="sl-mono">{year}</span>
+                        <i />
+                      </div>
                     )}
-                    <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'center' }}>
-                      <span style={{ color: '#475569', fontSize: '12px' }}>{formatDate(article.published_at)}</span>
-                      <span style={{ color: '#334155', fontSize: '12px' }}>·</span>
-                      <span style={{ color: '#475569', fontSize: '12px' }}>{article.reading_time_minutes} min read</span>
-                    </div>
-                  </div>
-                  <span style={{ color: '#22c55e', fontSize: '18px', flexShrink: 0, alignSelf: 'center' }}>→</span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
+                    <Link href={`/articles/${article.slug}`} className="sl-row">
+                      {article.cover_image_url ? (
+                        <div className="sl-thumb">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={article.cover_image_url} alt="" />
+                        </div>
+                      ) : (
+                        <div className="sl-plate" aria-hidden="true">
+                          <b>{s.m}</b>
+                          <em>{s.y}</em>
+                        </div>
+                      )}
+                      <div>
+                        <h2 className="sl-serif sl-row-t">{article.title}</h2>
+                        {article.subtitle && <p className="sl-row-s">{article.subtitle}</p>}
+                        <div className="sl-mono sl-row-m">
+                          <span>{formatDate(article.published_at)}</span>
+                          <span>{article.reading_time_minutes} min read</span>
+                        </div>
+                      </div>
+                    </Link>
+                  </Fragment>
+                )
+              })}
+            </div>
+          )}
+        </div>
       </main>
 
-      {/* Footer */}
-      <footer style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '2.5rem 1.5rem', marginTop: '4rem' }}>
-        <div style={{ maxWidth: '1100px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', textDecoration: 'none' }}>
-            <div style={{ width: '22px', height: '22px', borderRadius: '5px', background: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ color: 'white', fontWeight: 700, fontSize: '10px' }}>S</span>
-            </div>
-            <span style={{ color: '#475569', fontSize: '13px' }}>Shortlist · gotshortlisted.com</span>
-          </Link>
-          <div style={{ display: 'flex', gap: '2rem' }}>
-            <Link href="/about" style={{ color: '#475569', fontSize: '13px', textDecoration: 'none' }}>About</Link>
-            <Link href="/login" style={{ color: '#475569', fontSize: '13px', textDecoration: 'none' }}>Sign in</Link>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }
