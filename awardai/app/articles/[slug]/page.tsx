@@ -156,13 +156,28 @@ function renderMarkdown(md: string): string {
 // only when its text matches this article's title. A body whose first heading is
 // a real, different h1 is left alone. renderMarkdown() and the escapeHtml()
 // ordering in front of it are untouched — this runs before either.
+//
+// The comparison ignores case, whitespace, markdown marks AND punctuation. The
+// punctuation part is not cosmetic: run against the seven copy-locked bodies,
+// a title typed without its trailing '?' or its '...' missed on four of seven
+// (W1, W3, W4, W8), and a miss is silent — you get the duplicate h1 back with
+// no error. Whoever pastes should not have to reproduce punctuation exactly.
+// Ignoring it cannot cause a false strip: a leading h1 that equals the title
+// apart from punctuation IS the title.
 function stripDuplicateTitle(content: string, title: string): string {
   const lines = content.split('\n')
   const i = lines.findIndex(l => l.trim() !== '')
   if (i === -1) return content
   const first = lines[i].trim()
   if (!first.startsWith('# ')) return content
-  const norm = (s: string) => s.replace(/\s+/g, ' ').replace(/[*_`]/g, '').trim().toLowerCase()
+  // ASCII punctuation plus curly quotes, en/em dash and ellipsis. Written as an
+  // explicit punctuation list rather than \p{L}\p{N} with the /u flag, because
+  // tsconfig sets no `target` and so defaults below es6 (TS1501). A positive
+  // list also leaves accented and non-Latin letters intact, which /[^A-Za-z0-9]/
+  // would strip.
+  const PUNCT = /[!-\/:-@\[-\x60{-~–—‘’“”…]/g
+  const norm = (s: string) =>
+    s.replace(PUNCT, '').replace(/\s+/g, ' ').trim().toLowerCase()
   if (norm(first.slice(2)) !== norm(title)) return content
   return lines.slice(i + 1).join('\n')
 }
