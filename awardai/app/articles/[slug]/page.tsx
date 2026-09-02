@@ -39,13 +39,21 @@ export async function generateMetadata(
   { params }: { params: { slug: string } }
 ): Promise<Metadata> {
   const article = await getArticle(params.slug)
-  if (!article) return { title: 'Article not found — Shortlist' }
+  if (!article) return { title: 'Article not found' }
 
   const description = article.subtitle ||
     article.content.replace(/[#*\n]+/g, ' ').slice(0, 155).trim() + '…'
 
   return {
-    title: `${article.title} — Shortlist`,
+    // 'Articles — Shortlist — Shortlist' was fixed on /articles and /about in
+    // the S2-prep pass and MISSED here, because the gap review only named the
+    // listing. layout.tsx sets template: '%s — Shortlist', so a title that
+    // already carries the suffix gets a second one. Ben's /articles/test render
+    // showed 'Test — Shortlist — Shortlist' in the tab. This is the page a
+    // reader lands on from Substack or LinkedIn, so it was the worst of the
+    // three to leave doubled. openGraph.title below is NOT templated and
+    // correctly keeps the bare title.
+    title: article.title,
     description,
     openGraph: {
       title: article.title,
