@@ -5,6 +5,7 @@ import { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
+import { SiteNav, SiteFooter, Eyebrow } from '@/components/site/SiteChrome'
 
 type Article = {
   id: string
@@ -142,11 +143,35 @@ function renderMarkdown(md: string): string {
   return out.join('\n')
 }
 
+// Drop a leading '# Title' line when it repeats the article's own title.
+//
+// Every copy-locked article opens with its own '# Title' line, so renderMarkdown
+// emitted an <h1> underneath the page's title <h1>: two h1s on every article,
+// measured on the W6 render in S1 and again here on a 16-row harness. The S1
+// record put the fix on S2 as "strip the leading '# ' line from all 16 bodies",
+// by hand, sixteen times. That is the shape of job that gets forgotten once and
+// then ships, so it is done here instead and S2 can paste bodies untouched.
+//
+// Deliberately narrow: the FIRST non-empty line only, only when it is an h1, and
+// only when its text matches this article's title. A body whose first heading is
+// a real, different h1 is left alone. renderMarkdown() and the escapeHtml()
+// ordering in front of it are untouched — this runs before either.
+function stripDuplicateTitle(content: string, title: string): string {
+  const lines = content.split('\n')
+  const i = lines.findIndex(l => l.trim() !== '')
+  if (i === -1) return content
+  const first = lines[i].trim()
+  if (!first.startsWith('# ')) return content
+  const norm = (s: string) => s.replace(/\s+/g, ' ').replace(/[*_`]/g, '').trim().toLowerCase()
+  if (norm(first.slice(2)) !== norm(title)) return content
+  return lines.slice(i + 1).join('\n')
+}
+
 export default async function ArticlePage({ params }: { params: { slug: string } }) {
   const article = await getArticle(params.slug)
   if (!article) notFound()
 
-  const bodyHtml = renderMarkdown(article.content)
+  const bodyHtml = renderMarkdown(stripDuplicateTitle(article.content, article.title))
 
   // JSON-LD structured data for Google / AI search
   const jsonLd = {
@@ -171,7 +196,7 @@ export default async function ArticlePage({ params }: { params: { slug: string }
   }
 
   return (
-    <div style={{ background: '#0b1120', minHeight: '100vh', color: '#f1f5f9', fontFamily: 'Inter, system-ui, sans-serif' }}>
+    <div className="sl-shell">
 
       {/* JSON-LD — < escape prevents </script> breakout from article fields (S9) */}
       <script
@@ -179,130 +204,162 @@ export default async function ArticlePage({ params }: { params: { slug: string }
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }}
       />
 
-      {/* Nav */}
-      <nav style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '0 1.5rem' }}>
-        <div style={{ maxWidth: '1100px', margin: '0 auto', display: 'flex', alignItems: 'center', height: '64px', gap: '2rem' }}>
-          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', textDecoration: 'none', flexShrink: 0 }}>
-            <div style={{ width: '28px', height: '28px', borderRadius: '7px', background: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ color: 'white', fontWeight: 700, fontSize: '13px' }}>S</span>
-            </div>
-            <span style={{ color: 'white', fontWeight: 600, fontSize: '15px', letterSpacing: '-0.01em' }}>Shortlist</span>
-          </Link>
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-            <Link href="/articles" style={{ color: '#94a3b8', fontSize: '14px', textDecoration: 'none' }}>← All articles</Link>
-            <Link href="/login" style={{
-              background: '#16a34a', color: 'white', padding: '0.5rem 1.125rem',
-              borderRadius: '8px', fontSize: '14px', fontWeight: 500, textDecoration: 'none',
-            }}>Request access</Link>
+      <SiteNav active="articles" />
+
+      {/* Reading-page CSS. The measure is 720px, up from 680: the body face is
+          Geist at 18px rather than Inter at 16px, and the old measure ran short
+          of the ~70-character line a long read wants. */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        /* padding-TOP, never the shorthand. A "padding: X 0 0" on an element
+           that also carries .sl-read resets the 24px side padding to 0, which
+           slid the whole header 24px left of the body on desktop and ran it
+           flush to the screen edge on a phone. Caught in the 1440px render.
+           (This block is a template literal, so no backticks in here either.) */
+        .sl-art-head { padding-top: clamp(56px, 8vw, 88px); }
+        .sl-art-h1 { font-size: clamp(34px, 6.4vw, 56px); line-height: 1.06; letter-spacing: -0.02em;
+          color: var(--ink); margin: 22px 0 0; font-weight: 400; }
+        .sl-art-dek { font-family: var(--meta-font); font-style: italic;
+          font-size: clamp(19px, 2.6vw, 23px); line-height: 1.5; color: var(--muted);
+          margin: 18px 0 0; max-width: 34em; }
+        .sl-art-rule { margin: 30px 0 16px; border-top: 2px solid var(--gold); }
+        .sl-art-meta { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+          color: var(--muted); display: flex; flex-wrap: wrap; gap: 14px; }
+        .sl-art-cover { margin: clamp(36px, 6vw, 56px) 0 0; border: 1px solid var(--rule); }
+        .sl-art-cover img { display: block; width: 100%; height: auto; }
+
+        /* ── Body ──────────────────────────────────────────────────────────
+           Scoped to .sl-article, not to main, so nothing here can reach the
+           nav, the footer or the CTA block. */
+        .sl-article { margin-top: clamp(36px, 6vw, 52px); font-size: 18px; line-height: 1.78; color: var(--ink-2); }
+        .sl-article h1, .sl-article h2, .sl-article h3 {
+          font-family: "Instrument Serif", "Times New Roman", serif; font-weight: 400;
+          letter-spacing: -0.015em; color: var(--ink); }
+        .sl-article h1 { font-size: clamp(28px, 4.6vw, 38px); line-height: 1.14; margin: 2.6em 0 0.5em; }
+        .sl-article h2 { font-size: clamp(25px, 4vw, 33px); line-height: 1.18; margin: 2.2em 0 0.5em;
+          padding-top: 1.1em; border-top: 1px solid var(--rule); }
+        .sl-article h3 { font-size: clamp(21px, 3.2vw, 25px); line-height: 1.25; margin: 1.9em 0 0.4em; }
+        .sl-article h1:first-child, .sl-article h2:first-child, .sl-article h3:first-child { margin-top: 0; }
+        .sl-article h2:first-child { padding-top: 0; border-top: none; }
+        .sl-article p { margin: 0 0 1.15em; }
+        .sl-article strong { color: var(--ink); font-weight: 600; }
+        .sl-article em { font-style: italic; }
+        .sl-article a { color: var(--gold-deep); text-decoration: underline; text-underline-offset: 3px;
+          text-decoration-thickness: 1px; }
+        .sl-article a:hover { color: var(--ink); }
+        .sl-article blockquote { font-family: var(--meta-font); font-style: italic;
+          font-size: clamp(21px, 3.2vw, 26px); line-height: 1.44; color: var(--ink);
+          margin: 1.8em 0; padding-left: 1.4rem; border-left: 3px solid var(--gold); }
+        .sl-article blockquote strong { font-weight: 600; }
+        .sl-article ul { margin: 0 0 1.3em; padding-left: 1.3rem; list-style: disc; }
+        .sl-article ul li { margin: 0 0 0.45em; padding-left: 0.3rem; }
+        .sl-article ul li::marker { color: var(--gold-deep); }
+
+        /* ── Closing CTA ──────────────────────────────────────────────────
+           The TNO report's .product callout in homepage tokens: bone-2 plate,
+           4px gold left edge, EB Garamond italic lead, radius 0. S1 shipped a
+           bare button with no supporting line; the line here is the homepage's
+           own, verbatim, so it promises exactly what the site promises. */
+        .sl-cta { margin: clamp(52px, 8vw, 76px) 0 0; background: var(--bone-2);
+          border: 1px solid var(--rule); border-left: 4px solid var(--gold); padding: 30px 32px; }
+        .sl-cta-lead { font-family: var(--meta-font); font-style: italic;
+          font-size: clamp(20px, 2.8vw, 24px); line-height: 1.42; color: var(--ink); margin: 14px 0 0; }
+        .sl-cta-sub { font-size: 15px; line-height: 1.6; color: var(--muted); margin: 12px 0 0; }
+        .sl-cta-btn { display: inline-flex; align-items: center; gap: 14px; margin-top: 24px;
+          padding: 16px 26px; background: var(--gold); color: var(--ink); text-decoration: none;
+          font-size: 15px; font-weight: 600; }
+        .sl-cta-btn i { display: inline-block; width: 18px; height: 1px; background: var(--ink); }
+        @media (max-width: 560px) {
+          .sl-cta { padding: 24px 22px; }
+          .sl-cta-btn { width: 100%; justify-content: center; }
+        }
+
+        .sl-sub { margin: clamp(36px, 6vw, 48px) 0 0; }
+        .sl-sub iframe { display: block; width: 100%; max-width: 480px; height: 320px;
+          border: 1px solid var(--rule); background: var(--paper); }
+
+        .sl-share { margin: clamp(36px, 6vw, 48px) 0 0; padding-top: 26px; border-top: 1px solid var(--rule); }
+        .sl-share-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+        .sl-share-row a { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+          color: var(--muted); border: 1px solid var(--rule); padding: 10px 14px; text-decoration: none; }
+        .sl-share-row a:hover { border-color: var(--gold); color: var(--ink); }
+      ` }} />
+
+      <article>
+        <header className="sl-read sl-art-head">
+          <Eyebrow>Articles</Eyebrow>
+
+          <h1 className="sl-serif sl-art-h1">{article.title}</h1>
+
+          {article.subtitle && <p className="sl-art-dek">{article.subtitle}</p>}
+
+          <div className="sl-art-rule" />
+          <div className="sl-mono sl-art-meta">
+            <span>{formatDate(article.published_at)}</span>
+            <span>{article.reading_time_minutes} min read</span>
+            <span>Ben Condit</span>
           </div>
-        </div>
-      </nav>
-
-      <main style={{ maxWidth: '680px', margin: '0 auto', padding: '72px 1.5rem 100px' }}>
-
-        {/* Article header */}
-        <header style={{ marginBottom: '3rem' }}>
-          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
-            <span style={{ color: '#475569', fontSize: '13px' }}>{formatDate(article.published_at)}</span>
-            <span style={{ color: '#334155', fontSize: '13px' }}>·</span>
-            <span style={{ color: '#475569', fontSize: '13px' }}>{article.reading_time_minutes} min read</span>
-            <span style={{ color: '#334155', fontSize: '13px' }}>·</span>
-            <span style={{ color: '#475569', fontSize: '13px' }}>Ben Condit</span>
-          </div>
-
-          <h1 style={{
-            fontSize: '2.25rem', fontWeight: 700, letterSpacing: '-0.03em',
-            lineHeight: 1.2, color: '#f1f5f9', margin: '0 0 1rem',
-          }}>
-            {article.title}
-          </h1>
-
-          {article.subtitle && (
-            <p style={{ color: '#94a3b8', fontSize: '1.125rem', lineHeight: 1.6, margin: 0 }}>
-              {article.subtitle}
-            </p>
-          )}
         </header>
 
-        {/* Cover image */}
         {article.cover_image_url && (
-          <div style={{ marginBottom: '3rem', borderRadius: '12px', overflow: 'hidden' }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={article.cover_image_url}
-              alt={article.title}
-              style={{ width: '100%', height: 'auto', display: 'block' }}
-            />
+          <div className="sl-read">
+            <div className="sl-art-cover">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={article.cover_image_url} alt={article.title} />
+            </div>
           </div>
         )}
 
-        {/* Article body */}
+        {/* Article body. renderMarkdown() and the escapeHtml() ordering in front
+            of it are the S9 control and are untouched by this pass: everything
+            that changed above is CSS. */}
         <div
-          style={{ color: '#cbd5e1', lineHeight: 1.8, fontSize: '1rem' }}
+          className="sl-read sl-article"
           dangerouslySetInnerHTML={{ __html: bodyHtml }}
         />
 
-        {/* Inline styles for article content elements */}
-        <style>{`
-          main h1 { color: #f1f5f9; font-size: 1.75rem; font-weight: 700; margin: 2.5rem 0 1rem; letter-spacing: -0.02em; line-height: 1.3; }
-          main h2 { color: #f1f5f9; font-size: 1.375rem; font-weight: 600; margin: 2.25rem 0 0.875rem; letter-spacing: -0.015em; line-height: 1.35; }
-          main h3 { color: #e2e8f0; font-size: 1.125rem; font-weight: 600; margin: 2rem 0 0.75rem; }
-          main p { margin: 0 0 1.25rem; }
-          main p:empty { margin: 0.5rem 0; }
-          main strong { color: #f1f5f9; font-weight: 600; }
-          main em { color: #cbd5e1; font-style: italic; }
-          main a { color: #22c55e; text-decoration: underline; text-decoration-color: rgba(34,197,94,0.4); }
-          main a:hover { text-decoration-color: #22c55e; }
-          main blockquote { margin: 2rem 0; padding: 0.25rem 0 0.25rem 1.5rem; border-left: 3px solid rgba(34,197,94,0.5); color: #e2e8f0; font-size: 1.125rem; line-height: 1.7; font-style: normal; }
-          main blockquote strong { color: #f1f5f9; }
-          main ul { margin: 0 0 1.25rem; padding-left: 1.375rem; list-style: disc; }
-          main ul li { margin: 0 0 0.5rem; padding-left: 0.25rem; }
-          main ul li::marker { color: #22c55e; }
-        `}</style>
-
-        {/* Divider */}
-        <div style={{ margin: '4rem 0 3rem', borderTop: '1px solid rgba(255,255,255,0.07)' }} />
-
         {/* ── CTA pair (S1, 2 Sep 2026) ────────────────────────────────────────
-            Order is fixed: (a) Start free → platform signup, (b) Substack embed.
-            Nothing else sits between them. The embed captures the email on the
-            page instead of sending the reader off-site to subscribe. ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
-
-          {/* (a) Start free */}
-          <div>
-            <Link href="/signup" style={{
-              display: 'inline-block', background: '#16a34a', color: 'white',
-              padding: '0.875rem 1.75rem', borderRadius: '10px',
-              fontSize: '15px', fontWeight: 600, textDecoration: 'none',
-            }}>
-              Start free
+            Order is fixed: (a) Start free trial → platform signup, (b) Substack
+            embed. Nothing else sits between them. The embed captures the email
+            on the page instead of sending the reader off-site to subscribe.
+            "Start free" became "Start free trial" (S2-prep): the homepage
+            primary CTA reads "Start free trial", and the truncation drifted
+            toward implying a free tier, which is the thing the standing
+            no-free-tier rule exists to prevent. ── */}
+        <div className="sl-read">
+          <div className="sl-cta">
+            {/* COPY: every line in this block is lifted verbatim from the
+                homepage. The eyebrow is the hero eyebrow, the lead is the hero
+                h1, the subline is the hero subline, and the button is the hero
+                primary CTA. Nothing here is newly written, so nothing here can
+                promise something the site does not. */}
+            <Eyebrow>Awards intelligence, built by someone who ran one</Eyebrow>
+            <p className="sl-cta-lead">
+              Your final edit, brought forward as fast as possible.
+            </p>
+            <p className="sl-cta-sub">30+ shows. Unlimited entries. The judgment stays yours.</p>
+            <Link href="/signup" className="sl-cta-btn">
+              Start free trial
+              <i />
             </Link>
           </div>
 
-          {/* (b) Substack subscribe embed — sized for mobile first */}
-          <div style={{ width: '100%' }}>
+          <div className="sl-sub">
             <iframe
               src="https://shortlistawardsintelligence.substack.com/embed"
               title="Subscribe by email"
               width="100%"
               height="320"
-              style={{
-                display: 'block', width: '100%', maxWidth: '480px', height: '320px',
-                border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px',
-                background: 'white',
-              }}
               frameBorder="0"
               scrolling="no"
               loading="lazy"
             />
           </div>
 
-          {/* Social share — kept, moved below the CTA pair so the pair sits
-              directly under the article body. */}
-          <div>
-            <p style={{ color: '#475569', fontSize: '13px', marginBottom: '0.875rem' }}>Share this article</p>
-            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          {/* Social share — kept, below the CTA pair so the pair sits directly
+              under the article body. */}
+          <div className="sl-share">
+            <Eyebrow>Share this article</Eyebrow>
+            <div className="sl-share-row">
               {[
                 {
                   label: 'Share on X',
@@ -323,12 +380,7 @@ export default async function ArticlePage({ params }: { params: { slug: string }
                   href={btn.href}
                   target={btn.isCopy ? undefined : '_blank'}
                   rel="noopener noreferrer"
-                  style={{
-                    display: 'inline-block', color: '#94a3b8',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    padding: '0.5rem 1rem', borderRadius: '8px',
-                    fontSize: '13px', fontWeight: 500, textDecoration: 'none',
-                  }}
+                  className="sl-mono"
                 >
                   {btn.label}
                 </a>
@@ -336,24 +388,9 @@ export default async function ArticlePage({ params }: { params: { slug: string }
             </div>
           </div>
         </div>
-      </main>
+      </article>
 
-      {/* Footer */}
-      <footer style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '2.5rem 1.5rem' }}>
-        <div style={{ maxWidth: '1100px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', textDecoration: 'none' }}>
-            <div style={{ width: '22px', height: '22px', borderRadius: '5px', background: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ color: 'white', fontWeight: 700, fontSize: '10px' }}>S</span>
-            </div>
-            <span style={{ color: '#475569', fontSize: '13px' }}>Shortlist · gotshortlisted.com</span>
-          </Link>
-          <div style={{ display: 'flex', gap: '2rem' }}>
-            <Link href="/articles" style={{ color: '#475569', fontSize: '13px', textDecoration: 'none' }}>Articles</Link>
-            <Link href="/about" style={{ color: '#475569', fontSize: '13px', textDecoration: 'none' }}>About</Link>
-            <Link href="/login" style={{ color: '#475569', fontSize: '13px', textDecoration: 'none' }}>Sign in</Link>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }
