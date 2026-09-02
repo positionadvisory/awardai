@@ -86,25 +86,60 @@ function escapeHtml(text: string): string {
     .replace(/'/g, '&#39;')
 }
 
+// Inline marks, applied to an ALREADY-ESCAPED line. Extracted verbatim from the
+// old inline body of renderMarkdown so bold/italic behaviour is unchanged.
+function renderInline(escaped: string): string {
+  return escaped
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+}
+
 // Very lightweight markdown → HTML converter for article body.
-// Handles: headings (##, ###), bold (**text**), paragraphs, blank lines.
+// Handles: headings (#, ##, ###), bold (**text**), italic (*text*), paragraphs,
+// blank lines, blockquotes (> ) and unordered lists (- / * ).
 // Input is HTML-escaped line by line BEFORE markdown is applied — do not remove.
+// The emitted tag set is therefore exactly: h1 h2 h3 p strong em blockquote ul li.
+//
+// BLOCKQUOTE NOTE (S1, 2 Sep 2026): escapeHtml() runs first and turns '>' into
+// '&gt;', so the blockquote marker is matched in its ESCAPED form ('&gt; ').
+// This is deliberate: escapeHtml() and its position in the pipeline are the S9
+// control and must not be reordered to make the raw marker visible.
 function renderMarkdown(md: string): string {
-  return md
-    .split('\n')
-    .map(rawLine => {
-      const trimmed = escapeHtml(rawLine.trim())
-      if (!trimmed) return '<p style="margin:0"></p>'
-      if (trimmed.startsWith('### ')) return `<h3>${trimmed.slice(4)}</h3>`
-      if (trimmed.startsWith('## ')) return `<h2>${trimmed.slice(3)}</h2>`
-      if (trimmed.startsWith('# ')) return `<h1>${trimmed.slice(2)}</h1>`
-      // Bold
-      const withBold = trimmed.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      // Italic
-      const withItalic = withBold.replace(/\*(.+?)\*/g, '<em>$1</em>')
-      return `<p>${withItalic}</p>`
-    })
-    .join('\n')
+  const out: string[] = []
+  let listItems: string[] = []
+
+  const flushList = () => {
+    if (listItems.length) {
+      out.push(`<ul>${listItems.map(li => `<li>${li}</li>`).join('')}</ul>`)
+      listItems = []
+    }
+  }
+
+  for (const rawLine of md.split('\n')) {
+    const trimmed = escapeHtml(rawLine.trim())
+
+    // Unordered list item — '- ' or '* ' followed by whitespace. Neither marker is
+    // altered by escapeHtml. Requiring the space means '*emphasis*' at the start of
+    // a line is still italic, not a list.
+    const listItem = trimmed.match(/^[-*]\s+(.+)$/)
+    if (listItem) {
+      listItems.push(renderInline(listItem[1]))
+      continue
+    }
+    flushList()
+
+    if (!trimmed) { out.push('<p style="margin:0"></p>'); continue }
+    if (trimmed.startsWith('### ')) { out.push(`<h3>${trimmed.slice(4)}</h3>`); continue }
+    if (trimmed.startsWith('## ')) { out.push(`<h2>${trimmed.slice(3)}</h2>`); continue }
+    if (trimmed.startsWith('# ')) { out.push(`<h1>${trimmed.slice(2)}</h1>`); continue }
+    // Blockquote — '&gt; ' is the escaped form of '> '. 5 characters.
+    if (trimmed.startsWith('&gt; ')) { out.push(`<blockquote>${renderInline(trimmed.slice(5))}</blockquote>`); continue }
+
+    out.push(`<p>${renderInline(trimmed)}</p>`)
+  }
+  flushList()
+
+  return out.join('\n')
 }
 
 export default async function ArticlePage({ params }: { params: { slug: string } }) {
@@ -218,15 +253,53 @@ export default async function ArticlePage({ params }: { params: { slug: string }
           main em { color: #cbd5e1; font-style: italic; }
           main a { color: #22c55e; text-decoration: underline; text-decoration-color: rgba(34,197,94,0.4); }
           main a:hover { text-decoration-color: #22c55e; }
+          main blockquote { margin: 2rem 0; padding: 0.25rem 0 0.25rem 1.5rem; border-left: 3px solid rgba(34,197,94,0.5); color: #e2e8f0; font-size: 1.125rem; line-height: 1.7; font-style: normal; }
+          main blockquote strong { color: #f1f5f9; }
+          main ul { margin: 0 0 1.25rem; padding-left: 1.375rem; list-style: disc; }
+          main ul li { margin: 0 0 0.5rem; padding-left: 0.25rem; }
+          main ul li::marker { color: #22c55e; }
         `}</style>
 
         {/* Divider */}
         <div style={{ margin: '4rem 0 3rem', borderTop: '1px solid rgba(255,255,255,0.07)' }} />
 
-        {/* Share + CTA */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+        {/* ── CTA pair (S1, 2 Sep 2026) ────────────────────────────────────────
+            Order is fixed: (a) Start free → platform signup, (b) Substack embed.
+            Nothing else sits between them. The embed captures the email on the
+            page instead of sending the reader off-site to subscribe. ── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
 
-          {/* Social share */}
+          {/* (a) Start free */}
+          <div>
+            <Link href="/signup" style={{
+              display: 'inline-block', background: '#16a34a', color: 'white',
+              padding: '0.875rem 1.75rem', borderRadius: '10px',
+              fontSize: '15px', fontWeight: 600, textDecoration: 'none',
+            }}>
+              Start free
+            </Link>
+          </div>
+
+          {/* (b) Substack subscribe embed — sized for mobile first */}
+          <div style={{ width: '100%' }}>
+            <iframe
+              src="https://shortlistawardsintelligence.substack.com/embed"
+              title="Subscribe by email"
+              width="100%"
+              height="320"
+              style={{
+                display: 'block', width: '100%', maxWidth: '480px', height: '320px',
+                border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px',
+                background: 'white',
+              }}
+              frameBorder="0"
+              scrolling="no"
+              loading="lazy"
+            />
+          </div>
+
+          {/* Social share — kept, moved below the CTA pair so the pair sits
+              directly under the article body. */}
           <div>
             <p style={{ color: '#475569', fontSize: '13px', marginBottom: '0.875rem' }}>Share this article</p>
             <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
@@ -261,26 +334,6 @@ export default async function ArticlePage({ params }: { params: { slug: string }
                 </a>
               ))}
             </div>
-          </div>
-
-          {/* CTA block */}
-          <div style={{
-            background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.15)',
-            borderRadius: '16px', padding: '2rem',
-          }}>
-            <p style={{ color: '#f1f5f9', fontWeight: 600, fontSize: '1rem', margin: '0 0 0.5rem' }}>
-              Try Shortlist before your next entry.
-            </p>
-            <p style={{ color: '#94a3b8', fontSize: '14px', lineHeight: 1.6, margin: '0 0 1.25rem' }}>
-              AI-drafted entries, jury-calibrated evaluation, and a production brief — all from your existing brief.
-            </p>
-            <Link href="/login" style={{
-              display: 'inline-block', background: '#16a34a', color: 'white',
-              padding: '0.625rem 1.25rem', borderRadius: '8px',
-              fontSize: '14px', fontWeight: 500, textDecoration: 'none',
-            }}>
-              Request access — no card required
-            </Link>
           </div>
         </div>
       </main>

@@ -5,6 +5,13 @@ import { Metadata } from 'next'
 import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
 
+// ISR (S1, 2 Sep 2026). Without this the listing is prerendered ONCE at build
+// time: a newly published article never appears until someone redeploys, which
+// would have silently broken the S2 library paste. 60s keeps the page static and
+// fast while making a new article show up on its own. The article page itself is
+// already dynamic (no generateStaticParams), so only this listing was stale.
+export const revalidate = 60
+
 export const metadata: Metadata = {
   title: 'Articles — Shortlist',
   description: 'Practical writing on award entries, jury thinking, and how to win more with the same work. By Ben Condit.',
