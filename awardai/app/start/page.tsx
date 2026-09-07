@@ -35,11 +35,26 @@ import EvalBreakdown, { type EvalDisplayData } from '@/components/EvalBreakdown'
 
 // AOY safety net: detect-entry-context can return a non-canonical AOY name
 // ('Campaign Agency of the Year' without 'Asia') or an AOY category
-// ('PR Agency of the Year') with aoy=false, which isAoyShow misses. Every
-// Campaign AOY track is literally '... Agency of the Year'.
+// ('PR Agency of the Year') with aoy=false, which isAoyShow misses.
+//
+// ANCHORED ON THE ORGANISER, NOT THE PHRASE (7 Sep 2026). The old version
+// tested a bare /agency of the year/ against show AND category. That is a
+// generic programme name: AdNews, Adweek and Campaign UK/US/Global all use it,
+// and AdNews additionally uses it as a CATEGORY name in 21 of its 26 categories.
+// Any of those matched, and the setShow(AOY_SHOW_NAME) below then REWROTE the
+// show to Campaign Asia -- handing the entrant a Campaign Asia rubric and jury
+// read with no error at all. A missed detection costs the user one picker
+// click; a false detection produces a confident wrong answer, so this biases
+// hard against false positives.
 function looksLikeAoy(show?: string | null, category?: string | null): boolean {
   const re = /agency of the year/i
-  return isAoyShow(show ?? '') || re.test(show ?? '') || re.test(category ?? '')
+  const s = (show ?? '').trim()
+  if (isAoyShow(s)) return true
+  // The category arm only fires once the show is known to be a Campaign
+  // property. With no show, we cannot tell whose 'Agency of the Year' it is,
+  // so we do not guess.
+  if (!/campaign/i.test(s)) return false
+  return re.test(s) || re.test(category ?? '')
 }
 
 function nameFromFile(fileName: string): string {

@@ -136,6 +136,25 @@ export function isSmartiesShow(showName: string | null | undefined): boolean {
 }
 
 export const SHOW_CATEGORIES: Record<string, string[]> = {
+  // Letter prefixes MATCH show_profiles.category_pattern exactly. lib/entry-form.ts
+  // looks up .eq('category_pattern', categoryKey), so stripping them here would
+  // break every per-category lookup and silently fall back to the agency-frame
+  // default. Do not tidy them.
+  'AdNews Agency of the Year': [
+    'A. Creative Agency of the Year', 'B. Media Agency of the Year',
+    'C. Independent Agency of the Year', 'D. Specialist Agency of the Year',
+    'E. Small Agency of the Year (Headcount under 25)', 'F. Digital Agency of the Year',
+    'G. PR Agency of the Year', 'H. Holdco Agency of the Year',
+    'I. Ad Campaign of the Year', 'J. Media Campaign of the Year',
+    'K. Small Budget Media Campaign of the Year (Less than $500,000)',
+    'L. Social Media Campaign of the Year', 'M. Regional Media Campaign of the Year',
+    'N. Best Influencer Campaign', 'O. Best Use of Data', 'P. Best Use of Content',
+    'Q. Best Use of Music', 'R. Best Use of AI and Technology',
+    'S. Brand Partnership Award', 'T. Social Responsibility/ Pro Bono Award',
+    'U. The Game Changer Award', 'V. The AdNews Effectiveness Award',
+    'W. Employer of the Year (Headcount over 75)', 'X. Employer of the Year (Headcount under 75)',
+    'Y. Marketing Team of the Year', 'Z. Sales Team of the Year',
+  ],
   'Cannes Lions': [
     'Film Lions', 'Film Craft Lions', 'Titanium Lions', 'Grand Prix for Good',
     'Creative Business Transformation Lions', 'Creative Effectiveness Lions',
@@ -496,7 +515,7 @@ export const SHOW_CATEGORIES: Record<string, string[]> = {
     'Grand Effie', 'Integrated Campaign', 'Long-Term Effects', 'Media Innovation',
     'New Product/Service', 'Purpose', 'Sustained Success',
   ],
-  'Australian Effies': [
+  'Australian Effie Awards': [
     'Best Insight', 'Best Use of Media', 'Brand Experience', 'David vs Goliath',
     'Effectiveness Grand Prix', 'Integrated Campaign', 'Long-Term Effects',
     'New Product Launch', 'Purpose', 'Short-Term Sales',
