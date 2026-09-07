@@ -6,6 +6,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
 import { SiteNav, SiteFooter, Eyebrow } from '@/components/site/SiteChrome'
+import { renderMarkdown, stripDuplicateTitle } from '@/lib/article-markdown'
 
 // The article page must not reuse a cached database read.
 //
@@ -122,113 +123,14 @@ function formatDate(iso: string): string {
   })
 }
 
-// Escape raw HTML before any markdown transformation (audit S9 — Session 50).
-// Without this, HTML in article content goes straight into dangerouslySetInnerHTML:
-// stored XSS on the public site. Escaping first means the ONLY tags in the output
-// are the ones renderMarkdown itself emits (h1/h2/h3/p/strong/em).
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
-
-// Inline marks, applied to an ALREADY-ESCAPED line. Extracted verbatim from the
-// old inline body of renderMarkdown so bold/italic behaviour is unchanged.
-function renderInline(escaped: string): string {
-  return escaped
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-}
-
-// Very lightweight markdown → HTML converter for article body.
-// Handles: headings (#, ##, ###), bold (**text**), italic (*text*), paragraphs,
-// blank lines, blockquotes (> ) and unordered lists (- / * ).
-// Input is HTML-escaped line by line BEFORE markdown is applied — do not remove.
-// The emitted tag set is therefore exactly: h1 h2 h3 p strong em blockquote ul li.
-//
-// BLOCKQUOTE NOTE (S1, 2 Sep 2026): escapeHtml() runs first and turns '>' into
-// '&gt;', so the blockquote marker is matched in its ESCAPED form ('&gt; ').
-// This is deliberate: escapeHtml() and its position in the pipeline are the S9
-// control and must not be reordered to make the raw marker visible.
-function renderMarkdown(md: string): string {
-  const out: string[] = []
-  let listItems: string[] = []
-
-  const flushList = () => {
-    if (listItems.length) {
-      out.push(`<ul>${listItems.map(li => `<li>${li}</li>`).join('')}</ul>`)
-      listItems = []
-    }
-  }
-
-  for (const rawLine of md.split('\n')) {
-    const trimmed = escapeHtml(rawLine.trim())
-
-    // Unordered list item — '- ' or '* ' followed by whitespace. Neither marker is
-    // altered by escapeHtml. Requiring the space means '*emphasis*' at the start of
-    // a line is still italic, not a list.
-    const listItem = trimmed.match(/^[-*]\s+(.+)$/)
-    if (listItem) {
-      listItems.push(renderInline(listItem[1]))
-      continue
-    }
-    flushList()
-
-    if (!trimmed) { out.push('<p style="margin:0"></p>'); continue }
-    if (trimmed.startsWith('### ')) { out.push(`<h3>${trimmed.slice(4)}</h3>`); continue }
-    if (trimmed.startsWith('## ')) { out.push(`<h2>${trimmed.slice(3)}</h2>`); continue }
-    if (trimmed.startsWith('# ')) { out.push(`<h1>${trimmed.slice(2)}</h1>`); continue }
-    // Blockquote — '&gt; ' is the escaped form of '> '. 5 characters.
-    if (trimmed.startsWith('&gt; ')) { out.push(`<blockquote>${renderInline(trimmed.slice(5))}</blockquote>`); continue }
-
-    out.push(`<p>${renderInline(trimmed)}</p>`)
-  }
-  flushList()
-
-  return out.join('\n')
-}
-
-// Drop a leading '# Title' line when it repeats the article's own title.
-//
-// Every copy-locked article opens with its own '# Title' line, so renderMarkdown
-// emitted an <h1> underneath the page's title <h1>: two h1s on every article,
-// measured on the W6 render in S1 and again here on a 16-row harness. The S1
-// record put the fix on S2 as "strip the leading '# ' line from all 16 bodies",
-// by hand, sixteen times. That is the shape of job that gets forgotten once and
-// then ships, so it is done here instead and S2 can paste bodies untouched.
-//
-// Deliberately narrow: the FIRST non-empty line only, only when it is an h1, and
-// only when its text matches this article's title. A body whose first heading is
-// a real, different h1 is left alone. renderMarkdown() and the escapeHtml()
-// ordering in front of it are untouched — this runs before either.
-//
-// The comparison ignores case, whitespace, markdown marks AND punctuation. The
-// punctuation part is not cosmetic: run against the seven copy-locked bodies,
-// a title typed without its trailing '?' or its '...' missed on four of seven
-// (W1, W3, W4, W8), and a miss is silent — you get the duplicate h1 back with
-// no error. Whoever pastes should not have to reproduce punctuation exactly.
-// Ignoring it cannot cause a false strip: a leading h1 that equals the title
-// apart from punctuation IS the title.
-function stripDuplicateTitle(content: string, title: string): string {
-  const lines = content.split('\n')
-  const i = lines.findIndex(l => l.trim() !== '')
-  if (i === -1) return content
-  const first = lines[i].trim()
-  if (!first.startsWith('# ')) return content
-  // ASCII punctuation plus curly quotes, en/em dash and ellipsis. Written as an
-  // explicit punctuation list rather than \p{L}\p{N} with the /u flag, because
-  // tsconfig sets no `target` and so defaults below es6 (TS1501). A positive
-  // list also leaves accented and non-Latin letters intact, which /[^A-Za-z0-9]/
-  // would strip.
-  const PUNCT = /[!-\/:-@\[-\x60{-~–—‘’“”…]/g
-  const norm = (s: string) =>
-    s.replace(PUNCT, '').replace(/\s+/g, ' ').trim().toLowerCase()
-  if (norm(first.slice(2)) !== norm(title)) return content
-  return lines.slice(i + 1).join('\n')
-}
+// The body renderer (escapeHtml, renderInline, renderMarkdown,
+// stripDuplicateTitle) moved to lib/article-markdown.ts on 7 Sep 2026 when
+// anchors were added. It had to move rather than be exported from here: an
+// app/**/page.tsx may export only `default` plus the route-segment allowlist,
+// so exporting it in place fails `next build` and tsc --noEmit cannot see that
+// failure (S161). The move is what lets
+// scripts/article-markdown-fixture.mjs test the REAL renderer instead of a
+// hand-copy. The S9 escape-first ordering is unchanged and documented there.
 
 export default async function ArticlePage({ params }: { params: { slug: string } }) {
   const article = await getArticle(params.slug)
