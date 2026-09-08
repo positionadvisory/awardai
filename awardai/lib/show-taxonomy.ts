@@ -608,4 +608,37 @@ export const SHOW_CATEGORIES: Record<string, string[]> = {
     'Moving Image Craft & Production', 'Music & Sound Craft', 'Out of Home',
     'Print & Promotional', 'Public Relations', 'Radio & Audio-First', 'Social Media',
   ],
+  // The Indie Awards, added 8 Sep 2026 (T7a). Gate 4 of the seven gates.
+  //
+  // THIRTEEN of the show's twenty-one 2027 categories, not all twenty-one, and
+  // the difference is deliberate. Every string here matches a seeded
+  // show_profiles.category_pattern BYTE FOR BYTE, because lib/entry-form.ts
+  // looks the rubric up with .eq('category_pattern', categoryKey): a category
+  // offered here with no matching row resolves to no rubric and falls silently
+  // to the generic judge, which is how the Australian Effie's picker stayed
+  // broken for weeks.
+  //
+  // The eight absent categories are absent because we hold no rubric for them
+  // and should not imply we do. Four Best Creative categories are out because
+  // T3 measured them as the jury's highest-scoring group and our lowest, with a
+  // Gold winner landing in our bottom quartile: they are judged on artefacts a
+  // written case does not carry. Agency of the Year is out because within it our
+  // ordering against the jury was 3 of 6 pairs, a coin flip. Best Agency Client
+  // Partnership, Indie Legend and Rising Star are single 2000-word essays about
+  // a relationship or a person, with no criterion boxes to score.
+  'The Indie Awards': [
+    'B2B Campaign of the Year',
+    'Best B2B PR Campaign',
+    'Best Integrated Media Campaign',
+    'Best Integrated PR Campaign',
+    'Best Lifestyle/B2C PR Campaign',
+    'Best Media (Audio/Radio)',
+    'Best Media (Out of Home: OOH/DOOH)',
+    'Best Social First',
+    'Energy / Sustainability Campaign of the Year',
+    'Government & Not For Profit Campaign of the Year',
+    'Healthcare Campaign of the Year',
+    'Innovation & Martech Excellence',
+    'Public Good Award',
+  ],
 }
