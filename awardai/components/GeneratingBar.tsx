@@ -40,6 +40,14 @@ interface GeneratingBarProps {
    * jury eval uses green, the coach run keeps gold — 22 Jul 2026).
    */
   accent?: string
+  /**
+   * Start on a random statement (the default, so a returning user sees a fresh
+   * line) or on the first one. The Indie pre-read passes false: that entrant
+   * sees the bar exactly once, so the ORDER of the statements is itself the
+   * explanation of what is happening, and randomizing it throws that away.
+   * Optional and default true, so every existing call site is unchanged.
+   */
+  randomizeStart?: boolean
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -71,13 +79,14 @@ export default function GeneratingBar({
   onComplete,
   statements: statementsProp,
   accent = '#c9a95c',
+  randomizeStart = true,
 }: GeneratingBarProps) {
   const statements = statementsProp ?? DEFAULT_STATEMENTS
 
   // Progress 0–100
   const [progress, setProgress] = useState(0)
   // Which statement is showing
-  const [statementIdx, setStatementIdx] = useState(() => randomStart(statements.length))
+  const [statementIdx, setStatementIdx] = useState(() => randomizeStart ? randomStart(statements.length) : 0)
   // Fade state for statement text
   const [visible, setVisible] = useState(true)
 
@@ -89,8 +98,8 @@ export default function GeneratingBar({
 
   // Reset index when statements array changes
   useEffect(() => {
-    setStatementIdx(randomStart(statements.length))
-  }, [statements])
+    setStatementIdx(randomizeStart ? randomStart(statements.length) : 0)
+  }, [statements, randomizeStart])
 
   // ── Progress animation ───────────────────────────────────────────────────
   useEffect(() => {
