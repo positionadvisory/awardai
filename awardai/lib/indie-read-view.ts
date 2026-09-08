@@ -24,6 +24,15 @@ import { indieAdmin, isIndieToken } from './indie-read-server'
 
 export type IndieReadPayload = Record<string, unknown>
 
+const RETURN_VISIT_GRACE_MS = 60_000
+
+function isReturnVisit(lastReadAt: string | null): boolean {
+  if (!lastReadAt) return false
+  const t = new Date(lastReadAt).getTime()
+  if (isNaN(t)) return false
+  return Date.now() - t > RETURN_VISIT_GRACE_MS
+}
+
 export async function loadIndieRead(token: string): Promise<{ httpStatus: number; body: IndieReadPayload }> {
   if (!isIndieToken(token)) {
     return { httpStatus: 404, body: { error: 'Not found' } }
@@ -32,7 +41,7 @@ export async function loadIndieRead(token: string): Promise<{ httpStatus: number
 
   const { data: row, error } = await admin
     .from('indie_reads')
-    .select('id, status, category_slug, category_pattern, entry_id, bands, adjustments, also_fits, elsewhere, elsewhere_dropped, created_at, completed_at, expires_at, read_count, source_path')
+    .select('id, status, category_slug, category_pattern, entry_id, bands, adjustments, also_fits, elsewhere, elsewhere_dropped, created_at, completed_at, expires_at, read_count, last_read_at, source_path')
     .eq('token', token)
     .limit(1)
     .maybeSingle()
@@ -52,7 +61,12 @@ export async function loadIndieRead(token: string): Promise<{ httpStatus: number
     return { httpStatus: 200, body: { status: row.status, category_slug: row.category_slug } }
   }
 
-  // AWAITED, inside a try, and that is a fix rather than a preference. T7a
+  // AWAITED, inside a try, and that is a fix rather than a preference. NOTE
+  // that read_count is not a reliable view count and this write does not make
+  // it one: two renders per navigation both read the same value and both write
+  // the same increment. Making it a true counter needs an atomic increment in
+  // the database, which is T7a's table and a migration this build does not own.
+  // Nothing entrant-facing reads it. T7a
   // wrote this as fire and forget so a failed counter could never fail the
   // page, which is the right intent: but nothing guarantees a serverless
   // invocation stays alive after its response, and measured on the preview the
@@ -81,10 +95,23 @@ export async function loadIndieRead(token: string): Promise<{ httpStatus: number
       created_at:       row.created_at,
       completed_at:     row.completed_at,
       expires_at:       row.expires_at,
-      // First view is read_count 0 in the row we just read. T5's TOKEN_REUSED
-      // copy ("This read is already done") is a RETURN-visit string, so the
-      // page needs to know which visit this is.
-      is_return_visit:  (row.read_count ?? 0) > 0,
+      // T5's TOKEN_REUSED copy ("This read is already done") is a RETURN-visit
+      // string, so the page needs to know which visit this is.
+      //
+      // KEYED ON last_read_at, NOT read_count, and the reason is measured. The
+      // bump is a read-then-write, and this page renders twice per navigation,
+      // so both renders read the same pre-write value and both store the same
+      // incremented one: read_count reached 1 on the preview and then stayed at
+      // 1 across every later view while last_read_at moved each time. A
+      // saturating counter cannot tell a first visit from a tenth.
+      //
+      // The GRACE WINDOW is what makes the timestamp usable. Those two renders
+      // are milliseconds apart, so without it the first view would set the
+      // stamp and the second would read it and greet a brand new entrant with
+      // "this read is already done". A genuine return visit is minutes or days
+      // later, so one minute separates the two cases with room to spare, and it
+      // fails toward silence rather than toward wrong copy.
+      is_return_visit:  isReturnVisit(row.last_read_at as string | null),
       bands:            row.bands ?? [],
       adjustments:      row.adjustments ?? [],
       // Count is reported so the page can drop the word "Three" from
