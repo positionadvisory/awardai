@@ -274,6 +274,13 @@ export default function IndieRead({ token, data, again }: { token: string; data:
       {/* Stage 3, locked. Show and category only: a locked panel that leaks one
           sentence of rationale is a free sample of the paid product, and the
           entrant reads the sample instead of buying. */}
+      {/* Measured on the preview: stage 3 can resolve NOTHING. On the one real
+          entry tested it returned count 0 with dropped 4, because the model
+          names track titles from other shows' taxonomies and every one failed
+          to resolve against our own category lists. The first version of this
+          block kept the heading and rendered an empty body under it, which
+          reads as broken rather than as empty. The whole section goes. */}
+      {elsewhere !== null && elsewhere.length === 0 ? null : (
       <section className="mt-4 w-full rounded-xl border border-gray-200 bg-white p-6 sm:p-8">
         <h2 className="text-base font-semibold text-gray-900">{STAGE3_H}</h2>
         {elsewhere === null ? (
@@ -301,7 +308,7 @@ export default function IndieRead({ token, data, again }: { token: string; data:
             )}
             {stage3Error && <p className="mt-3 text-sm text-red-700">{stage3Error}</p>}
           </>
-        ) : elsewhere.length === 0 ? null : (
+        ) : (
           <>
             <p className="mt-2 text-sm leading-relaxed text-gray-500">{stage3Sub(elsewhere.length)}</p>
             <ul className="mt-4 grid grid-cols-1 gap-2.5">
@@ -322,6 +329,7 @@ export default function IndieRead({ token, data, again }: { token: string; data:
           </>
         )}
       </section>
+      )}
 
       {/* The three CTAs, in this order. The trial is first because it is the
           only one that converts, and burying it under the articles would be coy
