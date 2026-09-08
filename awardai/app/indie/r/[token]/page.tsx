@@ -1,12 +1,20 @@
 // app/indie/r/[token]/page.tsx -- the public tokenized read page.
 //
-// SERVER-RENDERED from GET /api/indie/read/[token], which is a service-role
-// route keyed on the token. It is not an anon-readable policy on a token
-// column: platform_invitations once had CREATE POLICY USING (true) for anon and
-// it was dropped precisely because it exposed every token and every invitee
-// email to anyone holding the anon key. indie_reads has RLS on with zero
-// policies, so that route is the only way in and this page goes through it
-// rather than reaching for the table with a second copy of the field allowlist.
+// SERVER-RENDERED through lib/indie-read-view.ts, the same function
+// GET /api/indie/read/[token] returns its body from, so the two surfaces cannot
+// disagree about which fields exist and there is only one copy of the column
+// allowlist. indie_reads has RLS on with zero policies and an explicit REVOKE,
+// so a service-role read is the only way in: an anon-readable policy on a token
+// column is what platform_invitations had, USING (true), and it was dropped
+// because it exposed every token and every invitee email to anyone holding the
+// anon key.
+//
+// It does NOT fetch its own API route over HTTP. That was the first version and
+// it failed on the preview, where Vercel's deployment protection answers an
+// uncredentialed server-side fetch with an HTML challenge: the page parsed no
+// JSON and rendered its failure state over a read that was fine, while the same
+// code would have worked on production. A page that can only be tested in
+// production is a page nobody tests.
 //
 // No login, no account, and no email address in the payload: the route does not
 // return the entrant's address and must not start, because this is a public URL
@@ -17,7 +25,7 @@
 // are in the API. A distinct "this read has expired" page would confirm to
 // somebody guessing tokens that this one existed.
 
-import { headers } from 'next/headers'
+import { loadIndieRead } from '@/lib/indie-read-view'
 import IndieRead, { type IndieReadData, type ReadBand } from '@/components/IndieRead'
 import { READ_NOT_FOUND, READ_FAILED, READ_LOAD_FAILED } from '@/lib/indie-copy'
 
@@ -55,18 +63,16 @@ function OneLine({ text }: { text: string }) {
 export default async function IndieReadPage(
   { params, searchParams }: { params: { token: string }; searchParams: { again?: string } }
 ) {
-  const h = headers()
-  const proto = h.get('x-forwarded-proto') ?? 'https'
-  const host = h.get('host') ?? ''
   const token = params.token
 
   let status = 0
   let payload: Record<string, unknown> = {}
   try {
-    const res = await fetch(proto + '://' + host + '/api/indie/read/' + encodeURIComponent(token), { cache: 'no-store' })
-    status = res.status
-    payload = await res.json().catch(() => ({}))
-  } catch {
+    const loaded = await loadIndieRead(token)
+    status = loaded.httpStatus
+    payload = loaded.body
+  } catch (err) {
+    console.error('[indie/r] load failed:', err)
     return <OneLine text={READ_LOAD_FAILED} />
   }
 
