@@ -52,11 +52,23 @@ export async function loadIndieRead(token: string): Promise<{ httpStatus: number
     return { httpStatus: 200, body: { status: row.status, category_slug: row.category_slug } }
   }
 
-  // Fire and forget: a failed counter must never fail the page.
-  admin.from('indie_reads')
-    .update({ read_count: (row.read_count ?? 0) + 1, last_read_at: new Date().toISOString() })
-    .eq('id', row.id)
-    .then(({ error: e }) => { if (e) console.error('[indie/read/token] read_count bump failed:', e) })
+  // AWAITED, inside a try, and that is a fix rather than a preference. T7a
+  // wrote this as fire and forget so a failed counter could never fail the
+  // page, which is the right intent: but nothing guarantees a serverless
+  // invocation stays alive after its response, and measured on the preview the
+  // bump never landed once in four views. read_count stayed 0, so
+  // is_return_visit could never turn true and T5's TOKEN_REUSED line could
+  // never render at all. Awaiting it costs one round trip; the try keeps the
+  // original guarantee, which was about not failing the page rather than about
+  // not waiting.
+  try {
+    const { error: bumpErr } = await admin.from('indie_reads')
+      .update({ read_count: (row.read_count ?? 0) + 1, last_read_at: new Date().toISOString() })
+      .eq('id', row.id)
+    if (bumpErr) console.error('[indie/read/token] read_count bump failed:', bumpErr)
+  } catch (e) {
+    console.error('[indie/read/token] read_count bump threw:', e)
+  }
 
   return {
     httpStatus: 200,
