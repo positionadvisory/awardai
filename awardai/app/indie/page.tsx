@@ -57,6 +57,23 @@ type Stage = 'form' | 'working' | 'pdf_sent' | 'notext'
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 const UPLOAD_EXTS = ['pdf', 'docx']
 
+// How long the upload path stays on the progress screen before it hands off to
+// the "On its way" screen. NOT zero, which is what shipped: the handoff screen
+// promises "the link lands in your inbox in about two minutes", and a request
+// that fails in six seconds made that promise before the server had answered.
+// A definite failure arrives well inside this window and never shows it; a real
+// read passes through it and the entrant is still released early, which is what
+// PDF_NOTE commits to. Under a minute stays true of the screen it is written on.
+const PDF_HANDOFF_AFTER_MS = 12000
+
+// The server's own refusal, mirrored client-side so an all-empty paste costs
+// neither a round trip nor one of the six hourly throttle slots (the attempts
+// row is written before the edge call, so a validation 400 spends one). The
+// server check remains the gate; this is a convenience. Inline rather than in
+// lib/indie-copy.ts because it is not T5 copy: it is this route's own string,
+// and page.tsx already holds the other validation messages.
+const PASTE_ALL_EMPTY = 'Paste at least one of the four sections.'
+
 function wordCount(s: string): number {
   const t = s.trim()
   if (!t) return 0
@@ -108,6 +125,13 @@ export default function IndiePreReadPage() {
   const [filename, setFilename] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const runningRef = useRef(false)
+  const handoffRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // A pending handoff must not outlive the page: it would call setStage after
+  // the redirect has already unmounted this component.
+  useEffect(() => {
+    return () => { if (handoffRef.current) clearTimeout(handoffRef.current) }
+  }, [])
 
   // ── Category config, and the two URL parameters ────────────────────────────
   useEffect(() => {
@@ -178,6 +202,11 @@ export default function IndiePreReadPage() {
   const submitPaste = async () => {
     if (runningRef.current) return
     if (!gate() || !selected) return
+    // Refused locally, with the server's own words. Four empty boxes is the one
+    // invalid paste the client can be certain about, and letting it through
+    // costs the entrant six seconds and a throttle slot to be told so.
+    const anyFilled = selected.boxes.some(b => (sections[b.key] ?? '').trim().length > 0)
+    if (!anyFilled) { setError(PASTE_ALL_EMPTY); return }
     // Set synchronously, before any await: disabled={state} does not close a
     // double-click race, and a duplicate fire here spends a model call.
     runningRef.current = true
@@ -226,6 +255,24 @@ export default function IndiePreReadPage() {
   }
 
   // ── Upload path ────────────────────────────────────────────────────────────
+  // Every outcome now resolves to exactly one visible end state: the notext
+  // screen, the refusal box, a redirect, the "On its way" screen, or the form
+  // carrying an error. What shipped handled only notext, 429 and a token, and
+  // everything else fell through to a bare runningRef reset that left the
+  // entrant sitting on "On its way ... the link lands in your inbox in about
+  // two minutes" with no email ever coming. That covered every 400
+  // (INDIEREAD-EMAIL, INDIEREAD-NOCAT, INDIEREAD-EMPTY), both edge 502s
+  // (INDIEREAD-SEGMENT, INDIEREAD-EVAL), any 500, a non-JSON upstream body and
+  // a thrown fetch. The paste path was already correct on all of them.
+  //
+  // 504 IS NOT A FAILURE ON THIS PATH, and this is the one place this handler
+  // must not follow the paste path. The route aborts its edge call at 110s and
+  // returns INDIE-TIMEOUT, but the edge function is still running and still
+  // sends the email: that is the documented two-minute upload flow, not a
+  // fault. So a 504 resolves to the handoff screen, where the inbox promise is
+  // true. Showing READ_FAILED there would tell an entrant the read died while
+  // it was on its way to them, and READ_FAILED also claims nothing was used
+  // up, which a completing read makes false.
   const submitFile = async (file: File) => {
     if (runningRef.current) return
     if (!gate() || !selected) return
@@ -234,20 +281,36 @@ export default function IndiePreReadPage() {
       setError('Send a PDF or a Word document, or paste the sections instead.')
       return
     }
+    // A zero-byte file cannot contain text, so it is answered here instead of
+    // spending a throttle slot on a request whose result is already known. It
+    // lands on the notext screen because that screen already says the true
+    // thing: no readable text, paste instead, nothing used up. Empty EXTRACTED
+    // text is deliberately NOT guarded this way. That is the scan case, and it
+    // has to reach the server so the notext email goes out.
+    if (file.size === 0) { setFilename(file.name); setStage('notext'); return }
+
     runningRef.current = true
     setFilename(file.name)
     setStatements(INDIE_PDF_STATEMENTS)
     setStage('working')
+    if (handoffRef.current) clearTimeout(handoffRef.current)
+    handoffRef.current = setTimeout(() => setStage('pdf_sent'), PDF_HANDOFF_AFTER_MS)
+
+    // One exit door. Cancels a pending handoff, applies the end state, and
+    // releases the double-click guard, so no branch can forget any of the
+    // three. The redirect is the only path that does not use it, because it
+    // leaves the page.
+    const settle = (apply: () => void) => {
+      if (handoffRef.current) { clearTimeout(handoffRef.current); handoffRef.current = null }
+      apply()
+      runningRef.current = false
+    }
+
     try {
       // The file is read in the browser and never uploaded anywhere. Only the
       // extracted text is sent, which is what the consent block promises.
       const { text } = await extractEntryText(file, setPdfStage)
 
-      // The page hands off before the read finishes. The upload path runs about
-      // two minutes against a 110s route timeout, so a 504 here is the EXPECTED
-      // outcome and not a failure: the edge function keeps running and emails
-      // the link. Only a fast refusal or a notext result changes this screen.
-      setStage('pdf_sent')
       const res = await fetch('/api/indie/read', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -261,21 +324,44 @@ export default function IndiePreReadPage() {
           filename: file.name,
         }),
       })
-      const data = await res.json().catch(() => ({}))
-      if (data.status === 'notext') { setStage('notext'); runningRef.current = false; return }
-      if (res.status === 429) {
-        setRefusal(data.reason === 'ip_throttle' ? QUEUE_IP_THROTTLE : QUEUE_DAILY_CAP)
-        setStage('form'); runningRef.current = false; return
-      }
-      if (typeof data.token === 'string' && data.token) {
-        router.push('/indie/r/' + data.token + (data.reused === true ? '?again=1' : ''))
+      const data = await res.json().catch(() => ({} as Record<string, unknown>))
+
+      // Read in this order deliberately. The timeout is checked before any
+      // failure branch because it is not one, and notext before the generic
+      // 4xx reader because it is a result rather than a refusal.
+      if (res.status === 504) { settle(() => setStage('pdf_sent')); return }
+      if (data.status === 'notext') { settle(() => setStage('notext')); return }
+      if (handleRefusal(res.status, data)) { settle(() => setStage('form')); return }
+
+      // Same refusal as the paste path: a section_alignment_warnings count
+      // above zero means a band may be attached to the wrong criterion, which
+      // is worse than no read at all.
+      const warnings = typeof data.section_alignment_warnings === 'number' ? data.section_alignment_warnings : 0
+      if (warnings > 0) {
+        console.error('[indie] section_alignment_warnings', warnings, 'on', data.token)
+        settle(() => { setError(READ_FAILED); setStage('form') })
         return
       }
-      runningRef.current = false
+
+      const token = typeof data.token === 'string' ? data.token : ''
+      if (!token) {
+        // A 2xx with no token and no notext status. Nothing to redirect to and
+        // nothing was promised, so it is a failure rather than a handoff.
+        console.error('[indie] upload returned no token', res.status, data.code)
+        settle(() => { setError(READ_FAILED); setStage('form') })
+        return
+      }
+      if (handoffRef.current) { clearTimeout(handoffRef.current); handoffRef.current = null }
+      router.push('/indie/r/' + token + (data.reused === true ? '?again=1' : ''))
     } catch {
-      // Includes the expected timeout. The screen already says the link is
-      // coming by email, and it is.
-      runningRef.current = false
+      // extractEntryText swallows its own failures and returns empty text, so
+      // this is the fetch: a dropped connection, or the browser giving up. We
+      // cannot know whether the read started. READ_FAILED is the safer of the
+      // two wrong answers available: if the read did complete, the entrant gets
+      // an email they were not promised, and re-running the same entry ID
+      // returns that same read rather than spending another. The handoff screen
+      // would instead promise an email that may never arrive.
+      settle(() => { setError(READ_FAILED); setStage('form') })
     }
   }
 
