@@ -39,7 +39,7 @@ import {
   INDIE_READ_STATEMENTS, INDIE_PDF_STATEMENTS,
   QUEUE_DAILY_CAP, QUEUE_IP_THROTTLE, READ_FAILED,
   INDIE_SRC_ABSENT, INDIE_VALID_SRC,
-  confirmLine, boxesNote, countUnder, countOver, pdfSentBody, pdfNoTextInline,
+  confirmLine, boxesNote, countUnder, countOver, pdfSentBody, pdfNoTextInline, pdfNoSectionsInline,
 } from '@/lib/indie-copy'
 
 type Box = { key: string; label: string; word_limit: number | null; guidance: string }
@@ -117,6 +117,12 @@ export default function IndiePreReadPage() {
   const [error, setError] = useState('')
   const [consentError, setConsentError] = useState('')
   const [refusal, setRefusal] = useState('')
+  // Which notext screen to render: '' / 'no_text_in_file' (the scan/image
+  // case, and the default for an older server response with no reason at
+  // all) or 'no_sections_in_file' (readable, but none of the four scored
+  // sections are in it). Reset on every new submission so a stale reason
+  // from a prior upload cannot leak onto this one.
+  const [notextReason, setNotextReason] = useState('')
   const [overrun, setOverrun] = useState(false)
   const [statements, setStatements] = useState<string[]>(INDIE_READ_STATEMENTS)
 
@@ -174,7 +180,7 @@ export default function IndiePreReadPage() {
   }, [])
 
   function gate(): boolean {
-    setError(''); setRefusal('')
+    setError(''); setRefusal(''); setNotextReason('')
     if (!selected) { setError('Choose your category first.'); return false }
     if (!email.trim()) { setError('A work email is needed so the read can reach you.'); return false }
     if (!consent) { setConsentError('Tick the box to confirm you have read how this works.'); return false }
@@ -189,6 +195,17 @@ export default function IndiePreReadPage() {
   function handleRefusal(status: number, data: Record<string, unknown>): boolean {
     if (status === 429) {
       setRefusal(data.reason === 'ip_throttle' ? QUEUE_IP_THROTTLE : QUEUE_DAILY_CAP)
+      return true
+    }
+    // A 5xx is ours, not the entrant's, so we name it ourselves rather than
+    // show whatever the upstream chain happened to say: production rendered
+    // the server's own "Could not finish the read.", which is terse and never
+    // says nothing was used up (T7e, 9 Sep 2026). 504 is excluded: it is not
+    // a failure on the upload path (submitFile checks it before calling this
+    // function, so it never reaches here from there), and this same function
+    // also serves the paste path, which has no such carve-out.
+    if (status >= 500 && status !== 504) {
+      setError(READ_FAILED)
       return true
     }
     if (status >= 400) {
@@ -287,7 +304,7 @@ export default function IndiePreReadPage() {
     // thing: no readable text, paste instead, nothing used up. Empty EXTRACTED
     // text is deliberately NOT guarded this way. That is the scan case, and it
     // has to reach the server so the notext email goes out.
-    if (file.size === 0) { setFilename(file.name); setStage('notext'); return }
+    if (file.size === 0) { setFilename(file.name); setNotextReason('no_text_in_file'); setStage('notext'); return }
 
     runningRef.current = true
     setFilename(file.name)
@@ -309,7 +326,9 @@ export default function IndiePreReadPage() {
     try {
       // The file is read in the browser and never uploaded anywhere. Only the
       // extracted text is sent, which is what the consent block promises.
-      const { text } = await extractEntryText(file, setPdfStage)
+      // The Indie path never uses chart-page image blobs, and rendering them
+      // needs requestAnimationFrame, which a hidden tab never fires (T7e).
+      const { text } = await extractEntryText(file, setPdfStage, { skipChartPages: true })
 
       const res = await fetch('/api/indie/read', {
         method: 'POST',
@@ -330,7 +349,13 @@ export default function IndiePreReadPage() {
       // failure branch because it is not one, and notext before the generic
       // 4xx reader because it is a result rather than a refusal.
       if (res.status === 504) { settle(() => setStage('pdf_sent')); return }
-      if (data.status === 'notext') { settle(() => setStage('notext')); return }
+      if (data.status === 'notext') {
+        settle(() => {
+          setNotextReason(typeof data.reason === 'string' ? data.reason : '')
+          setStage('notext')
+        })
+        return
+      }
       if (handleRefusal(res.status, data)) { settle(() => setStage('form')); return }
 
       // Same refusal as the paste path: a section_alignment_warnings count
@@ -406,7 +431,11 @@ export default function IndiePreReadPage() {
               </>
             ) : (
               <>
-                <p className="text-sm leading-relaxed text-gray-700">{pdfNoTextInline(filename)}</p>
+                <p className="text-sm leading-relaxed text-gray-700">
+                  {notextReason === 'no_sections_in_file'
+                    ? pdfNoSectionsInline(filename, selected?.display ?? 'your category')
+                    : pdfNoTextInline(filename)}
+                </p>
                 <button
                   type="button"
                   onClick={() => { setStage('form'); setShowPdf(false) }}

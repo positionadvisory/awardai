@@ -44,9 +44,22 @@ export function safeFileName(name: string): string {
     .replace(/^-+|-+$/g, '') || 'file'
 }
 
+export type ExtractOptions = {
+  // Skip the canvas render pass for pages with under 80 characters of text.
+  // pdf.js page.render() waits on requestAnimationFrame, which a hidden tab
+  // never fires, so extraction of a scan can stall indefinitely on a tab the
+  // user has switched away from (measured 9 Sep 2026: under a second with rAF
+  // emulated, unresolved after 8s without it). The Indie pre-read never uses
+  // the chart blobs this pass produces, so it opts out entirely rather than
+  // fixing the render call for a consumer that discards the result. Default
+  // is false: the Materials tab and /start both rely on this pass, unchanged.
+  skipChartPages?: boolean
+}
+
 export async function extractEntryText(
   file: File,
   onStage?: (label: string) => void,
+  opts?: ExtractOptions,
 ): Promise<ExtractResult> {
   const ext = fileExt(file.name)
   const chartBlobs: ChartBlob[] = []
@@ -110,7 +123,7 @@ export async function extractEntryText(
         : ''
       text = (formFieldsBlock + textParts.join('\n\n')).slice(0, MAX_TEXT)
 
-      if (chartPageNums.length > 0) {
+      if (!opts?.skipChartPages && chartPageNums.length > 0) {
         onStage?.(`Processing ${Math.min(chartPageNums.length, 8)} chart pages…`)
         for (const pageNum of chartPageNums.slice(0, 8)) {
           try {
