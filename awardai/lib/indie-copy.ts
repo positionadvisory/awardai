@@ -75,6 +75,17 @@ export function pdfNoTextInline(filename: string): string {
   return filename + ' came through, but there was no text in it we could read. That usually means it is a scan or an image rather than a text document. Paste your sections above instead, and the read comes back in under a minute. This has not used up your free read.'
 }
 
+// NOT-T5. The nothing-found twin of pdfNoTextInline above: the file has
+// readable text, but the segmenter found none of the four scored sections in
+// it (a deck, a brief, a draft with nothing written yet). Ben's framing,
+// approved 9 Sep 2026 (T7e): this is not the scan/image case, so it must not
+// open on "there was no text in it we could read", which is wrong for this
+// file and would send the entrant hunting for a scanner that is not the
+// problem.
+export function pdfNoSectionsInline(filename: string, category: string): string {
+  return filename + ' came through and we could read it, but none of the four sections ' + category + ' is scored on are in it yet. You probably do not want a read at this stage. When the sections exist, paste them above and the read comes back in under a minute. This has not used up your free read.'
+}
+
 // ---------------------------------------------------------------------------
 // Progress
 // ---------------------------------------------------------------------------
