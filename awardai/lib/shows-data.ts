@@ -261,10 +261,10 @@ export const DEADLINES_2026: ShowDeadline[] = [
   },
   {
     show: 'Festival of Media APAC', region: 'APAC',
-    finalDate: '2026-01-30', juryDate: '2026-03-19', ceremonyDate: '2026-05-07',
-    earlyBird: 'Dec 2025', standard: 'Jan 2026', final: '30 Jan 2026', ceremony: '7 May 2026',
-    note: 'Asia-Pacific Media Campaign Awards (C Squared / Festival of Media). 2026 cycle CLOSED: open 7 Nov 2025; early 5 Dec £349; standard 2 Jan £389; extended/final 30 Jan £440 (per entry per category, GBP). Shortlist 19 Mar; ceremony 7 May 2026 (virtual). Jury ~80–85% client-side brand marketers. Next (2027) cycle expected to open ~Nov 2026. Verified festivalofmedia.com 23 Jun 2026.',
-    confidence: 'verified', lastVerified: '2026-06-23',
+    finalDate: '2027-01-29', juryDate: '2027-03-18', ceremonyDate: '2027-05-06',
+    earlyBird: '4 Dec 2026, GBP 349 per entry per category', standard: '1 Jan 2027, GBP 389', final: '29 Jan 2027, GBP 440 (extended tier; the last published close)', ceremony: '6 May 2027',
+    note: 'Asia-Pacific Media Campaign Awards (C Squared / Festival of Media). 2027 cycle: open for entries 6 Nov 2026; Early Deadline 4 Dec 2026 GBP 349; Standard Deadline 1 Jan 2027 GBP 389; Extended Deadline 29 Jan 2027 GBP 440 (all fees per entry per category, GBP); Shortlist Announcement 18 Mar 2027 (used as juryDate, the closest analog to a jury/results date this show publishes); Awards Ceremony 6 May 2027. Prior (2026) cycle for history: open 7 Nov 2025; early 5 Dec; standard 2 Jan; extended 30 Jan 2026; shortlist 19 Mar; ceremony 7 May 2026. Jury ~80-85% client-side brand marketers. Source: festivalofmedia.com/asia-pacific-media-awards/, \"Key Dates & Fees\" section, read 13 Sep 2026. The page\'s animated stat counters read \"0%\" and \"0 yrs\" in a text-only read, so those numbers are not quoted here.',
+    confidence: 'verified', lastVerified: '2026-09-13',
   },
   {
     show: 'Campaign Asia Women Leading Change', region: 'APAC',
@@ -510,7 +510,7 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'The Indie Awards', region: 'Global',
     finalDate: '2026-12-03', juryDate: '', ceremonyDate: '2027-01-14',
     earlyBird: 'Super early bird GBP150 to 26 Sep 2026; early bird GBP250 to 26 Oct 2026', standard: 'GBP350 after 26 Oct 2026', final: '3 Dec 2026 (published; organizer intends an extension to 7 Dec)', ceremony: '14 Jan 2027, The Hickman, London, 17:00-19:00',
-    note: 'Added 29 Aug 2026 from dynamic_shows row 22, verified 27 Aug 2026 against indieawards.global and /how-to-enter-2027. 2027 cycle OPENED 26 Aug 2026. CONFIDENCE IS DELIBERATELY partial, NOT verified, and the reason is the close date rather than the sourcing: 3 Dec 2026 is what the organizer publishes, but Alice Carr at thenetworkone stated by email on 26 Aug 2026 that a pre-planned extension to 7 Dec exists, which is an organizer intention and not a published deadline. The precedent is real: the 2026 cycle published a 3 Dec 2025 close and actually closed 7 Jan 2026, a five-week slip. An extension only ever moves the date LATER, so the published date is a safe floor and is what is stored. Shortlist 5 Jan 2027. thenetworkone members get one free entry. Site defect, do not surface as fact: the published timeline reads "judging starts 10th December 2027", one year off; treat as 2026 for internal planning. Entry fee is intentionally absent from ENTRY_FEES: three conflicting figures exist across cycles and none is promotable until the organizer confirms.',
+    note: 'Added 29 Aug 2026 from dynamic_shows row 22, verified 27 Aug 2026 against indieawards.global and /how-to-enter-2027. 2027 cycle OPENED 26 Aug 2026. CONFIDENCE IS DELIBERATELY partial, NOT verified, and the reason is the close date rather than the sourcing: 3 Dec 2026 is what the organizer publishes, but Alice Carr at thenetworkone stated by email on 26 Aug 2026 that a pre-planned extension to 7 Dec exists, which is an organizer intention and not a published deadline. The precedent is real: the 2026 cycle published a 3 Dec 2025 close and actually closed 7 Jan 2026, a five-week slip. An extension only ever moves the date LATER, so the published date is a safe floor and is what is stored. Shortlist 5 Jan 2027. thenetworkone members get one free entry. Site timeline typo RESOLVED: the homepage 2027 TIMELINE now reads "judging starts 10th December 2026" (read 13 Sep 2026); the earlier "2027" reading was an organizer typo, since fixed, and no live defect remains. Entry fee is intentionally absent from ENTRY_FEES: three conflicting figures exist across cycles and none is promotable until the organizer confirms.',
     confidence: 'partial', lastVerified: '2026-08-27',
   },
 
