@@ -752,4 +752,21 @@ export const SHOW_CATEGORIES: Record<string, string[]> = {
     'People & Culture – More Than 100 Employees', 'People & Culture – Fewer Than 100 Employees',
     'Sales Team of the Year',
   ],
+  // Cairns Crocodiles Awards -- SHOW_CATEGORIES source: cairnscrocodiles.com/cairns-awards-2026/
+  // and the 2026 Criteria PDF (cairnscrocodiles.com/pdf/2026/CCA_2026_CRITERIA.pdf), both read
+  // 14 Sep 2026. All 35 named categories are enterable (no Grand-Prix-style exclusion on this show).
+  'Cairns Crocodiles Awards': [
+    // Craft (11)
+    'AI Craft', 'Branded Content', 'Design', 'Direct', 'Effectiveness', 'Experiential & Activations',
+    'Film Craft', 'Integrated', 'Media', 'Radio & Audio Craft', 'Strategy',
+    // Campaign (20)
+    'AI Innovation Campaign', 'Automotive Campaign', 'B2B Campaign', 'Beauty, Lifestyle & Fashion Campaign',
+    'PSA Campaign', 'Entertainment Campaign', 'Film Campaign', 'FMCG Campaign', 'Food & Beverage Campaign',
+    'Healthcare & Wellness Campaign', 'Inclusivity Campaign', 'Out of Home Campaign', 'PR Campaign',
+    'Print & Publishing Campaign', 'Radio & Audio Campaign', 'Retail Campaign', 'Retail Media Campaign',
+    'Social & Content Creator Campaign', 'Technology Campaign', 'Travel/Leisure Campaign',
+    // Regional Campaign of the Year (4)
+    'ANZ Campaign of the Year', 'East Asia Campaign of the Year', 'South Asia Campaign of the Year',
+    'Southeast Asia Campaign of the Year',
+  ],
 }
