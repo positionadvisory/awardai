@@ -698,4 +698,75 @@ export const SHOW_CATEGORIES: Record<string, string[]> = {
     'Best Small Agency of the Year',
     'Best Large Agency of the Year',
   ],
+
+  // Mumbrella Awards -- 2026 cycle, 36 enterable categories across five organiser
+  // groups (mumbrella.com.au/mumbrellaawards, read 14 Sep 2026; corroborated by the
+  // 2026 Call for Entries PDF). Holdco of the Year is DELIBERATELY excluded: the
+  // organiser marks it "AGGREGATE SCORE ONLY" on both category listings on the page,
+  // meaning it is awarded from other categories' scores and cannot be entered.
+  'Mumbrella Awards': [
+    // Campaign Excellence
+    'Ad Campaign of the Year', 'Creative Effectiveness', 'Omnichannel Campaign of the Year',
+    'Small Budget, Big Impact', 'Purpose and Impact Campaign',
+    // Craft and Innovation
+    'Film and Motion Craft', 'Design and Visual Craft', 'Digital and UX Craft',
+    'Real-Time and Responsive Marketing', 'Creative Excellence in AI and Emerging Tech', 'TV Ad of the Year',
+    // Specialist Disciplines
+    'Media Campaign of the Year', 'Best Use of Retail Media', 'Social-First Idea of the Year',
+    'Best Influencer or Creator Strategy', 'Experiential and Live Campaign of the Year',
+    'Content Marketing Strategy of the Year', 'Best Use of Data and Insight in Marketing',
+    'Pro Bono Campaign of the Year', 'Sustainability and Responsibility in Marketing',
+    // Agency and Team Awards (Holdco of the Year excluded -- aggregate score only)
+    'Creative Agency of the Year', 'Media Agency of the Year', 'PR Agency of the Year',
+    'Full-Service Agency of the Year', 'Independent Agency of the Year', 'Emerging Agency of the Year',
+    'Specialist Agency of the Year', 'Marketing Team of the Year', 'Sales Team of the Year',
+    'Emerging Talent', 'Brand of the Year', 'Industry Leader of the Year',
+    // Culture and Values Awards
+    'Mumbrella Award for Bravery', 'Mumbrella Award for Collaboration',
+    'Mumbrella Award for Culture', 'Mumbrella Award for Innovation',
+  ],
+  // B&T Awards -- SHOW_CATEGORIES source: bandtawards.com.au and the 2026 Criteria PDF
+  // (bandtawards.com.au/pdf/BTA_2026_CRITERIA.pdf), both read 14 Sep 2026. 47 of 48 named
+  // awards: B&T's Agency of the Year -- The Grand Prix is excluded (organiser: "cannot be
+  // entered", awarded to one of the Agency of the Year winners -- same treatment as
+  // Mumbrella's Holdco of the Year).
+  'B&T Awards': [
+    // Agency of the Year Awards (17 enterable; Grand Prix excluded)
+    'Advertising Agency', 'Branding, Design & CX Agency', 'Corporate PR Agency', 'Consumer PR Agency',
+    'Creator Agency', 'Direct Response/Performance Agency', 'Emerging Agency', 'Experiential/Promotional Agency',
+    'Independent Agency – More Than 50 Employees', 'Independent Agency – Fewer Than 50 Employees',
+    'Media Agency', 'Production Company', 'Research Agency', 'NSW Agency', 'Aotearoa New Zealand Agency',
+    'VIC Agency', 'QLD/Other States/Territories Agency',
+    // Campaign of the Year Awards (16; default Insight & Strategy 30 / Execution 30 / Effectiveness 40,
+    // except Best Sponsorship Campaign: Insight & Strategy 50 / Effectiveness 50)
+    'Best Consumer PR Campaign', 'Best CTV & Video Campaign', 'Best Digital Campaign',
+    'Best Direct Response Campaign', 'Best Creator-Led Campaign', 'Best Integrated Ad Campaign',
+    'Best Media Campaign', 'Best Out of Home Campaign', 'Best Pro-Bono Campaign', 'Best Radio/Audio Campaign',
+    'Best Regional Media Campaign', 'Best Retail Media Campaign', 'Best Social Media Campaign',
+    'Best Sponsorship Campaign', 'Best Tech & AI Campaign', 'Best TV Campaign',
+    // Leadership & Marketing Awards (14; each its own published weighting -- see DEADLINES_2026 note)
+    'The B&T Award for Bravery', 'The B&T Award for Diversity', 'The B&T Award for the Planet',
+    'Best Content Marketing Strategy', 'Best Digital Services', 'Best Digital Transformation',
+    'Best Media Platform', 'Best Retail Media Network', 'Data-Driven Marketing',
+    'Marketing Team of the Year', 'Marketing Technology Company of the Year',
+    'People & Culture – More Than 100 Employees', 'People & Culture – Fewer Than 100 Employees',
+    'Sales Team of the Year',
+  ],
+  // Cairns Crocodiles Awards -- SHOW_CATEGORIES source: cairnscrocodiles.com/cairns-awards-2026/
+  // and the 2026 Criteria PDF (cairnscrocodiles.com/pdf/2026/CCA_2026_CRITERIA.pdf), both read
+  // 14 Sep 2026. All 35 named categories are enterable (no Grand-Prix-style exclusion on this show).
+  'Cairns Crocodiles Awards': [
+    // Craft (11)
+    'AI Craft', 'Branded Content', 'Design', 'Direct', 'Effectiveness', 'Experiential & Activations',
+    'Film Craft', 'Integrated', 'Media', 'Radio & Audio Craft', 'Strategy',
+    // Campaign (20)
+    'AI Innovation Campaign', 'Automotive Campaign', 'B2B Campaign', 'Beauty, Lifestyle & Fashion Campaign',
+    'PSA Campaign', 'Entertainment Campaign', 'Film Campaign', 'FMCG Campaign', 'Food & Beverage Campaign',
+    'Healthcare & Wellness Campaign', 'Inclusivity Campaign', 'Out of Home Campaign', 'PR Campaign',
+    'Print & Publishing Campaign', 'Radio & Audio Campaign', 'Retail Campaign', 'Retail Media Campaign',
+    'Social & Content Creator Campaign', 'Technology Campaign', 'Travel/Leisure Campaign',
+    // Regional Campaign of the Year (4)
+    'ANZ Campaign of the Year', 'East Asia Campaign of the Year', 'South Asia Campaign of the Year',
+    'Southeast Asia Campaign of the Year',
+  ],
 }
