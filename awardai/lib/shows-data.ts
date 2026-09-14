@@ -471,6 +471,15 @@ export const DEADLINES_2026: ShowDeadline[] = [
     confidence: 'partial', lastVerified: '2026-08-27',
   },
 
+  {
+    show: 'UK Agency Awards', region: 'Europe',
+    finalDate: '2026-06-11', juryDate: '2026-07-15', ceremonyDate: '2026-10-01',
+    earlyBird: 'Super Early Bird GBP 215 by 7 May 2026; Early Bird GBP 270 by 28 May 2026', standard: 'GBP 270 by 28 May 2026 (Early Bird tier; the show has no tier named standard)', final: '11 Jun 2026, GBP 345, the published Final Deadline (2026 cycle; 2027 not yet published). The event page calendar also lists an 18 Jun 2026 Extended Deadline; two organizer sources conflict, see note', ceremony: '1 October 2026, London Hilton Bankside, 2-8 Great Suffolk St, London SE1 0UG',
+    note: '2026 cycle, stored under pre-build mode because the 2027 cycle is not yet published anywhere on the organizer site. finalDate 2026-06-11 is the Final Deadline entry close (GBP345 + VAT if applicable); this is the last of three fee-tier deadlines (Super Early Bird 7 May, Early Bird 28 May, Final 11 Jun), each of which is both a deadline and a fee-tier boundary. ceremonyDate 2026-10-01 is the ceremony date, confirmed live on /the-event/ in prose ("will take place at a live gala event on 1 October 2026"); a countdown widget on the same pages read inconsistent day-counts across fetches (a caching artifact) and is not the source used here. Eligibility window: entries should relate to work undertaken between February 2025 and June 2026, a distinct field from the deadline; see eligibilityWindow (rule RAN_DURING, not FIRST_PUBLICATION, since the organizer wording is "undertaken between" not "first published"). Word limit: entries must not exceed 1000 words, excluding company information/summary and the questions already printed in the form. Rule: one Word or PDF entry form per submission; multiple entries need multiple separate forms, each with the correct category ticked. Title format required: "Agency Name & Client Name - Campaign/Product/Tool/Website Name", or "Company/Team Name" for agency/team awards. Judges score the entry form only; supporting documents are optional, should only support claims already in the form, and are described by the organizer as "not an extension of it". Historical open window: no distinct "entries open" announcement post was found on the first two of fourteen pages of ukagencyawards.co/news (read 14 Sep 2026); those pages carry agency shortlist/winner stories dated Jul-Nov across cycles, not an opening announcement, so this is recorded as "open date not found" rather than invented. Also note: /the-event/ carries a "Dates for your calendar" widget showing an "18 June 2026 Extended Deadline", which conflicts with the Final Deadline of 11 Jun 2026 stated plainly and repeatedly on /entry-essentials/ and /help/; treated as a stale marketing widget, not acted on. Source: ukagencyawards.co/entry-essentials/, /help/, /the-event/, /categories/, /judges/, all read 14 Sep 2026. ORGANIZER SOURCE CONFLICT, recorded not resolved (QB, 14 Sep 2026): /entry-essentials/ and /help/ both state the Final Deadline was Thu 11 Jun 2026 and /help/ adds "Any entries after this date will only be accepted at the discretion of the awards team"; the "Dates for your calendar" list on /the-event/ shows "18 June 2026 Extended Deadline" with no fee named for it. finalDate keeps 11 Jun 2026 because it is the published Final Deadline on two pages; 18 Jun is carried here as a possible late extension. Ask the organizer before quoting either as the 2026 close. JUDGING SESSION: 15 Jul 2026 (stored as juryDate). SHORTLIST ANNOUNCEMENT: 17 Jul 2026, a separate field, not stored in a date column. Both from the same /the-event/ calendar. Supporting documents: up to three per entry, each under 2MB (/help/). Budget: judges prefer real numbers or brackets such as "20K to 50K" over percentages (/help/). DEVIATION FROM BRIEF: region is stored as \'Europe\', not \'United Kingdom\' as instructed, because ShowDeadline.region is a closed union type (Global | APAC | MENA | China | Europe | Australia | North America) with no United Kingdom member; \'United Kingdom\' would fail tsc --noEmit. Europe is the nearest valid value; PRCA UK Awards elsewhere in this file instead uses \'Global\' for a UK show, so there is no fixed convention to match.',
+    eligibilityWindow: { start: '2025-02-01', end: '2026-06-30', rule: 'RAN_DURING', source: 'ukagencyawards.co/entry-essentials/ and the organizer 2026 entry form, checked 14 Sep 2026: "Entries should relate to work undertaken between February 2025 - June 2026." Classified RAN_DURING: "undertaken between" describes work carried out at any point in the window, not a first-publication date.' },
+    confidence: 'verified', lastVerified: '2026-09-14',
+  },
+
 ]
 
 // ── ENTRY_FEES ────────────────────────────────────────────────────────────────
@@ -512,6 +521,7 @@ export const ENTRY_FEES: Record<string, EntryFeeData> = {
   'ADFEST':                 { base: 500,  range: 'THB 15,500–27,000 (~USD 430–770; standard/INNOVA × early/regular/late)', note: 'Standard 19 categories: THB 15,500 early / 17,500 regular / 19,500 late. INNOVA Lotus + Lotus Roots: THB 23,000 / 25,000 / 27,000. Film School (sub of New Director Lotus): ~half standard rate. Post-submission changes THB 2,000/request. 2027 cycle fees not yet published. USD conversions approximate at 2026 FX rates.' },
   'Cristal Festival':       { base: 480,  range: 'N/A — show structure changed', note: 'See NYF Advertising Awards (Cristal Village) and African Cristal Festival.' },
   'Campaign Asia Women to Watch APAC': { base: 300,  range: 'HKD 3,600–4,100 (deadline dependent)', note: 'Early bird by 8 Jun: HKD 3,600. Standard by 14 Jul: HKD 3,900. Final by 28 Jul: HKD 4,100. Fees non-refundable; include one-year Campaign Asia-Pacific membership. Source: campaignwomentowatch.com (verified 3 Jun 2026).' },
+  'UK Agency Awards': { base: 362, range: 'GBP 215-345 (Super Early Bird / Early Bird / Final; VAT if applicable)', note: 'base = Early Bird tier GBP 270 x GBP 1.341 = 362 USD (FX per ledger B1), the MIDDLE of the three tiers, because the show has no tier named standard (tiers are Super Early Bird GBP215, Early Bird GBP270, Final GBP345). Three-for-four multiple-entry saving applies: enter three, fourth entry free, all four submitted in one session. Read ukagencyawards.co/entry-essentials/ and /help/, 14 Sep 2026.' },
 }
 
 // ── Helper functions ──────────────────────────────────────────────────────────
@@ -809,6 +819,13 @@ export const KB_SHOW_ALIASES: Record<string, string | null> = {
   'digital a-list':                               'Campaign Greater China A List',
   'digital media awards (campaign asia)':         'Campaign Greater China Digital Media Awards',
   'dma awards':                                   'Campaign Greater China Digital Media Awards',
+
+  // UK Agency Awards
+  'uk agency awards':                             'UK Agency Awards',
+  'the uk agency awards':                         'UK Agency Awards',
+  'ukaa':                                          'UK Agency Awards',
+  'agency awards uk':                              'UK Agency Awards',
+  'uk agency awards 2026':                         'UK Agency Awards',
 
   // ── Hide — defunct, region-specific noise, or non-award editorial lists ─────
   'cristal festival':                             null,
