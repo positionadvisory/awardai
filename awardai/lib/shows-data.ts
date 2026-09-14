@@ -820,6 +820,13 @@ export const KB_SHOW_ALIASES: Record<string, string | null> = {
   'digital media awards (campaign asia)':         'Campaign Greater China Digital Media Awards',
   'dma awards':                                   'Campaign Greater China Digital Media Awards',
 
+  // UK Agency Awards
+  'uk agency awards':                             'UK Agency Awards',
+  'the uk agency awards':                         'UK Agency Awards',
+  'ukaa':                                          'UK Agency Awards',
+  'agency awards uk':                              'UK Agency Awards',
+  'uk agency awards 2026':                         'UK Agency Awards',
+
   // ── Hide — defunct, region-specific noise, or non-award editorial lists ─────
   'cristal festival':                             null,
   'global cristal awards':                        null,
