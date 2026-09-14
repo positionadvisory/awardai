@@ -809,4 +809,22 @@ export const SHOW_CATEGORIES: Record<string, string[]> = {
     'Influencer Marketing', 'Drustveni mediji (Social Media)', 'Medijska strategija (Media Strategy)',
     'Data-driven', 'Opce dobro (Common Good)', 'Zastita okolisa (Environmental Protection)',
   ],
+
+  // MIXX Awards Croatia -- SHOW_CATEGORIES source: 2026 rulebook PDF (Pravilnik natjecanja MIXX
+  // Awards Croatia 2026), read 14 Sep 2026, archived at
+  // Croatia/SOURCE-MIXX-Awards-Croatia-Pravilnik-2026-raw.txt. 20 categories across 4 groups,
+  // verified against the rulebook's own list -- no internal discrepancy, unlike IdejaX.
+  'MIXX Awards Croatia': [
+    // Group I. Kampanje / Campaigns (agency-entrants only, 6)
+    'Brand Awareness Campaign', 'Direct Response and Lead Generation Campaign', 'Cross-Media Integration Campaign',
+    'Campaign Effectiveness', 'Best Social Campaign', 'Corporate Social Responsibility Campaign',
+    // Group II. Alati/Platforme / Tools-Platforms (agencies, startups, similar companies, 10)
+    'Best AI-Driven Project', 'Best Effective Use of Data', 'Best Video Content', 'Best Digital Product',
+    'Best Media Strategy', 'Best Branded Content', 'Best Website', 'Best Social Media', 'Best Viral',
+    'Best Tech & Innovation',
+    // Group III. Export (agencies/startups/similar, 2, exempt from the domestic-market-run requirement)
+    'Best Export Campaign', 'Best Export Platform',
+    // Group IV. Publisher (publisher/media entrants only, 2)
+    'Best Publisher Campaign', 'Best Publisher Content',
+  ],
 }
