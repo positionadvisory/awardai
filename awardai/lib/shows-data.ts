@@ -110,6 +110,7 @@ export type UrgencyLevel =
   | 'past'
   | 'unknown'             // no row in DEADLINES_2026 for this show name
   | 'no_published_close'  // row exists; the show publishes no entry deadline
+  | 'last_cycle'          // row exists; finalDate is more than LAST_CYCLE_GRACE_DAYS in the past and no next-cycle dates are published; customers may prepare against last cycle's categories and judging notes
 
 export type DeadlineUrgency = {
   level: UrgencyLevel
@@ -134,6 +135,15 @@ export const URGENCY_THRESHOLDS = {
   PREPARE: 56,
 } as const
 
+/**
+ * Ben's decision, 14 Sep 2026: how many days after a published entry deadline
+ * closes before the show flips from 'past' (deadline passed, this cycle is
+ * still what customers were targeting) to 'last_cycle' (next cycle not yet
+ * published; customers may prepare against last cycle's categories and
+ * judging notes). Changing this one number moves the boundary for every show.
+ */
+export const LAST_CYCLE_GRACE_DAYS = 30
+
 // ── PREP_PHASES ───────────────────────────────────────────────────────────────
 
 export const PREP_PHASES: PrepPhase[] = [
@@ -152,6 +162,20 @@ export const PREP_PHASES: PrepPhase[] = [
 //                   agent will pause and ask user to operate manually
 //   'needs_check' — no reliable 2026 data found, show structure changed, or cycle already
 //                   closed; agent will pause and ask user to operate manually
+//
+// A row whose finalDate (published entry deadline) is in the past is not stale
+// data. It means: last cycle, next not yet published. Never delete or blank the
+// row for that reason alone -- getDeadlineUrgency reads daysLeft against
+// LAST_CYCLE_GRACE_DAYS and returns 'last_cycle' once the grace window has
+// passed, and customers may prepare against last cycle's categories and
+// judging notes until the organizer publishes the next cycle's dates. When
+// they do, a session replaces finalDate (published entry deadline), juryDate
+// (shortlist), and ceremonyDate (ceremony) -- and any fee-tier boundary or
+// eligibility window dates carried in earlyBird/standard/final/note or
+// eligibilityWindow -- with the new cycle's own dates, keeps one sentence of
+// prior-cycle history in `note`, and stamps `lastVerified`. Name the field on
+// every date: published entry deadline, fee-tier boundary, eligibility window,
+// shortlist, and ceremony are different fields and do not share a date.
 
 export const DEADLINES_2026: ShowDeadline[] = [
 
@@ -573,6 +597,16 @@ export function getDeadlineUrgency(showName: string | null | undefined): Deadlin
   const daysLeft = Math.round((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
 
   if (daysLeft < 0) {
+    if (daysLeft < -LAST_CYCLE_GRACE_DAYS) {
+      const closedMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+      const closedDate = `${deadline.getDate()} ${closedMonths[deadline.getMonth()]} ${deadline.getFullYear()}`
+      return {
+        level: 'last_cycle',
+        daysLeft,
+        deadlineDate: show.finalDate,
+        message: `Last cycle closed ${closedDate}. Next cycle not yet published. Prepping against last cycle's categories and judging notes.`,
+      }
+    }
     return {
       level: 'past',
       daysLeft,
