@@ -827,4 +827,27 @@ export const SHOW_CATEGORIES: Record<string, string[]> = {
     // Group IV. Publisher (publisher/media entrants only, 2)
     'Best Publisher Campaign', 'Best Publisher Content',
   ],
+
+  // BalCannes -- SHOW_CATEGORIES source: 2026 Entry Guide PDF (Entry-Guide-BalCannes-Awards-2026),
+  // read 14 Sep 2026, archived at Croatia/SOURCE-BalCannes-EntryGuide-2026-raw.txt. 34 categories
+  // across 4 tracks, verified against the Entry Guide's own list -- no internal discrepancy, unlike
+  // IdejaX. Grand Prix, Impact Prix and Editor's Pick are non-entry special awards decided from the
+  // scored tracks below and are excluded from this list.
+  'BalCannes': [
+    // Track I. Best on Market (15)
+    'Food', 'Alcoholic Beverages', 'Non-Alcoholic Beverages', 'Telecommunications',
+    'Finance/Insurance & Fintech', 'Retail', 'Health & Pharmacy', 'Household', 'Fashion & Beauty',
+    'Tourism/Culture & Leisure', 'Corporate Communications', 'Technology & Electronics',
+    'Energetics & Mobility', 'Entertainment', 'Miscellaneous',
+    // Track II. Best in Channel (12)
+    'Best TV Spot & Film', 'Best Online Video', 'Best Print', 'Best Outdoor (OOH)',
+    'Best Digital Outdoor (DOOH)', 'Best Audio & Radio', 'Best Experiential Advertising & Events',
+    'Best Low-Volume Packaging Design', 'Best High-Volume Packaging Design', 'Best Digital Product',
+    'Best Social Media Idea', 'Best Creative Use of Technology',
+    // Track III. Best Branding & Rebranding (2)
+    'Best Branding', 'Best Rebranding',
+    // Track IV. Best of Positive Change (5)
+    'Environment & Sustainability', 'Equality/Diversity & Inclusion', 'Health & Well-being',
+    'Education & Empowerment', 'Community & Culture',
+  ],
 }

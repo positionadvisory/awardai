@@ -2741,6 +2741,7 @@ export default function ProjectPage() {
     // First try exact canonical match, then fall back to keyword matching so that
     // variants like "Effies APAC", "SPIKES", "Cannes" all resolve to a known show.
     const SHOW_KEYWORD_MAP: Array<[string, string]> = [
+      ['balcannes', 'BalCannes'],
       ['cannes', 'Cannes Lions'],
       ['d&ad', 'D&AD'],
       ['spikes asia', 'Spikes Asia'],
