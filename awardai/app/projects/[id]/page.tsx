@@ -2747,6 +2747,7 @@ export default function ProjectPage() {
       ['spikes', 'Spikes Asia'],
       ['clio', 'Clio Awards'],
       ['one show', 'One Show'],
+      ['effie croatia', 'Effie Awards Croatia'],
       ['effie', 'Effie APAC'],
       ['warc', 'WARC Awards'],
       ['dubai lynx', 'Dubai Lynx'],

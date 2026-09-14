@@ -786,4 +786,27 @@ export const SHOW_CATEGORIES: Record<string, string[]> = {
     // Bonus (1, free direct entry, no jury vote against other entries)
     'Special Mention by Aleph',
   ],
+
+  // Effie Awards Croatia -- SHOW_CATEGORIES source: 2026 Entry Kit PDF (cms.danikomunikacija.com),
+  // read 14 Sep 2026, archived in full at Croatia/SOURCE-Effie-Awards-Croatia-EntryKit-2026-raw.txt.
+  // 29 total = 13 Product/Service + 16 Special. CORRECTED THIS BUILD: this session's own Phase 1
+  // dossier had labeled the Special group "13 Special categories," but the Entry Kit's own list
+  // (verbatim, same source archive) names 16 items -- no organiser-stated "13"/"trinaest" count
+  // exists anywhere in the archive, so this was our own miscount at dossier time, not an organiser
+  // discrepancy. 29 is the corrected total, not the 26 assumed earlier in this session.
+  'Effie Awards Croatia': [
+    // Product/Service (13)
+    'Hrana (Food)', 'Pica (Beverages)', 'Roba siroke potrosnje (FMCG/consumer goods)',
+    'Financijske, osiguravajuce usluge i fintech', 'Telekomunikacijske usluge', 'Zdravlje (Health)',
+    'Maloprodaja (Retail) i e-trgovina', 'Automobilska industrija i postprodaja (Automotive & aftersales)',
+    'Energetika (Energy)', 'Kultura i umjetnost (Culture & Arts)', 'Putovanja i turizam (Travel & Tourism)',
+    'Sport, zabava i slobodno vrijeme (Sport, Entertainment & Leisure)', 'Razno (Miscellaneous)',
+    // Special (16)
+    'Lansiranje proizvoda/usluge (Product/Service Launch)', 'Inovacije u marketingu i poslovanju (Marketing & Business Innovation)',
+    'Dugorocna ucinkovitost (Long-Term Effectiveness)', 'Korporativna reputacija i odnosi s javnoscu (Corporate Reputation & PR)',
+    'Niskobudzetne kampanje (Low-Budget Campaigns)', 'Business-to-Business', 'Umjetna inteligencija (AI)',
+    'David vs. Golijat (David vs. Goliath)', 'Engaged Community', 'Brand iskustvo (Brand Experience)',
+    'Influencer Marketing', 'Drustveni mediji (Social Media)', 'Medijska strategija (Media Strategy)',
+    'Data-driven', 'Opce dobro (Common Good)', 'Zastita okolisa (Environmental Protection)',
+  ],
 }
