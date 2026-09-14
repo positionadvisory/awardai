@@ -725,4 +725,31 @@ export const SHOW_CATEGORIES: Record<string, string[]> = {
     'Mumbrella Award for Bravery', 'Mumbrella Award for Collaboration',
     'Mumbrella Award for Culture', 'Mumbrella Award for Innovation',
   ],
+  // B&T Awards -- SHOW_CATEGORIES source: bandtawards.com.au and the 2026 Criteria PDF
+  // (bandtawards.com.au/pdf/BTA_2026_CRITERIA.pdf), both read 14 Sep 2026. 47 of 48 named
+  // awards: B&T's Agency of the Year -- The Grand Prix is excluded (organiser: "cannot be
+  // entered", awarded to one of the Agency of the Year winners -- same treatment as
+  // Mumbrella's Holdco of the Year).
+  'B&T Awards': [
+    // Agency of the Year Awards (17 enterable; Grand Prix excluded)
+    'Advertising Agency', 'Branding, Design & CX Agency', 'Corporate PR Agency', 'Consumer PR Agency',
+    'Creator Agency', 'Direct Response/Performance Agency', 'Emerging Agency', 'Experiential/Promotional Agency',
+    'Independent Agency – More Than 50 Employees', 'Independent Agency – Fewer Than 50 Employees',
+    'Media Agency', 'Production Company', 'Research Agency', 'NSW Agency', 'Aotearoa New Zealand Agency',
+    'VIC Agency', 'QLD/Other States/Territories Agency',
+    // Campaign of the Year Awards (16; default Insight & Strategy 30 / Execution 30 / Effectiveness 40,
+    // except Best Sponsorship Campaign: Insight & Strategy 50 / Effectiveness 50)
+    'Best Consumer PR Campaign', 'Best CTV & Video Campaign', 'Best Digital Campaign',
+    'Best Direct Response Campaign', 'Best Creator-Led Campaign', 'Best Integrated Ad Campaign',
+    'Best Media Campaign', 'Best Out of Home Campaign', 'Best Pro-Bono Campaign', 'Best Radio/Audio Campaign',
+    'Best Regional Media Campaign', 'Best Retail Media Campaign', 'Best Social Media Campaign',
+    'Best Sponsorship Campaign', 'Best Tech & AI Campaign', 'Best TV Campaign',
+    // Leadership & Marketing Awards (14; each its own published weighting -- see DEADLINES_2026 note)
+    'The B&T Award for Bravery', 'The B&T Award for Diversity', 'The B&T Award for the Planet',
+    'Best Content Marketing Strategy', 'Best Digital Services', 'Best Digital Transformation',
+    'Best Media Platform', 'Best Retail Media Network', 'Data-Driven Marketing',
+    'Marketing Team of the Year', 'Marketing Technology Company of the Year',
+    'People & Culture – More Than 100 Employees', 'People & Culture – Fewer Than 100 Employees',
+    'Sales Team of the Year',
+  ],
 }
