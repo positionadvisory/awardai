@@ -441,6 +441,14 @@ export default function BudgetPlanner({ directions, orgId, prefilledShow }: Prop
                               No published close
                             </span>
                           )}
+                          {/* 'last_cycle' behaves like 'no_published_close' here: no red
+                              badge, and it is excluded from inWindow the same way (daysLeft
+                              is negative, same as it already is for null). */}
+                          {urgency.level === 'last_cycle' && (
+                            <span className="text-xs px-2 py-0.5 rounded-full border bg-gray-50 text-gray-600 border-gray-200">
+                              Last cycle
+                            </span>
+                          )}
                           {/* Deadline badge */}
                           {urgency.daysLeft !== null && (
                             <span className={`text-xs px-2 py-0.5 rounded-full border ${
@@ -496,6 +504,11 @@ export default function BudgetPlanner({ directions, orgId, prefilledShow }: Prop
                           </div>
                         )}
                       </div>
+                      {urgency.level === 'last_cycle' && entryFee != null && (
+                        <p className="mt-2 text-xs text-gray-500">
+                          Last cycle closed; next cycle not yet published. Budget shown against last cycle's fee.
+                        </p>
+                      )}
 
                       {/* Total + budget check */}
                       <div className="mt-2 flex items-center justify-between">
