@@ -769,4 +769,21 @@ export const SHOW_CATEGORIES: Record<string, string[]> = {
     'ANZ Campaign of the Year', 'East Asia Campaign of the Year', 'South Asia Campaign of the Year',
     'Southeast Asia Campaign of the Year',
   ],
+
+  // SoMo Borac -- SHOW_CATEGORIES source: somoborac.com/uvjeti-prijave-2026/ and /ziri/, read 14 Sep 2026.
+  // 18 total per QB decision 4 (S6-Phase1-QB-verdict-and-GO-2026-09-14.md): 12 SoMo Advertising + 5 SoMo Media
+  // + Special Mention by Aleph (free, direct-entry bonus award, listed here since it has its own named award).
+  // SoMo Grand Prix and HUDI North Star are excluded: both are non-entry, jury/nomination-only awards with
+  // no separate submission, same treatment Mumbrella gives Holdco of the Year and B&T gives its Grand Prix.
+  'SoMo Borac': [
+    // SoMo Advertising (12)
+    'SoMo Social Strategy', 'SoMo Content', 'TikTok', 'DA - Digitalna aktivacija (Digital Activation)',
+    'Digitalni Mix', 'SoMo Tech', 'Digital Product & Web Experience', 'SoMoRitanac',
+    'SoMo Growth', 'SoMo Video Impact', 'Digital OOH', 'SoMo AI',
+    // SoMo Media (5)
+    'Digital Product of the Year', 'Digital Design of the Year', 'SoMo Native', 'Best Storytelling',
+    'SoMo Content Engagement',
+    // Bonus (1, free direct entry, no jury vote against other entries)
+    'Special Mention by Aleph',
+  ],
 }
