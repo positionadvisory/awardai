@@ -698,4 +698,31 @@ export const SHOW_CATEGORIES: Record<string, string[]> = {
     'Best Small Agency of the Year',
     'Best Large Agency of the Year',
   ],
+
+  // Mumbrella Awards -- 2026 cycle, 36 enterable categories across five organiser
+  // groups (mumbrella.com.au/mumbrellaawards, read 14 Sep 2026; corroborated by the
+  // 2026 Call for Entries PDF). Holdco of the Year is DELIBERATELY excluded: the
+  // organiser marks it "AGGREGATE SCORE ONLY" on both category listings on the page,
+  // meaning it is awarded from other categories' scores and cannot be entered.
+  'Mumbrella Awards': [
+    // Campaign Excellence
+    'Ad Campaign of the Year', 'Creative Effectiveness', 'Omnichannel Campaign of the Year',
+    'Small Budget, Big Impact', 'Purpose and Impact Campaign',
+    // Craft and Innovation
+    'Film and Motion Craft', 'Design and Visual Craft', 'Digital and UX Craft',
+    'Real-Time and Responsive Marketing', 'Creative Excellence in AI and Emerging Tech', 'TV Ad of the Year',
+    // Specialist Disciplines
+    'Media Campaign of the Year', 'Best Use of Retail Media', 'Social-First Idea of the Year',
+    'Best Influencer or Creator Strategy', 'Experiential and Live Campaign of the Year',
+    'Content Marketing Strategy of the Year', 'Best Use of Data and Insight in Marketing',
+    'Pro Bono Campaign of the Year', 'Sustainability and Responsibility in Marketing',
+    // Agency and Team Awards (Holdco of the Year excluded -- aggregate score only)
+    'Creative Agency of the Year', 'Media Agency of the Year', 'PR Agency of the Year',
+    'Full-Service Agency of the Year', 'Independent Agency of the Year', 'Emerging Agency of the Year',
+    'Specialist Agency of the Year', 'Marketing Team of the Year', 'Sales Team of the Year',
+    'Emerging Talent', 'Brand of the Year', 'Industry Leader of the Year',
+    // Culture and Values Awards
+    'Mumbrella Award for Bravery', 'Mumbrella Award for Collaboration',
+    'Mumbrella Award for Culture', 'Mumbrella Award for Innovation',
+  ],
 }
