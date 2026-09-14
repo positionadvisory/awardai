@@ -110,6 +110,7 @@ export type UrgencyLevel =
   | 'past'
   | 'unknown'             // no row in DEADLINES_2026 for this show name
   | 'no_published_close'  // row exists; the show publishes no entry deadline
+  | 'last_cycle'          // row exists; finalDate is more than LAST_CYCLE_GRACE_DAYS in the past and no next-cycle dates are published; customers may prepare against last cycle's categories and judging notes
 
 export type DeadlineUrgency = {
   level: UrgencyLevel
@@ -124,74 +125,7 @@ export type PrepPhase = {
   dEnd: number    // Days before deadline (negative, 0 = deadline day)
 }
 
-// ── Agent gate result ─────────────────────────────────────────────────────────
-
-export type ShowGateResult =
-  | { ok: true; show: ShowDeadline; fees: EntryFeeData | null }
-  | { ok: false; showName: string; reason: 'partial' | 'needs_check' | 'not_found' | 'deadline_passed'; message: string }
-
-/**
- * getShowDataWithConfidence — agent gate function.
- *
- * Returns ok: true only if the show is 'verified' AND the deadline is in the future.
- * All other cases return ok: false with a human-readable message for the agent to
- * surface to the user, instructing them to operate manually.
- *
- * Used by the run-full-prep orchestrator before every direction/draft/eval step.
- */
-export function getShowDataWithConfidence(showName: string): ShowGateResult {
-  if (!showName) {
-    return { ok: false, showName: '', reason: 'not_found', message: 'No show name provided.' }
-  }
-
-  const lower = showName.toLowerCase()
-  const found = DEADLINES_2026.find(
-    d =>
-      d.show.toLowerCase() === lower ||
-      d.show.toLowerCase().includes(lower) ||
-      lower.includes(d.show.toLowerCase())
-  )
-
-  if (!found) {
-    return {
-      ok: false,
-      showName,
-      reason: 'not_found',
-      message: `"${showName}" isn't in the verified show list yet. Please use the manual workflow for this project, or request the show be added via the Request a Show flow.`,
-    }
-  }
-
-  if (found.confidence !== 'verified') {
-    return {
-      ok: false,
-      showName: found.show,
-      reason: found.confidence,
-      message: `${found.show} hasn't been fully verified yet — some data may be incomplete or unconfirmed. Please use the manual workflow for this one. Once the show data is verified it will be available for Full Prep.`,
-    }
-  }
-
-  // Check deadline status
-  if (found.finalDate) {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const deadline = new Date(found.finalDate + 'T00:00:00')
-    const daysLeft = Math.round((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-    if (daysLeft < 0) {
-      return {
-        ok: false,
-        showName: found.show,
-        reason: 'deadline_passed',
-        message: `The ${found.show} 2026 entry deadline has passed (${found.final}). Full Prep can't create new entries for a closed show. Please use the manual workflow if you're evaluating an existing entry, or wait for the next cycle.`,
-      }
-    }
-  }
-
-  return {
-    ok: true,
-    show: found,
-    fees: ENTRY_FEES[found.show] ?? null,
-  }
-}
+// A past finalDate does not lock a show. See getDeadlineUrgency 'last_cycle' and the DEADLINES_2026 header note.
 
 // ── Urgency thresholds ────────────────────────────────────────────────────────
 
@@ -200,6 +134,15 @@ export const URGENCY_THRESHOLDS = {
   TIGHT: 35,
   PREPARE: 56,
 } as const
+
+/**
+ * Ben's decision, 14 Sep 2026: how many days after a published entry deadline
+ * closes before the show flips from 'past' (deadline passed, this cycle is
+ * still what customers were targeting) to 'last_cycle' (next cycle not yet
+ * published; customers may prepare against last cycle's categories and
+ * judging notes). Changing this one number moves the boundary for every show.
+ */
+export const LAST_CYCLE_GRACE_DAYS = 30
 
 // ── PREP_PHASES ───────────────────────────────────────────────────────────────
 
@@ -219,6 +162,20 @@ export const PREP_PHASES: PrepPhase[] = [
 //                   agent will pause and ask user to operate manually
 //   'needs_check' — no reliable 2026 data found, show structure changed, or cycle already
 //                   closed; agent will pause and ask user to operate manually
+//
+// A row whose finalDate (published entry deadline) is in the past is not stale
+// data. It means: last cycle, next not yet published. Never delete or blank the
+// row for that reason alone -- getDeadlineUrgency reads daysLeft against
+// LAST_CYCLE_GRACE_DAYS and returns 'last_cycle' once the grace window has
+// passed, and customers may prepare against last cycle's categories and
+// judging notes until the organizer publishes the next cycle's dates. When
+// they do, a session replaces finalDate (published entry deadline), juryDate
+// (shortlist), and ceremonyDate (ceremony) -- and any fee-tier boundary or
+// eligibility window dates carried in earlyBird/standard/final/note or
+// eligibilityWindow -- with the new cycle's own dates, keeps one sentence of
+// prior-cycle history in `note`, and stamps `lastVerified`. Name the field on
+// every date: published entry deadline, fee-tier boundary, eligibility window,
+// shortlist, and ceremony are different fields and do not share a date.
 
 export const DEADLINES_2026: ShowDeadline[] = [
 
@@ -640,6 +597,16 @@ export function getDeadlineUrgency(showName: string | null | undefined): Deadlin
   const daysLeft = Math.round((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
 
   if (daysLeft < 0) {
+    if (daysLeft < -LAST_CYCLE_GRACE_DAYS) {
+      const closedMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+      const closedDate = `${deadline.getDate()} ${closedMonths[deadline.getMonth()]} ${deadline.getFullYear()}`
+      return {
+        level: 'last_cycle',
+        daysLeft,
+        deadlineDate: show.finalDate,
+        message: `Last cycle closed ${closedDate}. Next cycle not yet published. Prepping against last cycle's categories and judging notes.`,
+      }
+    }
     return {
       level: 'past',
       daysLeft,

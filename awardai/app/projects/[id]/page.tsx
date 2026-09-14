@@ -4968,6 +4968,8 @@ export default function ProjectPage() {
                               u.level === 'critical' || u.level === 'past' ? 'bg-red-50 text-red-700 border-red-200'
                               : u.level === 'tight' ? 'bg-amber-50 text-amber-800 border-amber-200'
                               : u.level === 'prepare' ? 'bg-blue-50 text-blue-700 border-blue-200'
+                              // 'last_cycle' gets the same neutral treatment as 'no_published_close' /
+                              // 'unknown': it is not a red-badge state, it is "next cycle not yet published".
                               : 'bg-gray-50 text-gray-600 border-gray-200'
                             const label =
                               u.level === 'past' ? 'Deadline passed'
@@ -4975,6 +4977,7 @@ export default function ProjectPage() {
                               : u.level === 'tight' ? `${u.daysLeft} days left`
                               : u.level === 'prepare' ? `${u.daysLeft} days left`
                               : u.level === 'no_published_close' ? 'No published close'
+                              : u.level === 'last_cycle' ? 'Next cycle not yet published'
                               : 'No deadline on file'
                             return (
                               <span className={`inline-block mt-1 text-xs px-2 py-0.5 rounded-full border ${tone}`} title={u.message}>

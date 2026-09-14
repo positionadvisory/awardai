@@ -200,7 +200,7 @@ export default function ShowsDrawer({
             <>
               <div className="px-4 pt-3 pb-1">
                 <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-                  📅 Only shows with confirmed 2026 deadlines appear below. Shows with unannounced entry windows are not surfaced until dates are confirmed.
+                  📅 Shows with a published deadline appear below; a show whose last cycle has closed shows its most recent dates until the organizer publishes the next cycle.
                 </p>
               </div>
               <DeadlineCalendar />
