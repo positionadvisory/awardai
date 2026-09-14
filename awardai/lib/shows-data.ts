@@ -124,74 +124,7 @@ export type PrepPhase = {
   dEnd: number    // Days before deadline (negative, 0 = deadline day)
 }
 
-// ── Agent gate result ─────────────────────────────────────────────────────────
-
-export type ShowGateResult =
-  | { ok: true; show: ShowDeadline; fees: EntryFeeData | null }
-  | { ok: false; showName: string; reason: 'partial' | 'needs_check' | 'not_found' | 'deadline_passed'; message: string }
-
-/**
- * getShowDataWithConfidence — agent gate function.
- *
- * Returns ok: true only if the show is 'verified' AND the deadline is in the future.
- * All other cases return ok: false with a human-readable message for the agent to
- * surface to the user, instructing them to operate manually.
- *
- * Used by the run-full-prep orchestrator before every direction/draft/eval step.
- */
-export function getShowDataWithConfidence(showName: string): ShowGateResult {
-  if (!showName) {
-    return { ok: false, showName: '', reason: 'not_found', message: 'No show name provided.' }
-  }
-
-  const lower = showName.toLowerCase()
-  const found = DEADLINES_2026.find(
-    d =>
-      d.show.toLowerCase() === lower ||
-      d.show.toLowerCase().includes(lower) ||
-      lower.includes(d.show.toLowerCase())
-  )
-
-  if (!found) {
-    return {
-      ok: false,
-      showName,
-      reason: 'not_found',
-      message: `"${showName}" isn't in the verified show list yet. Please use the manual workflow for this project, or request the show be added via the Request a Show flow.`,
-    }
-  }
-
-  if (found.confidence !== 'verified') {
-    return {
-      ok: false,
-      showName: found.show,
-      reason: found.confidence,
-      message: `${found.show} hasn't been fully verified yet — some data may be incomplete or unconfirmed. Please use the manual workflow for this one. Once the show data is verified it will be available for Full Prep.`,
-    }
-  }
-
-  // Check deadline status
-  if (found.finalDate) {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const deadline = new Date(found.finalDate + 'T00:00:00')
-    const daysLeft = Math.round((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-    if (daysLeft < 0) {
-      return {
-        ok: false,
-        showName: found.show,
-        reason: 'deadline_passed',
-        message: `The ${found.show} 2026 entry deadline has passed (${found.final}). Full Prep can't create new entries for a closed show. Please use the manual workflow if you're evaluating an existing entry, or wait for the next cycle.`,
-      }
-    }
-  }
-
-  return {
-    ok: true,
-    show: found,
-    fees: ENTRY_FEES[found.show] ?? null,
-  }
-}
+// A past finalDate does not lock a show. See getDeadlineUrgency 'last_cycle' and the DEADLINES_2026 header note.
 
 // ── Urgency thresholds ────────────────────────────────────────────────────────
 
