@@ -850,4 +850,29 @@ export const SHOW_CATEGORIES: Record<string, string[]> = {
     'Environment & Sustainability', 'Equality/Diversity & Inclusion', 'Health & Well-being',
     'Education & Empowerment', 'Community & Culture',
   ],
+
+  // IdejaX -- SHOW_CATEGORIES source: 2026 rulebook PDF (Pravilnik IdejaX 2026), read 14 Sep 2026,
+  // archived at Croatia/SOURCE-IdejaX-Pravilnik-2026-raw.txt. 31 categories across 4 groups
+  // (15+12+2+2). CATEGORY COUNT DISCREPANCY (disclosed, not resolved, per QB decision 5): the
+  // rulebook's own "NAGRADE I PRIZNANJA" summary paragraph refers to "13 kategorija" for Group II
+  // Best in Channel, but Section II's own category list names only 12 -- the 12 named categories
+  // are used here per QB decision 5, and the "13 kategorija" count discrepancy is noted, not
+  // silently reconciled.
+  'IdejaX': [
+    // Group I. Best on Market (15)
+    'Hrana', 'Alkoholna pica', 'Bezalkoholna pica', 'Telekomunikacijske usluge',
+    'Financijske usluge/osiguranja/fintech', 'Maloprodaja', 'Zdravlje i farmacija', 'Kucanstvo',
+    'Moda i ljepota', 'Turizam/kultura/slobodno vrijeme', 'Korporativne komunikacije',
+    'Tehnologija i elektronika', 'Energetika i mobilnost', 'Entertainment', 'Razno',
+    // Group II. Best in Channel (12 named; see count discrepancy note above)
+    'Najbolji TV spot & film', 'Najbolji online video', 'Najbolji print', 'Najbolji outdoor (OOH)',
+    'Najbolji digitalni outdoor (DOOH)', 'Najbolji audio & radio',
+    'Najbolje iskustveno oglasavanje i dogadanja', 'Najbolja ambalaza - mala naklada',
+    'Najbolja ambalaza - velika naklada', 'Najbolji digitalni proizvod',
+    'Najbolja ideja na drustvenim mrezama', 'Najbolja kreativna upotreba tehnologije',
+    // Group III. Best Branding & Rebranding (2)
+    'Najbolji branding', 'Najbolji rebranding',
+    // Group IV. Best of Positive Change (2)
+    'Priroda', 'Drustvo',
+  ],
 }

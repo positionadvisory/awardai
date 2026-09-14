@@ -2777,6 +2777,7 @@ export default function ProjectPage() {
       ['uk agency awards', 'UK Agency Awards'],
       ['somo borac', 'SoMo Borac'],
       ['mixx awards croatia', 'MIXX Awards Croatia'],
+      ['idejax', 'IdejaX'],
     ]
     const clientShow =
       kbShows.find(s => lowerText.includes(s.toLowerCase())) ??
