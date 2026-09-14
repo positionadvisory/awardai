@@ -2741,12 +2741,14 @@ export default function ProjectPage() {
     // First try exact canonical match, then fall back to keyword matching so that
     // variants like "Effies APAC", "SPIKES", "Cannes" all resolve to a known show.
     const SHOW_KEYWORD_MAP: Array<[string, string]> = [
+      ['balcannes', 'BalCannes'],
       ['cannes', 'Cannes Lions'],
       ['d&ad', 'D&AD'],
       ['spikes asia', 'Spikes Asia'],
       ['spikes', 'Spikes Asia'],
       ['clio', 'Clio Awards'],
       ['one show', 'One Show'],
+      ['effie croatia', 'Effie Awards Croatia'],
       ['effie', 'Effie APAC'],
       ['warc', 'WARC Awards'],
       ['dubai lynx', 'Dubai Lynx'],
@@ -2773,6 +2775,9 @@ export default function ProjectPage() {
       ['caples', 'Caples Awards'],
       ['epica', 'Epica Awards'],
       ['uk agency awards', 'UK Agency Awards'],
+      ['somo borac', 'SoMo Borac'],
+      ['mixx awards croatia', 'MIXX Awards Croatia'],
+      ['idejax', 'IdejaX'],
     ]
     const clientShow =
       kbShows.find(s => lowerText.includes(s.toLowerCase())) ??

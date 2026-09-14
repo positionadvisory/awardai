@@ -769,4 +769,110 @@ export const SHOW_CATEGORIES: Record<string, string[]> = {
     'ANZ Campaign of the Year', 'East Asia Campaign of the Year', 'South Asia Campaign of the Year',
     'Southeast Asia Campaign of the Year',
   ],
+
+  // SoMo Borac -- SHOW_CATEGORIES source: somoborac.com/uvjeti-prijave-2026/ and /ziri/, read 14 Sep 2026.
+  // 18 total per QB decision 4 (S6-Phase1-QB-verdict-and-GO-2026-09-14.md): 12 SoMo Advertising + 5 SoMo Media
+  // + Special Mention by Aleph (free, direct-entry bonus award, listed here since it has its own named award).
+  // SoMo Grand Prix and HUDI North Star are excluded: both are non-entry, jury/nomination-only awards with
+  // no separate submission, same treatment Mumbrella gives Holdco of the Year and B&T gives its Grand Prix.
+  'SoMo Borac': [
+    // SoMo Advertising (12)
+    'SoMo Social Strategy', 'SoMo Content', 'TikTok', 'DA - Digitalna aktivacija (Digital Activation)',
+    'Digitalni Mix', 'SoMo Tech', 'Digital Product & Web Experience', 'SoMoRitanac',
+    'SoMo Growth', 'SoMo Video Impact', 'Digital OOH', 'SoMo AI',
+    // SoMo Media (5)
+    'Digital Product of the Year', 'Digital Design of the Year', 'SoMo Native', 'Best Storytelling',
+    'SoMo Content Engagement',
+    // Bonus (1, free direct entry, no jury vote against other entries)
+    'Special Mention by Aleph',
+  ],
+
+  // Effie Awards Croatia -- SHOW_CATEGORIES source: 2026 Entry Kit PDF (cms.danikomunikacija.com),
+  // read 14 Sep 2026, archived in full at Croatia/SOURCE-Effie-Awards-Croatia-EntryKit-2026-raw.txt.
+  // 29 total = 13 Product/Service + 16 Special. CORRECTED THIS BUILD: this session's own Phase 1
+  // dossier had labeled the Special group "13 Special categories," but the Entry Kit's own list
+  // (verbatim, same source archive) names 16 items -- no organiser-stated "13"/"trinaest" count
+  // exists anywhere in the archive, so this was our own miscount at dossier time, not an organiser
+  // discrepancy. 29 is the corrected total, not the 26 assumed earlier in this session.
+  'Effie Awards Croatia': [
+    // Product/Service (13)
+    'Hrana (Food)', 'Pica (Beverages)', 'Roba siroke potrosnje (FMCG/consumer goods)',
+    'Financijske, osiguravajuce usluge i fintech', 'Telekomunikacijske usluge', 'Zdravlje (Health)',
+    'Maloprodaja (Retail) i e-trgovina', 'Automobilska industrija i postprodaja (Automotive & aftersales)',
+    'Energetika (Energy)', 'Kultura i umjetnost (Culture & Arts)', 'Putovanja i turizam (Travel & Tourism)',
+    'Sport, zabava i slobodno vrijeme (Sport, Entertainment & Leisure)', 'Razno (Miscellaneous)',
+    // Special (16)
+    'Lansiranje proizvoda/usluge (Product/Service Launch)', 'Inovacije u marketingu i poslovanju (Marketing & Business Innovation)',
+    'Dugorocna ucinkovitost (Long-Term Effectiveness)', 'Korporativna reputacija i odnosi s javnoscu (Corporate Reputation & PR)',
+    'Niskobudzetne kampanje (Low-Budget Campaigns)', 'Business-to-Business', 'Umjetna inteligencija (AI)',
+    'David vs. Golijat (David vs. Goliath)', 'Engaged Community', 'Brand iskustvo (Brand Experience)',
+    'Influencer Marketing', 'Drustveni mediji (Social Media)', 'Medijska strategija (Media Strategy)',
+    'Data-driven', 'Opce dobro (Common Good)', 'Zastita okolisa (Environmental Protection)',
+  ],
+
+  // MIXX Awards Croatia -- SHOW_CATEGORIES source: 2026 rulebook PDF (Pravilnik natjecanja MIXX
+  // Awards Croatia 2026), read 14 Sep 2026, archived at
+  // Croatia/SOURCE-MIXX-Awards-Croatia-Pravilnik-2026-raw.txt. 20 categories across 4 groups,
+  // verified against the rulebook's own list -- no internal discrepancy, unlike IdejaX.
+  'MIXX Awards Croatia': [
+    // Group I. Kampanje / Campaigns (agency-entrants only, 6)
+    'Brand Awareness Campaign', 'Direct Response and Lead Generation Campaign', 'Cross-Media Integration Campaign',
+    'Campaign Effectiveness', 'Best Social Campaign', 'Corporate Social Responsibility Campaign',
+    // Group II. Alati/Platforme / Tools-Platforms (agencies, startups, similar companies, 10)
+    'Best AI-Driven Project', 'Best Effective Use of Data', 'Best Video Content', 'Best Digital Product',
+    'Best Media Strategy', 'Best Branded Content', 'Best Website', 'Best Social Media', 'Best Viral',
+    'Best Tech & Innovation',
+    // Group III. Export (agencies/startups/similar, 2, exempt from the domestic-market-run requirement)
+    'Best Export Campaign', 'Best Export Platform',
+    // Group IV. Publisher (publisher/media entrants only, 2)
+    'Best Publisher Campaign', 'Best Publisher Content',
+  ],
+
+  // BalCannes -- SHOW_CATEGORIES source: 2026 Entry Guide PDF (Entry-Guide-BalCannes-Awards-2026),
+  // read 14 Sep 2026, archived at Croatia/SOURCE-BalCannes-EntryGuide-2026-raw.txt. 34 categories
+  // across 4 tracks, verified against the Entry Guide's own list -- no internal discrepancy, unlike
+  // IdejaX. Grand Prix, Impact Prix and Editor's Pick are non-entry special awards decided from the
+  // scored tracks below and are excluded from this list.
+  'BalCannes': [
+    // Track I. Best on Market (15)
+    'Food', 'Alcoholic Beverages', 'Non-Alcoholic Beverages', 'Telecommunications',
+    'Finance/Insurance & Fintech', 'Retail', 'Health & Pharmacy', 'Household', 'Fashion & Beauty',
+    'Tourism/Culture & Leisure', 'Corporate Communications', 'Technology & Electronics',
+    'Energetics & Mobility', 'Entertainment', 'Miscellaneous',
+    // Track II. Best in Channel (12)
+    'Best TV Spot & Film', 'Best Online Video', 'Best Print', 'Best Outdoor (OOH)',
+    'Best Digital Outdoor (DOOH)', 'Best Audio & Radio', 'Best Experiential Advertising & Events',
+    'Best Low-Volume Packaging Design', 'Best High-Volume Packaging Design', 'Best Digital Product',
+    'Best Social Media Idea', 'Best Creative Use of Technology',
+    // Track III. Best Branding & Rebranding (2)
+    'Best Branding', 'Best Rebranding',
+    // Track IV. Best of Positive Change (5)
+    'Environment & Sustainability', 'Equality/Diversity & Inclusion', 'Health & Well-being',
+    'Education & Empowerment', 'Community & Culture',
+  ],
+
+  // IdejaX -- SHOW_CATEGORIES source: 2026 rulebook PDF (Pravilnik IdejaX 2026), read 14 Sep 2026,
+  // archived at Croatia/SOURCE-IdejaX-Pravilnik-2026-raw.txt. 31 categories across 4 groups
+  // (15+12+2+2). CATEGORY COUNT DISCREPANCY (disclosed, not resolved, per QB decision 5): the
+  // rulebook's own "NAGRADE I PRIZNANJA" summary paragraph refers to "13 kategorija" for Group II
+  // Best in Channel, but Section II's own category list names only 12 -- the 12 named categories
+  // are used here per QB decision 5, and the "13 kategorija" count discrepancy is noted, not
+  // silently reconciled.
+  'IdejaX': [
+    // Group I. Best on Market (15)
+    'Hrana', 'Alkoholna pica', 'Bezalkoholna pica', 'Telekomunikacijske usluge',
+    'Financijske usluge/osiguranja/fintech', 'Maloprodaja', 'Zdravlje i farmacija', 'Kucanstvo',
+    'Moda i ljepota', 'Turizam/kultura/slobodno vrijeme', 'Korporativne komunikacije',
+    'Tehnologija i elektronika', 'Energetika i mobilnost', 'Entertainment', 'Razno',
+    // Group II. Best in Channel (12 named; see count discrepancy note above)
+    'Najbolji TV spot & film', 'Najbolji online video', 'Najbolji print', 'Najbolji outdoor (OOH)',
+    'Najbolji digitalni outdoor (DOOH)', 'Najbolji audio & radio',
+    'Najbolje iskustveno oglasavanje i dogadanja', 'Najbolja ambalaza - mala naklada',
+    'Najbolja ambalaza - velika naklada', 'Najbolji digitalni proizvod',
+    'Najbolja ideja na drustvenim mrezama', 'Najbolja kreativna upotreba tehnologije',
+    // Group III. Best Branding & Rebranding (2)
+    'Najbolji branding', 'Najbolji rebranding',
+    // Group IV. Best of Positive Change (2)
+    'Priroda', 'Drustvo',
+  ],
 }
