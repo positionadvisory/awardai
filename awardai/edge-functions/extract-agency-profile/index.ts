@@ -7,7 +7,7 @@
 // Body: { credentials_text: string } | { url: string }
 // Response: { profile: AgencyProfileRow }
 
-import Anthropic from 'npm:@anthropic-ai/sdk'
+import Anthropic from 'npm:@anthropic-ai/sdk@0.106.0'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -268,7 +268,7 @@ Return a single JSON object with these exact keys:
 
     inputTokens = message.usage?.input_tokens ?? 0
     outputTokens = message.usage?.output_tokens ?? 0
-    const rawText = message.content[0].type === 'text' ? message.content[0].text : ''
+    const rawText = (Array.isArray(message?.content) ? message.content : []).filter((b: any) => b?.type === 'text').map((b: any) => b.text ?? '').join('')
     const jsonStart = rawText.indexOf('{')
     const jsonEnd = rawText.lastIndexOf('}')
     if (jsonStart === -1 || jsonEnd === -1) throw new Error('No JSON in response')

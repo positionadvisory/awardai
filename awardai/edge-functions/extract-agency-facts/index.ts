@@ -24,7 +24,7 @@
 // Response: { facts: AgencyFacts, source: 'project'|'text'|'url' }
 // ─────────────────────────────────────────────────────────────────────────────
 
-import Anthropic from 'npm:@anthropic-ai/sdk'
+import Anthropic from 'npm:@anthropic-ai/sdk@0.106.0'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -298,7 +298,7 @@ ${corpus.slice(0, 16000)}
     })
     inputTokens = claudeRes.usage?.input_tokens ?? 0
     outputTokens = claudeRes.usage?.output_tokens ?? 0
-    const rawText = claudeRes.content[0]?.type === 'text' ? claudeRes.content[0].text : ''
+    const rawText = (Array.isArray(claudeRes?.content) ? claudeRes.content : []).filter((b: any) => b?.type === 'text').map((b: any) => b.text ?? '').join('')
     const jsonStart = rawText.indexOf('{')
     const jsonEnd = rawText.lastIndexOf('}')
     if (jsonStart === -1 || jsonEnd === -1) throw new Error('No JSON in response')
