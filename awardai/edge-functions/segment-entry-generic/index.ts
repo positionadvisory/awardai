@@ -288,7 +288,7 @@ async function callClaude(system: string, userText: string, deadlineMs: number):
       return { ok: false, timeout: false, status: res.status }
     }
     const data = await res.json()
-    const rawText: string = data.content?.[0]?.text ?? ''
+    const rawText: string = (Array.isArray(data?.content) ? data.content : []).filter((b: any) => b?.type === 'text').map((b: any) => b.text ?? '').join('')
     const inputTokens: number = data.usage?.input_tokens ?? 0
     const outputTokens: number = data.usage?.output_tokens ?? 0
     return { ok: true, rawText, inputTokens, outputTokens }

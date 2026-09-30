@@ -326,7 +326,7 @@ The rationale must be plain prose. Never use em-dashes anywhere in your output.`
     }
 
     const aiData = await claudeRes.json()
-    const rawText: string = aiData.content?.[0]?.text ?? ''
+    const rawText: string = (Array.isArray(aiData?.content) ? aiData.content : []).filter((b: any) => b?.type === 'text').map((b: any) => b.text ?? '').join('')
 
     // Usage log (Session 47): required for the rate limit above to count calls,
     // and gives cost telemetry this function never had. Non-blocking.

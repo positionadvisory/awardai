@@ -490,7 +490,7 @@ Deno.serve(async (req) => {
     }
 
     const claudeData = await claudeRes.json()
-    const rawText: string = claudeData.content?.[0]?.text ?? ''
+    const rawText: string = (Array.isArray(claudeData?.content) ? claudeData.content : []).filter((b: any) => b?.type === 'text').map((b: any) => b.text ?? '').join('')
     const inputTokens: number = claudeData.usage?.input_tokens ?? 0
     const outputTokens: number = claudeData.usage?.output_tokens ?? 0
 

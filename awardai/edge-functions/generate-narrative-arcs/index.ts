@@ -331,7 +331,7 @@ async function callArc(
     throw new Error(`ARC-AI-${res.status}`)
   }
 
-  const text: string = data?.content?.[0]?.text ?? ''
+  const text: string = (Array.isArray(data?.content) ? data.content : []).filter((b: any) => b?.type === 'text').map((b: any) => b.text ?? '').join('')
   if (!text.trim()) throw new Error('ARC-AI-EMPTY')
 
   return {

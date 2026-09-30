@@ -478,7 +478,7 @@ ${execLine}  "sections": ["extracted text for section 1", "... one string per we
           return { ok: false, kind: 'ai', status: res.status, detail: errorBody.slice(0, 300) }
         }
         const data = await res.json()
-        const rawText: string = data.content?.[0]?.text ?? ''
+        const rawText: string = (Array.isArray(data?.content) ? data.content : []).filter((b: any) => b?.type === 'text').map((b: any) => b.text ?? '').join('')
         const inTok: number = data.usage?.input_tokens ?? 0
         const outTok: number = data.usage?.output_tokens ?? 0
         const stopReason: string = data.stop_reason ?? '?'

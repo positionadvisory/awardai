@@ -358,7 +358,7 @@ Return only the top 3 best-fit categories, ranked from strongest to weakest fit.
         )
       }
       const claudeData = await claudeRes.json()
-      const rawText: string = claudeData.content?.[0]?.text?.trim() ?? ''
+      const rawText: string = (Array.isArray(claudeData?.content) ? claudeData.content : []).filter((b: any) => b?.type === 'text').map((b: any) => b.text ?? '').join('').trim()
       const inputTokens: number = claudeData.usage?.input_tokens ?? 0
       const outputTokens: number = claudeData.usage?.output_tokens ?? 0
 
@@ -443,7 +443,7 @@ Return ONLY the script. No preamble, no notes, no sign-off.`
         )
       }
       const claudeData = await claudeRes.json()
-      scriptText = claudeData.content?.[0]?.text?.trim() ?? ''
+      scriptText = (Array.isArray(claudeData?.content) ? claudeData.content : []).filter((b: any) => b?.type === 'text').map((b: any) => b.text ?? '').join('').trim()
 
       const inputTokens: number = claudeData.usage?.input_tokens ?? 0
       const outputTokens: number = claudeData.usage?.output_tokens ?? 0
@@ -533,7 +533,7 @@ Return a valid JSON object with EXACTLY this structure (no markdown fences, no p
       )
     }
     const claudeData = await claudeRes.json()
-    const rawText: string = claudeData.content?.[0]?.text?.trim() ?? ''
+    const rawText: string = (Array.isArray(claudeData?.content) ? claudeData.content : []).filter((b: any) => b?.type === 'text').map((b: any) => b.text ?? '').join('').trim()
     const inputTokens: number = claudeData.usage?.input_tokens ?? 0
     const outputTokens: number = claudeData.usage?.output_tokens ?? 0
 
