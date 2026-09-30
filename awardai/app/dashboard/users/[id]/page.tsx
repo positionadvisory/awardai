@@ -4,16 +4,8 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
+import { calcCost } from '@/lib/model-pricing'
 
-// ── Pricing ────────────────────────────────────────────────────────────────────
-const PRICING: Record<string, { input: number; output: number }> = {
-  'claude-sonnet-4-6': { input: 3, output: 15 },
-  'claude-opus-4-6': { input: 15, output: 75 },
-}
-function calcCost(model: string | null, inp: number | null, out: number | null): number {
-  const p = PRICING[model ?? ''] ?? PRICING['claude-sonnet-4-6']
-  return ((inp ?? 0) / 1_000_000) * p.input + ((out ?? 0) / 1_000_000) * p.output
-}
 function fmtCost(c: number): string {
   return c < 0.005 ? '<$0.01' : `$${c.toFixed(2)}`
 }
