@@ -41,7 +41,8 @@ const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')!
 type CleanResult = { what: string | null; win_factor: string | null }
 
 async function cleanBatch(
-  campaigns: Array<{ id: number; what: string | null; win_factor: string | null }>
+  campaigns: Array<{ id: number; what: string | null; win_factor: string | null }>,
+  logCtx: { supabase: any; userId: string | null }
 ): Promise<CleanResult[]> {
   const prompt = campaigns.map((c, i) =>
     `Campaign ${i + 1}:
@@ -66,6 +67,7 @@ Return a JSON array (one object per campaign, same order as input):
 
 Return ONLY the JSON array. No markdown, no explanation.`
 
+  const CLEAN_MODEL = 'claude-haiku-4-5-20251001'
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -74,7 +76,7 @@ Return ONLY the JSON array. No markdown, no explanation.`
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
+      model: CLEAN_MODEL,
       max_tokens: 2048,
       system,
       messages: [{ role: 'user', content: prompt }],
@@ -87,7 +89,21 @@ Return ONLY the JSON array. No markdown, no explanation.`
   }
 
   const data = await res.json()
-  const rawText: string = data.content?.[0]?.text ?? ''
+  const rawText: string = (Array.isArray(data?.content) ? data.content : []).filter((b: any) => b?.type === 'text').map((b: any) => b.text ?? '').join('')
+
+  try {
+    await logCtx.supabase.from('usage_logs').insert({
+      user_id: logCtx.userId,
+      org_id: null,
+      action: 'clean_campaign_content',
+      model: CLEAN_MODEL,
+      input_tokens: data.usage?.input_tokens ?? 0,
+      output_tokens: data.usage?.output_tokens ?? 0,
+      metadata: { campaign_ids: campaigns.map(c => c.id) },
+    })
+  } catch (logErr) {
+    console.error('clean-campaign-content: usage log failed', logErr)
+  }
 
   // Robust JSON extraction
   const firstBracket = rawText.indexOf('[')
@@ -177,7 +193,7 @@ Deno.serve(async (req) => {
     for (let i = 0; i < campaigns.length; i += SUB_BATCH) {
       const subBatch = campaigns.slice(i, i + SUB_BATCH)
       try {
-        const cleaned = await cleanBatch(subBatch)
+        const cleaned = await cleanBatch(subBatch, { supabase, userId: user.id })
 
         for (let j = 0; j < subBatch.length; j++) {
           const campaign = subBatch[j]

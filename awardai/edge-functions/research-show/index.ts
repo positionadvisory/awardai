@@ -143,6 +143,7 @@ Deno.serve(async (req) => {
     }
 
     // ── Call Claude Sonnet ────────────────────────────────────────────────────
+    const RESEARCH_MODEL = 'claude-sonnet-4-6'
     const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -151,7 +152,7 @@ Deno.serve(async (req) => {
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        model: RESEARCH_MODEL,
         max_tokens: 2048,
         system: `You are an awards industry researcher. Your job is to extract structured intelligence about an award show from its website and/or entry kit.
 
@@ -197,7 +198,21 @@ Rules:
     }
 
     const aiData = await claudeRes.json()
-    const rawText: string = aiData.content?.[0]?.text ?? ''
+    const rawText: string = (Array.isArray(aiData?.content) ? aiData.content : []).filter((b: any) => b?.type === 'text').map((b: any) => b.text ?? '').join('')
+
+    try {
+      await admin.from('usage_logs').insert({
+        user_id: user.id,
+        org_id: null,
+        action: 'research_show',
+        model: RESEARCH_MODEL,
+        input_tokens: aiData.usage?.input_tokens ?? 0,
+        output_tokens: aiData.usage?.output_tokens ?? 0,
+        metadata: { show_request_id },
+      })
+    } catch (logErr) {
+      console.error('research-show: usage log failed', logErr)
+    }
 
     // ── Parse response ────────────────────────────────────────────────────────
     let result: Record<string, unknown>
