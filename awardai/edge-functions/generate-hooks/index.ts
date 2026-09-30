@@ -159,7 +159,7 @@ RULES:
     }
 
     const claudeData = await claudeRes.json()
-    const rawText: string = claudeData.content?.[0]?.text ?? ''
+    const rawText: string = (Array.isArray(claudeData?.content) ? claudeData.content : []).filter((b: any) => b?.type === 'text').map((b: any) => b.text ?? '').join('')
 
     // ── Parse response ────────────────────────────────────────────────────────
     let hooks: string[]

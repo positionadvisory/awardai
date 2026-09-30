@@ -275,7 +275,7 @@ If the user asks something outside the scope of this evaluation or award entry s
     }
 
     const claudeData = await claudeRes.json()
-    const reply: string = claudeData.content?.[0]?.text?.trim() ?? ''
+    const reply: string = (Array.isArray(claudeData?.content) ? claudeData.content : []).filter((b: any) => b?.type === 'text').map((b: any) => b.text ?? '').join('').trim()
     const inputTokens: number = claudeData.usage?.input_tokens ?? 0
     const outputTokens: number = claudeData.usage?.output_tokens ?? 0
 

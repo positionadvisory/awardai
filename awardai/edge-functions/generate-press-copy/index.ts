@@ -250,7 +250,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const aiData = await response.json()
-    const copy = aiData.content?.[0]?.text?.trim() ?? ''
+    const copy = (Array.isArray(aiData?.content) ? aiData.content : []).filter((b: any) => b?.type === 'text').map((b: any) => b.text ?? '').join('').trim()
 
     // Audit fix A-13: this function previously spent Haiku tokens with zero
     // cost telemetry. Log usage (non-blocking — failure must not break copy).
