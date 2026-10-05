@@ -398,8 +398,8 @@ export const DEADLINES_2026: ShowDeadline[] = [
     show: 'Spikes Asia', region: 'APAC',
     finalDate: '', juryDate: '', ceremonyDate: '2026-03-12',
     earlyBird: '', standard: '', final: 'Closed', ceremony: '12 Mar 2026 (Singapore — 2026 cycle complete)',
-    note: '2026 cycle fully closed — gala was 12 Mar 2026, The Capitol Theatre, Singapore (India led Grand Prix tally, Leo Mumbai named APAC Agency of the Year, Uzbekistan\'s first-ever Spikes win). 2027 cycle dates NOT YET PUBLISHED as of 8 Jul 2026 (/enter still 404s). Expect 2027 call for entries ~Nov 2026 (2026 jury was announced 11-13 Nov 2025, same window historically brings the next call for entries). Organiser: Asian Advertising Festival (Spikes Asia) Pte Ltd — Lions by Informa (Informa acquired Ascential in 2024; rebrand to "Lions by Informa" is live). Contact: awards@canneslions.com. 2026 fee range was USD $655–$1,005 (standard) / $870–$1,220 (final late) across 25 categories. 2026 What\'s New: new Creative B2B Spike (standalone); Social & Influencer → Social & Creator rename; new sub-categories: Excellence in Image Description, Retail Media, Cultural Engagement. Confirmed 93 named jurors for 2026 cycle (first-ever Jury President from Pakistan, Atiya Zaidi).',
-    confidence: 'verified', lastVerified: '2026-07-08',
+    note: 'RENAMED 17 Sep 2026: Spikes Asia is now LIONS Asia, and its awards are the Asia Lions Awards (spikes.asia/news/spikes-asia-evolves-into-lions-asia, read 4 Oct 2026). The name change took effect immediately. The festival moves from March to September: the first LIONS Asia Festival and Asia Lions Awards are in Singapore, September 2027, exact dates and venue not yet published. Entries for the Asia Lions open in April 2027 (organiser FAQ). Eligibility dates will change to fit the September timing and are not yet published. Judging criteria and jury formation stay the same (organiser FAQ). The rebrand does not change entry fees (organiser FAQ). Prior Spikes Asia wins remain Spikes Asia Awards; wins from 2027 are Asia Lions Awards. Asia Lions winners are NOT automatically eligible for Cannes Lions. Canonical platform key stays "Spikes Asia" until a deliberate rename across show_profiles, SHOW_CATEGORIES and the keyword maps; "LIONS Asia" / "Asia Lions" are aliased to it. SUPERSEDED: the line below expecting a 2027 call for entries ~Nov 2026 is wrong; there is no entry window between Oct 2026 and Mar 2027. Prior note follows. 2026 cycle fully closed — gala was 12 Mar 2026, The Capitol Theatre, Singapore (India led Grand Prix tally, Leo Mumbai named APAC Agency of the Year, Uzbekistan\'s first-ever Spikes win). 2027 cycle dates NOT YET PUBLISHED as of 8 Jul 2026 (/enter still 404s). Expect 2027 call for entries ~Nov 2026 (2026 jury was announced 11-13 Nov 2025, same window historically brings the next call for entries). Organiser: Asian Advertising Festival (Spikes Asia) Pte Ltd — Lions by Informa (Informa acquired Ascential in 2024; rebrand to "Lions by Informa" is live). Contact: awards@canneslions.com. 2026 fee range was USD $655–$1,005 (standard) / $870–$1,220 (final late) across 25 categories. 2026 What\'s New: new Creative B2B Spike (standalone); Social & Influencer → Social & Creator rename; new sub-categories: Excellence in Image Description, Retail Media, Cultural Engagement. Confirmed 93 named jurors for 2026 cycle (first-ever Jury President from Pakistan, Atiya Zaidi).',
+    confidence: 'verified', lastVerified: '2026-10-04',
   },
   {
     show: 'Campaign Asia Agency of the Year', region: 'APAC',
@@ -823,6 +823,13 @@ export const KB_SHOW_ALIASES: Record<string, string | null> = {
   'campaign asia aoty':                           'Campaign Asia Agency of the Year',
   'campaign asia agency of the year awards':      'Campaign Asia Agency of the Year',
   'campaign asia-pacific agency of the year':     'Campaign Asia Agency of the Year',
+
+  // LIONS Asia (renamed from Spikes Asia 17 Sep 2026). Exact-key aliases to the
+  // existing canonical key; the canonical rename is a separate, deliberate pass.
+  'lions asia':                                   'Spikes Asia',
+  'asia lions':                                   'Spikes Asia',
+  'asia lions awards':                            'Spikes Asia',
+  'lions asia festival of creativity':            'Spikes Asia',
 
   // Festival of Media APAC
   'festival of media apac (foma)':                'Festival of Media APAC',

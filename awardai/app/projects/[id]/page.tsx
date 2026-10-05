@@ -2746,6 +2746,8 @@ export default function ProjectPage() {
       ['d&ad', 'D&AD'],
       ['spikes asia', 'Spikes Asia'],
       ['spikes', 'Spikes Asia'],
+      ['lions asia', 'Spikes Asia'],
+      ['asia lions', 'Spikes Asia'],
       ['clio', 'Clio Awards'],
       ['one show', 'One Show'],
       ['effie croatia', 'Effie Awards Croatia'],
