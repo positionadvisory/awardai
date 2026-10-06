@@ -180,12 +180,23 @@ export const SHOW_CATEGORIES: Record<string, string[]> = {
     'Publishing', 'Radio & Audio Advertising', 'Social Media',
     'Use of Craft', 'Writing for Design',
   ],
+  // 2027 professional MEDIUM names, spelled as clios.com's Mediums page and
+  // Entry Fees table spell them (29 mediums, read 6 Oct 2026). Student (a
+  // track for enrolled students, not a medium) and The Clios and Meta Next
+  // Generation AI Creative Award (a brief-response award for creatives with up
+  // to five years' experience) are deliberately excluded: this list is sent as
+  // candidate_categories to the suggest and directions paths, and neither one
+  // can take an agency's existing campaign.
   'Clio Awards': [
-    'Branded Entertainment', 'Content & Contact', 'Creative Effectiveness',
-    'Culture & Context', 'Design', 'Direct', 'Event & Experiential', 'Fashion',
-    'Film', 'Film Technique', 'Health & Wellness', 'Innovation', 'Integration',
-    'Out-of-Home', 'PR', 'Print', 'Radio & Audio', 'Social Media',
-    'Sports', 'Student', 'Sustainable Development Goals',
+    'Audio', 'Audio Craft', 'Branded Entertainment & Content',
+    'Creative Business Transformation', 'Creative Commerce',
+    'Creative Disruption', 'Creative Effectiveness', 'Creative Strategy',
+    'Creative Use of Data', 'Culture & Influence', 'Design', 'Design Craft',
+    'Digital/Mobile', 'Digital/Mobile Craft', 'Direct', 'Experience/Activation',
+    'Fashion & Beauty', 'Film', 'Film Craft', 'Integrated', 'Media',
+    'Out of Home', 'Partnerships & Collaborations', 'Print',
+    'Print & Out of Home Craft', 'Public Relations', 'Social Media',
+    'Social Media Craft', 'Use of Influencers',
   ],
   'One Show': [
     'Advertising', 'Brand Experience', 'Branded Entertainment', 'Branded Film',
