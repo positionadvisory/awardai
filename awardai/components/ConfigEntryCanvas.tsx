@@ -34,6 +34,7 @@ import {
   reconcileDerivedList,
   orphanedDerivedResults,
   countWords,
+  countChars,
   sectionWordCount,
   isScoredSection,
   type EntryFormSpec,
@@ -343,7 +344,7 @@ export default function ConfigEntryCanvas({
                 )}
                 {!scored && (
                   <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200 text-gray-500 font-medium">
-                    required, not scored
+                    {norm.fields.every((f) => f.required) ? 'required, not scored' : 'not scored'}
                   </span>
                 )}
               </div>
@@ -575,15 +576,23 @@ function FieldEditor({ field, values, objectives, onFieldChange, onSourceChange,
   if (field.type === 'long_text' || field.type === 'short_text') {
     const val = typeof raw === 'string' ? raw : ''
     const wc = countWords(val)
-    const over = !!(field.word_limit && wc > field.word_limit)
+    const cc = countChars(val)
+    const overWords = !!(field.word_limit && wc > field.word_limit)
+    const overChars = !!(field.char_limit && cc > field.char_limit)
+    const over = overWords || overChars
     const isSentence = field.type === 'short_text' && field.one_sentence
     return (
       <div>
         <div className="flex items-center justify-between gap-2">
           {label}
-          {field.word_limit && (
-            <span className={`text-xs tabular-nums ${over ? 'text-red-600' : 'text-gray-400'}`}>{wc} / {field.word_limit}w</span>
-          )}
+          <span className="flex items-center gap-2">
+            {field.word_limit && (
+              <span className={`text-xs tabular-nums ${overWords ? 'text-red-600' : 'text-gray-400'}`}>{wc} / {field.word_limit}w</span>
+            )}
+            {field.char_limit && (
+              <span className={`text-xs tabular-nums ${overChars ? 'text-red-600' : 'text-gray-400'}`}>{cc.toLocaleString('en-US')} / {field.char_limit.toLocaleString('en-US')} chars</span>
+            )}
+          </span>
         </div>
         {help}
         {field.type === 'short_text' ? (
@@ -597,7 +606,7 @@ function FieldEditor({ field, values, objectives, onFieldChange, onSourceChange,
           <textarea
             value={val}
             onChange={(e) => onFieldChange(e.target.value)}
-            rows={Math.max(Math.min(20, Math.ceil((field.word_limit ?? 60) / 11) + 1), (val.match(/\n/g) || []).length + 3)}
+            rows={Math.max(Math.min(20, field.char_limit ? Math.ceil(field.char_limit / 70) + 1 : Math.ceil((field.word_limit ?? 60) / 11) + 1), (val.match(/\n/g) || []).length + 3)}
             className={`w-full bg-gray-50 border rounded-lg px-3 py-2 text-sm text-gray-900 leading-relaxed resize-none focus:outline-none focus:border-green-600 ${over ? 'border-red-300' : 'border-gray-300'}`}
           />
         )}
