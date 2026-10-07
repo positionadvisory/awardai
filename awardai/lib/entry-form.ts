@@ -426,6 +426,15 @@ export interface EntryFormField {
   source?: EntryFormSource
   // long_text / short_text
   word_limit?: number | null
+  /**
+   * Portal-enforced maximum in CHARACTERS (Clio Awards, 7 Oct 2026), distinct
+   * from word_limit. Counted by countChars, which matches Chrome's textarea
+   * maxlength (UTF-16 code units, one line break = 1; tested 7 Oct 2026). The
+   * canvas soft-warns over it; nothing truncates. Field-level only: a section
+   * carrying a char limit must be a v2 section (with `fields`), so the four
+   * isStaticSection copies stay untouched.
+   */
+  char_limit?: number | null
   /** short_text: cap to a single sentence (canvas hint + soft validation). */
   one_sentence?: boolean
   // list
@@ -552,6 +561,14 @@ export function countWords(text: string | null | undefined): number {
   const t = String(text).trim()
   if (!t) return 0
   return t.split(/\s+/).length
+}
+
+/** Pure. Character count as a textarea `maxlength` counts it: UTF-16 code
+ * units, with CRLF normalized to one line break (Chrome counts a line break as
+ * 1, measured 7 Oct 2026). Pairs with EntryFormField.char_limit. */
+export function countChars(text: string | null | undefined): number {
+  if (!text) return 0
+  return String(text).replace(/\r\n/g, '\n').length
 }
 
 /** Pure. Sum of word counts across a section's PROSE fields (long_text +
