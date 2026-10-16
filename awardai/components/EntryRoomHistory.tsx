@@ -47,6 +47,10 @@ export type MinimalEvaluation = {
   overall_score: number
   scores?: Record<string, number> | null
   created_at?: string
+  // Scoring update note (16 Oct 2026): which scorer wrote this evaluation. Two evaluations
+  // from different scorers are not compared (see 'scoring-changed' below). Optional:
+  // callers that do not pass it get the old behavior.
+  model_used?: string | null
 } | null | undefined
 
 // ── version selector ────────────────────────────────────────────────────────
@@ -170,12 +174,14 @@ export type VersionDeltaState =
   | 'prior-not-evaluated'
   | 'this-version-not-evaluated'
   | 'no-prior-generation'
+  | 'scoring-changed'
 
 export const VERSION_DELTA_MESSAGE: Record<VersionDeltaState, string> = {
   'evaluated': '',
   'prior-not-evaluated': 'No earlier evaluated version to compare against.',
   'this-version-not-evaluated': 'This version has not been evaluated.',
   'no-prior-generation': 'This is the first draft — nothing earlier to compare against.',
+  'scoring-changed': 'The earlier draft was scored before our scoring was updated, so the two scores are not compared.',
 }
 
 export function computeVersionDeltaState(params: {
@@ -187,6 +193,12 @@ export function computeVersionDeltaState(params: {
   if (!thisEval) return { state: 'this-version-not-evaluated', delta: null }
   if (gen <= 1) return { state: 'no-prior-generation', delta: null }
   if (!priorEvaluatedEval) return { state: 'prior-not-evaluated', delta: null }
+  // Scoring update note (16 Oct 2026): a delta across a scorer change would credit or
+  // blame the user's edit for the scorer's re-baseline. Only compare like with like.
+  if (thisEval.model_used !== undefined && priorEvaluatedEval.model_used !== undefined
+      && thisEval.model_used !== priorEvaluatedEval.model_used) {
+    return { state: 'scoring-changed', delta: null }
+  }
   const delta = Math.round((thisEval.overall_score - priorEvaluatedEval.overall_score) * 10) / 10
   return { state: 'evaluated', delta }
 }
