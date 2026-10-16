@@ -6403,7 +6403,21 @@ export default function ProjectPage() {
                         )}
 
                         {/* Previous Evaluations History */}
-                        {dirHistory.length > 0 && (
+                        {dirHistory.length > 0 && (() => {
+                          // Scoring update note (16 Oct 2026): shown only when this direction's
+                          // evaluations came from more than one scorer, i.e. the list spans a
+                          // scoring update. Keyed on model_used, never shown by name.
+                          // The reference scorer is the newest evaluation's, across both modes.
+                          const allDirEvals = [
+                            ...(evalBoth.judge ? [evalBoth.judge] : []),
+                            ...(evalBoth.coach ? [evalBoth.coach] : []),
+                            ...dirHistory,
+                          ]
+                          const refModel = allDirEvals.reduce<Evaluation | null>(
+                            (newest, e) => (!newest || e.created_at > newest.created_at ? e : newest), null)?.model_used
+                          const scorerSet = new Set<string>(allDirEvals.map(e => e.model_used ?? ''))
+                          const spansScoringUpdate = scorerSet.size > 1
+                          return (
                           <div className="px-5 py-3 border-b border-gray-100 bg-white">
                             <button
                               onClick={() => setEvalHistoryOpen(prev => ({ ...prev, [dirId]: !prev[dirId] }))}
@@ -6413,6 +6427,11 @@ export default function ProjectPage() {
                               <span>{evalHistoryOpen[dirId] ? 'Hide' : 'See'} previous evaluations</span>
                               <span className="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{dirHistory.length}</span>
                             </button>
+                            {spansScoringUpdate && (
+                              <p className="mt-1.5 text-xs text-gray-400">
+                                Some of these evaluations were scored before our scoring was updated. Compare scores from the same period.
+                              </p>
+                            )}
                             {evalHistoryOpen[dirId] && (
                               <div className="mt-3 space-y-3">
                                 {dirHistory.map((hist, hIdx) => {
@@ -6432,6 +6451,9 @@ export default function ProjectPage() {
                                         <span className={`text-xs font-bold tabular-nums ${scoreColor(hist.overall_score)}`}>
                                           {hist.overall_score.toFixed(1)}/10
                                         </span>
+                                        {spansScoringUpdate && (hist.model_used ?? '') !== (refModel ?? '') && (
+                                          <span className="text-xs text-gray-400 bg-gray-100 rounded-full px-1.5 py-0.5">Before scoring update</span>
+                                        )}
                                       </div>
                                       {hJudgeOutput && (
                                         <div className="space-y-1.5">
@@ -6462,7 +6484,8 @@ export default function ProjectPage() {
                               </div>
                             )}
                           </div>
-                        )}
+                          )
+                        })()}
 
                         {/* Findings render (23 Aug 2026, entry-room step one; moved
                             24 Aug 2026, Entry Room Slice 1b, from sxsEditSurface into
