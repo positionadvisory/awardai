@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
 import { calcCost } from '@/lib/model-pricing'
+import { ladderScore } from '@/lib/score-ladder'
 
 function fmtCost(c: number): string {
   return c < 0.005 ? '<$0.01' : `$${c.toFixed(2)}`
@@ -37,6 +38,7 @@ type Evaluation = {
   scores: Record<string, number>
   created_at: string
   created_by: string
+  model_used?: string | null
 }
 
 type MonthlyUsage = {
@@ -164,7 +166,7 @@ export default function DashboardPage() {
       ] = await Promise.all([
         supabase.from('projects').select('id, campaign_name, client_name, target_shows, status, created_at, user_id').eq('org_id', orgId).order('created_at', { ascending: false }),
         supabase.from('directions').select('id, project_id, best_show, best_category, win_likelihood, created_by, created_at').eq('org_id', orgId),
-        supabase.from('evaluations').select('id, project_id, overall_score, scores, created_at, created_by').eq('org_id', orgId),
+        supabase.from('evaluations').select('id, project_id, overall_score, scores, created_at, created_by, model_used').eq('org_id', orgId),
         supabase.from('monthly_usage').select('*').eq('org_id', orgId).order('period_year', { ascending: false }).order('period_month', { ascending: false }).limit(6),
         supabase.from('profiles').select('id, full_name, email, role, created_at').eq('org_id', orgId),
         supabase.from('usage_logs').select('id, user_id, action, model, input_tokens, output_tokens, created_at').eq('org_id', orgId).gte('created_at', thirtyDaysAgo).order('created_at', { ascending: false }).limit(1000),
@@ -197,12 +199,12 @@ export default function DashboardPage() {
   const totalProjects = projects.length
   const totalDirections = directions.length
   const totalEvaluations = evaluations.length
-  const readyEntries = evaluations.filter(e => e.overall_score >= 7.5).length
+  const readyEntries = evaluations.filter(e => ladderScore(e.overall_score, e.model_used) >= 7.5).length
 
   // Pipeline: categorise each project by highest stage reached
   const projectsWithDirs = new Set(directions.map(d => d.project_id))
   const projectsWithEvals = new Set(evaluations.map(e => e.project_id))
-  const projectsReady = new Set(evaluations.filter(e => e.overall_score >= 7.5).map(e => e.project_id))
+  const projectsReady = new Set(evaluations.filter(e => ladderScore(e.overall_score, e.model_used) >= 7.5).map(e => e.project_id))
 
   let pipelineNone = 0, pipelineDirs = 0, pipelineEval = 0, pipelineReady = 0
   for (const p of projects) {
@@ -254,7 +256,7 @@ export default function DashboardPage() {
 
   // Top 5 entries
   const topEntries = [...evaluations]
-    .sort((a, b) => b.overall_score - a.overall_score)
+    .sort((a, b) => ladderScore(b.overall_score, b.model_used) - ladderScore(a.overall_score, a.model_used))
     .slice(0, 5)
     .map(e => ({
       ...e,
@@ -560,8 +562,8 @@ export default function DashboardPage() {
                         </p>
                       </div>
                       <span className={`text-sm font-semibold ${
-                        e.overall_score >= 8 ? 'text-green-700' :
-                        e.overall_score >= 6 ? 'text-amber-600' : 'text-red-500'
+                        ladderScore(e.overall_score, e.model_used) >= 8 ? 'text-green-700' :
+                        ladderScore(e.overall_score, e.model_used) >= 6 ? 'text-amber-600' : 'text-red-500'
                       }`}>
                         {e.overall_score}
                       </span>

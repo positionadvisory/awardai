@@ -29,6 +29,7 @@
 // Scoring is NEVER touched here: this renders persisted evaluations only.
 
 import React from 'react'
+import { ladderScore } from '@/lib/score-ladder'
 
 /* The badge shown on any holistically-scored panel (SMARTIES S92, and any
  * config show whose entry_form resolves scoring_mode 'qualitative').
@@ -90,6 +91,9 @@ export type EvalDisplayData = {
   evaluation_mode?: 'judge' | 'coach'
   created_at?: string
   output?: unknown
+  // Scoring update (16 Oct 2026): which scorer wrote this, so the colour
+  // ladders read it on the right scale (lib/score-ladder.ts).
+  model_used?: string | null
 }
 
 export const SCORE_DIMENSIONS: { key: keyof EvaluationScores; label: string }[] = [
@@ -101,13 +105,15 @@ export const SCORE_DIMENSIONS: { key: keyof EvaluationScores; label: string }[] 
   { key: 'jury_fit', label: 'Jury Fit' },
 ]
 
-export function scoreColor(score: number): string {
+export function scoreColor(score: number, modelUsed?: string | null): string {
+  score = ladderScore(score, modelUsed)
   if (score >= 8) return 'text-green-700'
   if (score >= 6) return 'text-amber-700'
   return 'text-red-600'
 }
 
-export function scoreBg(score: number): string {
+export function scoreBg(score: number, modelUsed?: string | null): string {
+  score = ladderScore(score, modelUsed)
   if (score >= 8) return 'bg-green-50 border-green-200'
   if (score >= 6) return 'bg-amber-50 border-amber-200'
   return 'bg-red-50 border-red-200'
@@ -123,7 +129,8 @@ export function scoreBg(score: number): string {
 // NOT derived from priority_fixes: production shows a constant 5 fixes on every
 // coach eval (scores 0.8-7.4), so a count-based tier would be constant (Ben,
 // 22 Jul: derive the hidden tier from the score instead, show only the word).
-function coachHeadroom(score: number): { label: string; caption: string } {
+function coachHeadroom(score: number, modelUsed?: string | null): { label: string; caption: string } {
+  score = ladderScore(score, modelUsed)
   if (score >= 8) return { label: 'Near ceiling', caption: 'this entry is close to its potential' }
   if (score >= 5) return { label: 'Solid headroom', caption: 'targeted improvements available' }
   return { label: 'Significant headroom', caption: 'real room to strengthen this entry' }
@@ -156,15 +163,17 @@ function splitFocusPoint(text: string): { lead: string; rest: string } {
 // Compact-variant score colours (/start, S158 round 3): app thresholds on
 // bordered chips. Kept alongside scoreColor/scoreBg so the thresholds can
 // never drift between the two skins.
-export function chipClasses(score?: number | null): string {
+export function chipClasses(score?: number | null, modelUsed?: string | null): string {
   if (score == null) return 'bg-gray-50 border-gray-200 text-gray-400'
+  score = ladderScore(score, modelUsed)
   if (score >= 8) return 'bg-green-50 border-green-200 text-green-700'
   if (score >= 6) return 'bg-amber-50 border-amber-200 text-amber-700'
   return 'bg-red-50 border-red-200 text-red-600'
 }
 
-export function overallColor(score?: number | null): string {
+export function overallColor(score?: number | null, modelUsed?: string | null): string {
   if (score == null) return 'text-gray-500'
+  score = ladderScore(score, modelUsed)
   if (score >= 8) return 'text-green-700'
   if (score >= 6) return 'text-amber-700'
   return 'text-red-600'
@@ -237,7 +246,7 @@ export default function EvalBreakdown({
     return (
       <>
         <div className="flex items-baseline gap-2">
-          <span className={`text-3xl font-semibold tabular-nums ${overallColor(evaluation.overall_score)}`}>{evaluation.overall_score?.toFixed(1) ?? '—'}</span>
+          <span className={`text-3xl font-semibold tabular-nums ${overallColor(evaluation.overall_score, evaluation.model_used)}`}>{evaluation.overall_score?.toFixed(1) ?? '—'}</span>
           <span className="text-sm text-gray-400">/ 10</span>
           <span className="ml-auto text-xs font-medium uppercase tracking-wide text-gray-400">Jury read</span>
         </div>
@@ -245,7 +254,7 @@ export default function EvalBreakdown({
         {chips.length > 0 && (
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
             {chips.map((c, i) => (
-              <div key={i} className={`rounded-lg border px-3 py-2 ${chipClasses(c.score)}`}>
+              <div key={i} className={`rounded-lg border px-3 py-2 ${chipClasses(c.score, evaluation.model_used)}`}>
                 <p className="text-[11px] font-medium leading-tight opacity-80">{c.label}</p>
                 <p className="mt-0.5 text-lg font-semibold tabular-nums">{c.score ?? '—'}</p>
               </div>
@@ -296,7 +305,7 @@ export default function EvalBreakdown({
           // headroom tier above it. No digit, no /10, no delta badge — a second
           // number just breeds a second fixation (the whole point of the change).
           const score = evaluation.overall_score
-          const tier = Number.isFinite(score) ? coachHeadroom(score) : null
+          const tier = Number.isFinite(score) ? coachHeadroom(score, evaluation.model_used) : null
           const co = (evaluation.output ?? null) as CoachOutput | null
           const fixCount = Array.isArray(co?.priority_fixes) ? co!.priority_fixes.length : 0
           const focus = (co?.focus_point ?? '').trim()
@@ -338,7 +347,7 @@ export default function EvalBreakdown({
         <div>
           <div className="flex items-baseline gap-2 flex-wrap">
             <span
-              className={`font-bold tabular-nums ${scoreColor(evaluation.overall_score)}`}
+              className={`font-bold tabular-nums ${scoreColor(evaluation.overall_score, evaluation.model_used)}`}
               style={{ fontFamily: '"Instrument Serif", "Times New Roman", serif', fontSize: '2.8rem', lineHeight: 1, letterSpacing: '-0.02em' }}
             >
               {evaluation.overall_score.toFixed(1)}
@@ -389,11 +398,11 @@ export default function EvalBreakdown({
               {secs.map(s => {
                 const sDelta = deltas?.[s.key]
                 return (
-                  <div key={s.key} className={`border rounded-lg px-3 py-2.5 ${scoreBg(s.score)}`}>
+                  <div key={s.key} className={`border rounded-lg px-3 py-2.5 ${scoreBg(s.score, evaluation.model_used)}`}>
                     <div className="flex items-baseline justify-between gap-2">
                       <p className="text-xs text-gray-700 font-medium min-w-0 flex-1">{s.label} <span className="text-gray-400 font-normal">{s.weight}% of score</span></p>
                       <div className="flex items-baseline gap-1.5 flex-shrink-0">
-                        <p className={`text-lg font-bold tabular-nums ${scoreColor(s.score)}`}>{s.score}<span className="text-xs text-gray-400">/10</span></p>
+                        <p className={`text-lg font-bold tabular-nums ${scoreColor(s.score, evaluation.model_used)}`}>{s.score}<span className="text-xs text-gray-400">/10</span></p>
                         {sDelta !== undefined && sDelta !== 0 && (
                           <span className={`text-xs font-semibold tabular-nums ${sDelta > 0 ? 'text-green-600' : 'text-red-500'}`}>{sDelta > 0 ? `↑+${sDelta}` : `↓${sDelta}`}</span>
                         )}
@@ -433,11 +442,11 @@ export default function EvalBreakdown({
               {secs.map(s => {
                 const sDelta = deltas?.[s.field_key]
                 return (
-                  <div key={s.field_key} className={`border rounded-lg px-3 py-2.5 ${scoreBg(s.score)}`}>
+                  <div key={s.field_key} className={`border rounded-lg px-3 py-2.5 ${scoreBg(s.score, evaluation.model_used)}`}>
                     <div className="flex items-baseline justify-between gap-2">
                       <p className="text-xs text-gray-700 font-medium min-w-0 flex-1">{s.label}</p>
                       <div className="flex items-baseline gap-1.5 flex-shrink-0">
-                        <p className={`text-lg font-bold tabular-nums ${scoreColor(s.score)}`}>{s.score}<span className="text-xs text-gray-400">/10</span></p>
+                        <p className={`text-lg font-bold tabular-nums ${scoreColor(s.score, evaluation.model_used)}`}>{s.score}<span className="text-xs text-gray-400">/10</span></p>
                         {sDelta !== undefined && sDelta !== 0 && (
                           <span className={`text-xs font-semibold tabular-nums ${sDelta > 0 ? 'text-green-600' : 'text-red-500'}`}>{sDelta > 0 ? `↑+${sDelta}` : `↓${sDelta}`}</span>
                         )}
@@ -483,11 +492,11 @@ export default function EvalBreakdown({
                 const sKey = s.key ?? s.field_key ?? String(i)
                 const sDelta = deltas?.[sKey]
                 return (
-                  <div key={sKey} className={`border rounded-lg px-3 py-2.5 ${scoreBg(s.score)}`}>
+                  <div key={sKey} className={`border rounded-lg px-3 py-2.5 ${scoreBg(s.score, evaluation.model_used)}`}>
                     <div className="flex items-baseline justify-between gap-2">
                       <p className="text-xs text-gray-700 font-medium min-w-0 flex-1">{s.label}{isWeighted && typeof s.weight === 'number' ? <span className="text-gray-400 font-normal"> {s.weight}% of score</span> : null}</p>
                       <div className="flex items-baseline gap-1.5 flex-shrink-0">
-                        <p className={`text-lg font-bold tabular-nums ${scoreColor(s.score)}`}>{s.score}<span className="text-xs text-gray-400">/10</span></p>
+                        <p className={`text-lg font-bold tabular-nums ${scoreColor(s.score, evaluation.model_used)}`}>{s.score}<span className="text-xs text-gray-400">/10</span></p>
                         {sDelta !== undefined && sDelta !== 0 && (
                           <span className={`text-xs font-semibold tabular-nums ${sDelta > 0 ? 'text-green-600' : 'text-red-500'}`}>{sDelta > 0 ? `↑+${sDelta}` : `↓${sDelta}`}</span>
                         )}
@@ -516,10 +525,10 @@ export default function EvalBreakdown({
           const score = evaluation.scores?.[dim.key] ?? 0
           const delta = deltas?.[dim.key]
           return (
-            <div key={dim.key} className={`border rounded-lg px-3 py-2.5 ${scoreBg(score)}`}>
+            <div key={dim.key} className={`border rounded-lg px-3 py-2.5 ${scoreBg(score, evaluation.model_used)}`}>
               <p className="text-xs text-gray-500 mb-1">{dim.label}</p>
               <div className="flex items-baseline gap-1.5">
-                <p className={`text-xl font-bold tabular-nums ${scoreColor(score)}`}>{score}</p>
+                <p className={`text-xl font-bold tabular-nums ${scoreColor(score, evaluation.model_used)}`}>{score}</p>
                 {delta !== undefined && delta !== 0 && (
                   <span className={`text-xs font-semibold tabular-nums ${delta > 0 ? 'text-green-600' : 'text-red-500'}`}>
                     {delta > 0 ? `↑+${delta}` : `↓${delta}`}
@@ -537,10 +546,10 @@ export default function EvalBreakdown({
           const baScore = evaluation.scores?.brief_alignment ?? 0
           const baDelta = deltas?.['brief_alignment']
           return (
-            <div className={`border-2 border-dashed rounded-lg px-3 py-2.5 ${scoreBg(baScore)}`}>
+            <div className={`border-2 border-dashed rounded-lg px-3 py-2.5 ${scoreBg(baScore, evaluation.model_used)}`}>
               <p className="text-xs text-gray-500 mb-1">Brief Alignment</p>
               <div className="flex items-baseline gap-1.5">
-                <p className={`text-xl font-bold tabular-nums ${scoreColor(baScore)}`}>{baScore}</p>
+                <p className={`text-xl font-bold tabular-nums ${scoreColor(baScore, evaluation.model_used)}`}>{baScore}</p>
                 {baDelta !== undefined && baDelta !== 0 && (
                   <span className={`text-xs font-semibold tabular-nums ${baDelta > 0 ? 'text-green-600' : 'text-red-500'}`}>
                     {baDelta > 0 ? `↑+${baDelta}` : `↓${baDelta}`}

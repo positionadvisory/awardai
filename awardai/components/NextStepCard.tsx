@@ -38,6 +38,7 @@
 //   8+ contention / 6–7.9 in contention not comfortable / <6 wrong home.
 
 import { useEffect, useRef } from 'react'
+import { ladderScore } from '@/lib/score-ladder'
 
 export type NextStepOpportunity = {
   show: string
@@ -74,6 +75,9 @@ type NextStepCardProps = {
   evaluatedShow: string
   // Active judge eval score; null when no judge eval exists (coach-only state)
   overallScore: number | null
+  // Scoring update (16 Oct 2026): model_used of the evaluation these scores came from, so the
+  // pills read on the right scale (lib/score-ladder.ts). Omitted = current scorer.
+  scorerModel?: string | null
   // Total judge / coach evals run for this direction (active + history)
   judgeRunCount: number
   coachRunCount: number
@@ -99,14 +103,15 @@ type NextStepCardProps = {
 const TAP_TARGET = { minHeight: '44px' } as const
 
 // Calibration-anchored score framing (judge score only — never coach)
-function scoreSentence(score: number | null, show: string): string | null {
+function scoreSentence(score: number | null, show: string, modelUsed?: string | null): string | null {
   if (score === null) return null
   const showName = show || 'this show'
   const s = score.toFixed(1)
-  if (score >= 8) {
+  const band = ladderScore(score, modelUsed)
+  if (band >= 8) {
     return `This entry scored ${s} against the ${showName} jury standard. It is in genuine contention there.`
   }
-  if (score >= 6) {
+  if (band >= 6) {
     return `This entry scored ${s} against the ${showName} jury standard. That is in contention, but not a comfortable position.`
   }
   return `This entry scored ${s} against the ${showName} jury standard. At that level, ${showName} is unlikely to be the right home for this work as written.`
@@ -116,6 +121,7 @@ export default function NextStepCard({
   opportunities,
   evaluatedShow,
   overallScore,
+  scorerModel,
   judgeRunCount,
   coachRunCount,
   hasJudge,
@@ -140,7 +146,7 @@ export default function NextStepCard({
 
   const hasOpportunities = Array.isArray(opportunities) && opportunities.length > 0
   const hasStronger = strongerDirections.length > 0
-  const framing = scoreSentence(overallScore, evaluatedShow)
+  const framing = scoreSentence(overallScore, evaluatedShow, scorerModel)
   const runsLabel = judgeRunCount <= 1 ? 'once' : `${judgeRunCount} times`
   const totalRuns = judgeRunCount + coachRunCount
   // Ben, Session 57: past three runs, re-running without material changes to
@@ -213,7 +219,7 @@ export default function NextStepCard({
             ✦ Run Coach Review
           </button>
         </div>
-      ) : overallScore !== null && overallScore >= 7 ? (
+      ) : overallScore !== null && ladderScore(overallScore, scorerModel) >= 7 ? (
         !hasScript ? (
           <div className="bg-white border border-green-200 rounded-lg px-4 py-3 mb-4">
             <p className="text-sm text-gray-800 leading-relaxed mb-2">

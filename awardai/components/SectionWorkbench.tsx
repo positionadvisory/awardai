@@ -16,6 +16,7 @@
 // the wiring in P2 Chunks 3-4 and P4 is additive.
 
 import { useState } from 'react'
+import { ladderScore } from '@/lib/score-ladder'
 import DataNeededList from '@/components/DataNeededList'
 import { normalizeRequestText, type DataNeededItem } from '@/lib/data-needed'
 
@@ -27,6 +28,9 @@ export type SectionRevision = {
 }
 
 type Props = {
+  // Scoring update (16 Oct 2026): model_used of the evaluation these scores came from, so the
+  // pills read on the right scale (lib/score-ladder.ts). Omitted = current scorer.
+  scorerModel?: string | null
   sectionKey: string
   label: string
   weight?: number | null
@@ -66,8 +70,9 @@ function countWords(s: string): number {
   return t ? t.split(/\s+/).length : 0
 }
 
-function scoreClasses(score?: number | null): string {
+function scoreClasses(score?: number | null, modelUsed?: string | null): string {
   if (score == null) return 'bg-gray-100 text-gray-500 ring-gray-200'
+  score = ladderScore(score, modelUsed)
   if (score >= 7) return 'bg-green-100 text-green-800 ring-green-200'
   if (score >= 5) return 'bg-amber-100 text-amber-800 ring-amber-200'
   return 'bg-red-100 text-red-700 ring-red-200'
@@ -87,7 +92,7 @@ export default function SectionWorkbench({
   sectionKey, label, weight, text, wordLimit, score, rationale, gaps,
   dataItems, revisions, onSaveText, onRestore,
   onToggleData, onAddData, onScanData, scanningData, onTrackGap, chatSlot, anchorId,
-  onRecheck, rechecking, rescore, rescoreStale,
+  onRecheck, rechecking, rescore, rescoreStale, scorerModel,
 }: Props) {
   const [editing, setEditing] = useState(false)
   const [buffer, setBuffer] = useState('')
@@ -113,7 +118,7 @@ export default function SectionWorkbench({
             <span className="text-xs text-gray-400">{weight}% of score</span>
           )}
           {score != null && (
-            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${scoreClasses(score)}`}>
+            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${scoreClasses(score, scorerModel)}`}>
               {score}/10
             </span>
           )}

@@ -34,6 +34,7 @@ import {
   type PlannerFacet,
   type PlannerRegion,
 } from '@/lib/planner-facets'
+import { ladderScore } from '@/lib/score-ladder'
 
 /** The latest-eval score at or above which a campaign is preselected (spec). */
 export const QUALIFY_THRESHOLD = 7
@@ -49,6 +50,8 @@ export type CampaignOption = {
   campaign_name: string
   /** Latest non-null overall_score (0-10), or null if never scored. */
   entry_readiness: number | null
+  /** Scoring update (16 Oct 2026): model_used of that latest score, so thresholds read it on the right scale. */
+  readiness_model: string | null
   /** best_show of the direction behind that latest score; null if unscored. */
   scored_show: string | null
   directions: PlannerV3Direction[]
@@ -71,7 +74,7 @@ type DirectionRow = {
   created_at: string | null
 }
 type DraftRow = { id: number; project_id: number; direction_id: number }
-type EvalRow = { id: number; project_id: number; entry_draft_id: number; overall_score: number | null; created_at: string }
+type EvalRow = { id: number; project_id: number; entry_draft_id: number; overall_score: number | null; created_at: string; model_used?: string | null }
 
 /**
  * Fetch every project in the org as a selectable campaign, sorted by latest
@@ -102,7 +105,7 @@ export async function fetchCampaignOptions(orgId: number): Promise<CampaignOptio
       .in('project_id', projectIds),
     supabase
       .from('evaluations')
-      .select('id, project_id, entry_draft_id, overall_score, created_at')
+      .select('id, project_id, entry_draft_id, overall_score, created_at, model_used')
       .eq('org_id', orgId)
       .order('created_at', { ascending: false }),
   ])
@@ -128,11 +131,11 @@ export async function fetchCampaignOptions(orgId: number): Promise<CampaignOptio
 
   // Latest NON-NULL-score eval per project (evals are pre-sorted newest-first,
   // so the first non-null hit per project is the latest).
-  const latestScored = new Map<number, { score: number; entry_draft_id: number }>()
+  const latestScored = new Map<number, { score: number; entry_draft_id: number; model_used: string | null }>()
   for (const e of evals) {
     if (e.overall_score === null || e.overall_score === undefined) continue
     if (!latestScored.has(e.project_id)) {
-      latestScored.set(e.project_id, { score: Number(e.overall_score), entry_draft_id: e.entry_draft_id })
+      latestScored.set(e.project_id, { score: Number(e.overall_score), entry_draft_id: e.entry_draft_id, model_used: e.model_used ?? null })
     }
   }
 
@@ -165,14 +168,16 @@ export async function fetchCampaignOptions(orgId: number): Promise<CampaignOptio
     }
 
     const campaign_name = p.campaign_name || p.client_name || `Project ${p.id}`
-    const qualifies = entry_readiness !== null && entry_readiness >= QUALIFY_THRESHOLD
+    const readiness_model = scored ? scored.model_used : null
+    const qualifies = entry_readiness !== null && ladderScore(entry_readiness, readiness_model) >= QUALIFY_THRESHOLD
 
-    return { project_id: p.id, campaign_name, entry_readiness, scored_show, directions: pv3dirs, qualifies, first_aired: p.first_aired ?? null }
+    return { project_id: p.id, campaign_name, entry_readiness, readiness_model, scored_show, directions: pv3dirs, qualifies, first_aired: p.first_aired ?? null }
   })
 
   options.sort((a, b) => {
-    const ar = a.entry_readiness ?? -1
-    const br = b.entry_readiness ?? -1
+    // Sort on the ladder value so scores from both scorers rank on one scale.
+    const ar = a.entry_readiness === null ? -1 : ladderScore(a.entry_readiness, a.readiness_model)
+    const br = b.entry_readiness === null ? -1 : ladderScore(b.entry_readiness, b.readiness_model)
     if (br !== ar) return br - ar
     return a.campaign_name.localeCompare(b.campaign_name)
   })

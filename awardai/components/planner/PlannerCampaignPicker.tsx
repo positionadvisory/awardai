@@ -19,6 +19,7 @@
  */
 
 import type { CampaignOption } from '@/lib/planner-v3-data'
+import { ladderScore } from '@/lib/score-ladder'
 
 type Props = {
   options: CampaignOption[]
@@ -38,7 +39,7 @@ function ScoreBadge({ option }: { option: CampaignOption }) {
   }
   const score = option.entry_readiness.toFixed(1)
   const ctx = option.scored_show ? ` vs ${option.scored_show}` : ''
-  const strong = option.entry_readiness >= 7
+  const strong = ladderScore(option.entry_readiness, option.readiness_model) >= 7
   return (
     <span
       className={`text-xs px-2 py-0.5 rounded-full font-medium border ${
