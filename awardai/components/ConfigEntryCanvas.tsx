@@ -28,6 +28,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ladderScore } from '@/lib/score-ladder'
 import {
   composeSectionText,
   normalizeSection,
@@ -84,6 +85,9 @@ export interface ConfigCanvasRow {
 export type SectionJuryRead = { score: number | null; rationale: string | null }
 
 interface ConfigEntryCanvasProps {
+  // Scoring update (16 Oct 2026): model_used of the evaluation these scores came from, so the
+  // pills read on the right scale (lib/score-ladder.ts). Omitted = current scorer.
+  scorerModel?: string | null
   spec: EntryFormSpec
   rows: ConfigCanvasRow[]
   scoringMode: 'weighted' | 'qualitative'
@@ -157,8 +161,9 @@ function initSectionValues(section: EntryFormSection, row?: ConfigCanvasRow): En
 
 // Wave 1 (S151): score pill classes, mirrored from SectionWorkbench so the
 // jury-read chip reads identically across AOY and the typed canvas.
-function juryScoreClasses(score?: number | null): string {
+function juryScoreClasses(score?: number | null, modelUsed?: string | null): string {
   if (score == null) return 'bg-gray-100 text-gray-500 ring-gray-200'
+  score = ladderScore(score, modelUsed)
   if (score >= 7) return 'bg-green-100 text-green-800 ring-green-200'
   if (score >= 5) return 'bg-amber-100 text-amber-800 ring-amber-200'
   return 'bg-red-100 text-red-700 ring-red-200'
@@ -175,7 +180,7 @@ function revShortTs(ts: string): string {
 export default function ConfigEntryCanvas({
   spec, rows, scoringMode, onSaveSection,
   dirId, juryBySection, onSendChat, chatBusyRowId, chatErrors, onRestoreRevision,
-  sectionDiffs, inlineChangesOn,
+  sectionDiffs, inlineChangesOn, scorerModel,
 }: ConfigEntryCanvasProps) {
   const sections = useMemo(
     () => (spec.sections ?? []).slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
@@ -350,7 +355,7 @@ export default function ConfigEntryCanvas({
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 {jury && jury.score != null && (
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${juryScoreClasses(jury.score)}`}>
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${juryScoreClasses(jury.score, scorerModel)}`}>
                     {jury.score}/10
                   </span>
                 )}
@@ -402,7 +407,7 @@ export default function ConfigEntryCanvas({
               <div className="mb-4 rounded-lg border-l-2 border-gray-200 bg-gray-50 px-3 py-2">
                 <div className="flex items-center gap-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Jury read</p>
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${juryScoreClasses(jury.score)}`}>
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${juryScoreClasses(jury.score, scorerModel)}`}>
                     {jury.score}/10
                   </span>
                 </div>

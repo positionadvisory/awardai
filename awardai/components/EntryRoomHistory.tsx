@@ -105,8 +105,10 @@ export function HistoricalViewBanner({ gen, totalGens, onReturn }: { gen: number
 
 // ── read-only field cards (no refine, no variant picker, no editing) ────────
 
-export function ReadOnlyVersionFields({ fields, sectionScores, diffByKey, inlineChangesOn }: {
+export function ReadOnlyVersionFields({ fields, sectionScores, diffByKey, inlineChangesOn, scorerModel }: {
   fields: MinimalDraftField[]
+  // Scoring update (16 Oct 2026): model_used of the version's evaluation (lib/score-ladder.ts).
+  scorerModel?: string | null
   sectionScores?: Record<string, number | null>
   // Entry Room Slice 2 (24 Aug 2026): per-field_key word-level diff against the
   // nearest earlier generation to the one being viewed here, and the
@@ -135,7 +137,7 @@ export function ReadOnlyVersionFields({ fields, sectionScores, diffByKey, inline
                 <span className="text-xs text-gray-400 bg-gray-50 rounded-full px-2 py-0.5 flex-shrink-0">Weight {f.section_weight}%</span>
               )}
               {score != null && (
-                <span className={`text-xs font-semibold rounded-full px-2 py-0.5 border flex-shrink-0 ${scoreBg(score)} ${scoreColor(score)}`}>{score}/10</span>
+                <span className={`text-xs font-semibold rounded-full px-2 py-0.5 border flex-shrink-0 ${scoreBg(score, scorerModel)} ${scoreColor(score, scorerModel)}`}>{score}/10</span>
               )}
               {/* Slice 2d: small note affordance on the card header, title-only
                   (no extra state) -- absent entirely when this version predates

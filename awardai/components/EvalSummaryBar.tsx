@@ -11,6 +11,7 @@
 // any list uses grid-cols-1 (iOS gotchas).
 
 import { useState } from 'react'
+import { ladderScore } from '@/lib/score-ladder'
 
 export type SummarySection = {
   key: string
@@ -20,6 +21,9 @@ export type SummarySection = {
 
 type Props = {
   overallScore?: number | null
+  // Scoring update (16 Oct 2026): model_used of the evaluation these scores came from, so the
+  // pills read on the right scale (lib/score-ladder.ts). Omitted = current scorer.
+  scorerModel?: string | null
   verdict?: string | null
   sections: SummarySection[]
   strengths?: string[]
@@ -39,8 +43,9 @@ type Props = {
 
 // green 7+, amber 5-6, red <5 (brief). Tailwind classes shared with the rest of
 // the app, so they survive the purge (no arbitrary values here).
-function scoreClasses(score?: number | null): string {
+function scoreClasses(score?: number | null, modelUsed?: string | null): string {
   if (score == null) return 'bg-gray-100 text-gray-500 ring-gray-200'
+  score = ladderScore(score, modelUsed)
   if (score >= 7) return 'bg-green-100 text-green-800 ring-green-200'
   if (score >= 5) return 'bg-amber-100 text-amber-800 ring-amber-200'
   return 'bg-red-100 text-red-700 ring-red-200'
@@ -55,7 +60,7 @@ function firstSentence(text?: string | null): string {
 export default function EvalSummaryBar({
   overallScore, verdict, sections, strengths, unattributedGaps,
   onJumpToSection,
-  indicativeTotal, rescoredCount, deltaByKey,
+  indicativeTotal, rescoredCount, deltaByKey, scorerModel,
 }: Props) {
   const [expanded, setExpanded] = useState(false)
   const hasDetail = !!verdict || (strengths?.length ?? 0) > 0 || (unattributedGaps?.length ?? 0) > 0
@@ -112,7 +117,7 @@ export default function EvalSummaryBar({
               onClick={() => onJumpToSection?.(s.key)}
               disabled={!onJumpToSection}
               title={s.label}
-              className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ring-1 transition-colors ${scoreClasses(s.score)} ${onJumpToSection ? 'cursor-pointer hover:brightness-95' : 'cursor-default'}`}
+              className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ring-1 transition-colors ${scoreClasses(s.score, scorerModel)} ${onJumpToSection ? 'cursor-pointer hover:brightness-95' : 'cursor-default'}`}
             >
               <span className="max-w-[10rem] truncate font-medium">{s.label}</span>
               <span className="tabular-nums">{s.score != null ? s.score : '—'}</span>

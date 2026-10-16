@@ -105,6 +105,7 @@ import VideoScriptTab from '@/components/tabs/VideoScriptTab'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { COLLAB_TYPE_LABELS, materialWordCount, buildAnalysisText, type CollabType } from '@/lib/project-page-shared'
 import { trySegmentEntryGeneric } from '@/lib/segment-entry-generic-client'
+import { ladderScore } from '@/lib/score-ladder'
 
 // ── TonalBrief — structured production brief returned by generate-tonal-brief ─
 export type ColorSwatch = { hex: string; name: string; role: string }
@@ -1596,7 +1597,7 @@ export default function ProjectPage() {
   }
 
   const downloadEvaluation = (d: Direction, evaluation: Evaluation) => {
-    const scoreLabel = (s: number) => s >= 8 ? '★★★' : s >= 6 ? '★★☆' : '★☆☆'
+    const scoreLabel = (s: number) => { const b = ladderScore(s, evaluation.model_used); return b >= 8 ? '★★★' : b >= 6 ? '★★☆' : '★☆☆' }
     const lines = [
       'AWARD ENTRY EVALUATION REPORT',
       '================================',
@@ -4918,7 +4919,7 @@ export default function ProjectPage() {
                                 Draft · Gen {dirMaxGen}
                               </span>
                             )}
-                            {hasEval && dirBestEval && <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${scoreBg(dirBestEval.overall_score)} ${scoreColor(dirBestEval.overall_score)}`}>{dirBestEval.overall_score}/10</span>}
+                            {hasEval && dirBestEval && <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${scoreBg(dirBestEval.overall_score, dirBestEval.model_used)} ${scoreColor(dirBestEval.overall_score, dirBestEval.model_used)}`}>{dirBestEval.overall_score}/10</span>}
                           </div>
                           {d.best_show && <p className="text-green-700 text-sm mt-0.5">{d.best_show} · <span className="text-gray-500">{d.best_category}</span></p>}
                           {/* Category-names-a-sibling-programme flag (BEST-CATEGORY-PROGRAMME-LEAK,
@@ -5258,6 +5259,7 @@ export default function ProjectPage() {
                     // badges (score + category fit) show in both states.
                     const isExpanded = entryCardExpanded[dirId] ?? (dirId === effectiveFocusDirId)
                     const summaryScore = (evalBoth.judge ?? evalBoth.coach)?.overall_score ?? null
+                    const summaryModel = (evalBoth.judge ?? evalBoth.coach)?.model_used ?? null
                     const dirFit = d?.win_likelihood ?? null
 
                     // ── Entry Room Slice 1 (24 Aug 2026) — version selector ──────────
@@ -5472,6 +5474,7 @@ export default function ProjectPage() {
                               </div>
                               <EvalSummaryBar
                                 overallScore={evaluation?.overall_score ?? null}
+                                scorerModel={evaluation?.model_used ?? null}
                                 verdict={verdict}
                                 sections={summarySections}
                                 strengths={evaluation?.strengths}
@@ -5492,6 +5495,7 @@ export default function ProjectPage() {
                                   return (
                                   <div key={f.id}>
                                   <SectionWorkbench
+                                    scorerModel={evaluation?.model_used ?? null}
                                     anchorId={`wb-${dirId}-${f.field_key}`}
                                     sectionKey={f.field_key}
                                     label={f.field_label}
@@ -5572,6 +5576,7 @@ export default function ProjectPage() {
                                   onSaveSection={saveSectionFields}
                                   dirId={dirId}
                                   juryBySection={juryBySection}
+                                  scorerModel={evalBoth.judge?.model_used ?? null}
                                   sectionDiffs={diffByKeyHere}
                                   inlineChangesOn={inlineOnHere}
                                   chatBusyRowId={chatBusyField?.id ?? null}
@@ -6068,6 +6073,7 @@ export default function ProjectPage() {
                                   opportunities={opportunities}
                                   evaluatedShow={dirShow ?? ''}
                                   overallScore={judgeEval ? judgeEval.overall_score : null}
+                                  scorerModel={judgeEval ? judgeEval.model_used : null}
                                   judgeRunCount={judgeRunCount}
                                   coachRunCount={coachRunCount}
                                   hasJudge={hasJudge}
@@ -6448,7 +6454,7 @@ export default function ProjectPage() {
                                         <span className="text-xs text-gray-300">·</span>
                                         <span className="text-xs text-gray-400">{hDate}</span>
                                         <span className="text-xs text-gray-300">·</span>
-                                        <span className={`text-xs font-bold tabular-nums ${scoreColor(hist.overall_score)}`}>
+                                        <span className={`text-xs font-bold tabular-nums ${scoreColor(hist.overall_score, hist.model_used)}`}>
                                           {hist.overall_score.toFixed(1)}/10
                                         </span>
                                         {spansScoringUpdate && (hist.model_used ?? '') !== (refModel ?? '') && (
@@ -6636,7 +6642,7 @@ export default function ProjectPage() {
                                 )}
                                 <span className="flex items-center gap-2 mt-1.5 flex-wrap">
                                   {summaryScore != null && (
-                                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${scoreBg(summaryScore)} ${scoreColor(summaryScore)}`}>{summaryScore}/10</span>
+                                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${scoreBg(summaryScore, summaryModel)} ${scoreColor(summaryScore, summaryModel)}`}>{summaryScore}/10</span>
                                   )}
                                   {typeof dirFit === 'number' && (
                                     <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-500 border border-gray-200">{dirFit}% fit</span>
@@ -6982,6 +6988,7 @@ export default function ProjectPage() {
                                 <ReadOnlyVersionFields
                                   fields={readOnlyFields}
                                   sectionScores={viewSectionScores}
+                                  scorerModel={thisVersionEval?.model_used ?? null}
                                   diffByKey={diffByKeyHere}
                                   inlineChangesOn={inlineOnHere}
                                 />
@@ -6996,7 +7003,7 @@ export default function ProjectPage() {
                                   </div>
                                   {thisVersionEval ? (
                                     <div className="flex items-baseline gap-2">
-                                      <span className={`text-3xl font-bold tabular-nums ${scoreColor(thisVersionEval.overall_score)}`}>{thisVersionEval.overall_score.toFixed(1)}</span>
+                                      <span className={`text-3xl font-bold tabular-nums ${scoreColor(thisVersionEval.overall_score, thisVersionEval.model_used)}`}>{thisVersionEval.overall_score.toFixed(1)}</span>
                                       <span className="text-sm text-gray-400">/10</span>
                                     </div>
                                   ) : (
