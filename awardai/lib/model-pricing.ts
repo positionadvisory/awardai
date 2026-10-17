@@ -9,6 +9,9 @@ export const PRICING: Record<string, { input: number; output: number }> = {
   'claude-haiku-4-5': { input: 1, output: 5 },
   'claude-opus-5-5': { input: 4, output: 20 },
   'claude-sonnet-5-5': { input: 2, output: 10 },
+  // Haiku 5.5: rate for prompts up to 100,000 tokens, read 2026-10-17. Over 100,000 it is
+  // $0.50 / $2.50; no Shortlist Haiku call comes near that (largest prompt ~3,000 tokens).
+  'claude-haiku-5-5': { input: 0.1, output: 0.5 },
   'gte-small': { input: 0, output: 0 },
 }
 export function calcCost(model: string | null, inp: number | null, out: number | null): number {

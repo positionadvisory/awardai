@@ -287,7 +287,7 @@ export default function PressKitTab({
       version_c,
       selected: 'a' as const,
       press_target: pressTarget ?? null,
-      model_used: 'claude-haiku-4-5-20251001',
+      model_used: 'claude-haiku-5-5',
     }
 
     const { data, error } = await supabase
