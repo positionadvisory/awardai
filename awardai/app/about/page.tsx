@@ -52,6 +52,7 @@ export default function AboutPage() {
             '@id': 'https://www.gotshortlisted.com/about#ben-condit',
             url: 'https://www.gotshortlisted.com/about',
             image: 'https://www.gotshortlisted.com/ben.jpg',
+            sameAs: ['https://www.linkedin.com/in/benjamin-condit/'],
             worksFor: { '@id': 'https://www.gotshortlisted.com/#organization' },
             description:
               'Ben Condit has spent 25 years in Asia building agencies, leading regional brands, and running large media operations. Shortlist is his return to the entrepreneurial side of the industry.',

@@ -473,7 +473,7 @@ const Pricing = ({ onCTA, m }: { onCTA: () => void; m: boolean }) => (
       </div>
       <div style={{ marginTop: m ? 32 : 80, maxWidth: m ? '100%' : 480 }}>
         <div style={{ border: '1px solid var(--rule-dark)', background: 'oklch(0.21 0.045 158)', padding: m ? '28px 24px' : '40px 36px', position: 'relative' }}>
-          <div className="sl-mono" style={{ position: 'absolute', top: -1, left: -1, background: 'var(--gold)', color: 'var(--ink)', padding: '5px 10px', fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase' }}>Agency</div>
+          <div className="sl-mono" style={{ position: 'absolute', top: -1, left: -1, background: 'var(--gold)', color: 'var(--ink)', padding: '5px 10px', fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase' }}>Shortlist Pro</div>
           <div style={{ marginTop: 16, display: 'flex', alignItems: 'baseline', gap: 8 }}>
             <span className="sl-serif" style={{ fontSize: m ? 72 : 88, lineHeight: 0.95, letterSpacing: '-0.02em' }}>$299</span>
             <span className="sl-mono" style={{ fontSize: 11, color: 'var(--muted-dark)', letterSpacing: '0.14em', textTransform: 'uppercase' }}>/ month</span>
