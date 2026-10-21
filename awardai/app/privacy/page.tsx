@@ -4,7 +4,10 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy — Shortlist',
+  // Bare title: layout.tsx appends ' — Shortlist' via its template.
+  title: 'Privacy Policy',
+  alternates: { canonical: '/privacy' },
+  openGraph: { title: 'Privacy Policy — Shortlist', description: 'Privacy Policy for Shortlist, the awards intelligence platform by Position Group Pte. Ltd.', url: '/privacy', siteName: 'Shortlist', type: 'website', images: [{ url: '/og-default.png', width: 1200, height: 630 }] },
   description: 'Privacy Policy for Shortlist, the awards intelligence platform by Position Group Pte. Ltd.',
 }
 

@@ -4,7 +4,10 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Terms of Use — Shortlist',
+  // Bare title: layout.tsx appends ' — Shortlist' via its template.
+  title: 'Terms of Use',
+  alternates: { canonical: '/terms' },
+  openGraph: { title: 'Terms of Use — Shortlist', description: 'Terms of Use for Shortlist, the awards intelligence platform by Position Group Pte. Ltd.', url: '/terms', siteName: 'Shortlist', type: 'website', images: [{ url: '/og-default.png', width: 1200, height: 630 }] },
   description: 'Terms of Use for Shortlist, the awards intelligence platform by Position Group Pte. Ltd.',
 }
 

@@ -134,7 +134,7 @@ const chromeCss = `
    asks anyone to request anything, so the label contradicted the page it sat
    on. Replaced by "Start free trial" -> /signup, which is the homepage primary
    CTA word for word.                                                  ── */
-export const SiteNav = ({ active }: { active?: 'articles' | 'about' }) => (
+export const SiteNav = ({ active }: { active?: 'articles' | 'about' | 'shows' }) => (
   <>
     <style dangerouslySetInnerHTML={{ __html: chromeCss }} />
     <nav className="sl-nav">
@@ -150,6 +150,13 @@ export const SiteNav = ({ active }: { active?: 'articles' | 'about' }) => (
             style={active === 'articles' ? { opacity: 1, color: 'var(--gold)' } : undefined}
           >
             Articles
+          </Link>
+          <Link
+            href="/shows"
+            className="sl-nav-link sl-nav-sec"
+            style={active === 'shows' ? { opacity: 1, color: 'var(--gold)' } : undefined}
+          >
+            Show dates
           </Link>
           <Link
             href="/about"
@@ -187,6 +194,8 @@ export const SiteFooter = () => (
       </Link>
       <div className="sl-mono sl-foot-nav">
         <Link href="/articles">Articles</Link>
+        <Link href="/shows">Show dates</Link>
+        <Link href="/faq">FAQ</Link>
         <Link href="/about">About</Link>
         <Link href="/login">Sign in</Link>
         <a href="mailto:ben@positionadvisory.com">Contact</a>

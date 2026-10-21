@@ -24,10 +24,18 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Articles — Shortlist',
     description: 'Practical writing on award entries, jury thinking, and how to win more with the same work.',
-    url: 'https://gotshortlisted.com/articles',
+    url: '/articles',
     siteName: 'Shortlist',
     type: 'website',
+    images: [{ url: '/og-default.png', width: 1200, height: 630, alt: 'Shortlist: awards intelligence, built by someone who ran one' }],
   },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Articles on award entries and jury thinking, by Ben Condit',
+    description: 'Practical writing on award entries, jury thinking, and how to win more with the same work.',
+    images: ['/og-default.png'],
+  },
+  alternates: { canonical: '/articles' },
 }
 
 type Article = {
