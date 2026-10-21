@@ -101,8 +101,9 @@ export const metadata: Metadata = {
 // exists. Structured data is what search engines and AI answers read first, so
 // it must match the pricing section exactly: one plan, monthly. If pricing
 // changes, change it here in the same commit.
-// sameAs: add Ben's and Shortlist's LinkedIn URLs here when confirmed. They are
-// what separate this "Shortlist" from other products of the same name.
+// sameAs (confirmed by Ben, 21 Oct 2026) is what separates this "Shortlist"
+// from other products of the same name. The plan is named Shortlist Pro
+// everywhere: homepage pricing card, FAQ, /upgrade, settings and here.
 const SITE = 'https://www.gotshortlisted.com'
 const siteJsonLd = {
   '@context': 'https://schema.org',
@@ -114,9 +115,18 @@ const siteJsonLd = {
       alternateName: 'Shortlist Awards Intelligence',
       url: SITE,
       logo: { '@type': 'ImageObject', url: `${SITE}/icon.png`, width: 512, height: 512 },
-      founder: { '@id': `${SITE}/about#ben-condit` },
+      founder: {
+        '@type': 'Person',
+        '@id': `${SITE}/about#ben-condit`,
+        name: 'Ben Condit',
+        url: `${SITE}/about`,
+        sameAs: ['https://www.linkedin.com/in/benjamin-condit/'],
+      },
       email: 'ben@positionadvisory.com',
-      sameAs: ['https://shortlistawardsintelligence.substack.com'],
+      sameAs: [
+        'https://www.linkedin.com/company/117854020/',
+        'https://shortlistawardsintelligence.substack.com/',
+      ],
     },
     {
       '@type': 'WebSite',
@@ -138,6 +148,7 @@ const siteJsonLd = {
       publisher: { '@id': `${SITE}/#organization` },
       offers: {
         '@type': 'Offer',
+        name: 'Shortlist Pro',
         price: '299',
         priceCurrency: 'USD',
         url: `${SITE}/#pricing`,
