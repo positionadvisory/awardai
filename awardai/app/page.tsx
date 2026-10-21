@@ -286,22 +286,20 @@ const VizFrame = ({ children, label }: { children: React.ReactNode; label: strin
   </div>
 )
 
-const DRow = ({ show, cat, score, roi, angle, top }: { show: string; cat: string; score: number; roi: string; angle: string; top?: boolean }) => (
-  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) 60px 56px 56px', gap: 12, padding: '14px 0', borderTop: top ? '1px solid var(--rule)' : 'none', borderBottom: '1px solid var(--rule)', alignItems: 'center' }}>
+const DRow = ({ show, cat, score, angle, top }: { show: string; cat: string; score: number; angle: string; top?: boolean }) => (
+  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) 96px', gap: 12, padding: '14px 0', borderTop: top ? '1px solid var(--rule)' : 'none', borderBottom: '1px solid var(--rule)', alignItems: 'center' }}>
     <div><div style={{ fontSize: 13, fontWeight: 600 }}>{show}</div><div style={{ fontSize: 12, color: 'var(--muted)' }}>{cat} · <em>{angle}</em></div></div>
     <div><div style={{ height: 4, background: 'var(--rule)' }}><div style={{ height: 4, width: `${score}%`, background: score > 70 ? 'var(--gold)' : 'oklch(0.55 0.04 155)' }} /></div><div className="sl-mono" style={{ fontSize: 10, marginTop: 4, letterSpacing: '0.1em', color: 'var(--muted)' }}>{score}% win</div></div>
-    <div className="sl-mono" style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'right' }}>ROI</div>
-    <div className="sl-serif" style={{ fontSize: 22, lineHeight: 1, textAlign: 'right' }}>{roi}</div>
   </div>
 )
 
 const DirectionsViz = () => (
   <VizFrame label="Entry directions / generated">
     <div className="sl-mono" style={{ fontSize: 10, letterSpacing: '0.16em', color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 12 }}>Project: Heritage rebrand · 11 directions surfaced</div>
-    <DRow top show="Cannes Lions" cat="Brand Experience" score={78} roi="3.4x" angle="cultural reset, not a launch" />
-    <DRow show="Effie APAC" cat="Sustained Success" score={71} roi="2.9x" angle="five-year compound effect" />
-    <DRow show="Spikes Asia" cat="Strategy" score={64} roi="2.1x" angle="reframing the category" />
-    <DRow show="D&AD" cat="Writing for Design" score={42} roi="0.9x" angle="craft-led, weaker fit" />
+    <DRow top show="Cannes Lions" cat="Brand Experience" score={78} angle="cultural reset, not a launch" />
+    <DRow show="Effie APAC" cat="Sustained Success" score={71} angle="five-year compound effect" />
+    <DRow show="Spikes Asia" cat="Strategy" score={64} angle="reframing the category" />
+    <DRow show="D&AD" cat="Writing for Design" score={42} angle="craft-led, weaker fit" />
     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 18, alignItems: 'center' }}>
       <div className="sl-mono" style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: '0.14em', textTransform: 'uppercase' }}>Recommended: 3 entries · $11,400</div>
       <div style={{ fontSize: 11, color: 'var(--gold-deep)', fontWeight: 600 }}>Generate briefs →</div>
@@ -366,7 +364,7 @@ const VideoViz = () => (
 
 const HowItWorks = ({ m }: { m: boolean }) => {
   const cards = [
-    { n: '01', label: 'Entry directions', problem: "You don't know where to enter until you've already paid.", body: "Upload your brief and materials. Shortlist reads everything and generates entry directions per show and category, each with a win likelihood score, strategic angle, and ROI index. Know where you have a real shot before spending a dollar.", visual: <DirectionsViz /> },
+    { n: '01', label: 'Entry directions', problem: "You don't know where to enter until you've already paid.", body: "Upload your brief and materials. Shortlist reads everything and generates entry directions per show and category, each with a win likelihood score and a strategic angle. Know where you have a real shot before spending a dollar.", visual: <DirectionsViz /> },
     { n: '02', label: 'Jury-mode evaluation', problem: "You can't see your own blind spots.", body: "Two evaluation modes: Jury mode scores your entry across six dimensions, the way a judge would. Coach mode shows your untapped potential and a prioritized fix list. Both run on the same entry. Weaknesses caught before submission, not after.", visual: <JuryViz /> },
     { n: '03', label: 'Press kit generation', problem: 'The scramble after a shortlist is its own emergency.', body: "The moment your entry is ready, Shortlist generates the full press kit: LinkedIn, X, Instagram, press release, PDF, and Outlook-safe HTML email, all in your agency voice. No brief. No back and forth. Done.", visual: <PressKitViz /> },
     { n: '04', label: 'Video script', problem: 'Most director briefings happen before anyone knows what the jury needs to see.', body: "Generate and score your awards video script in the same workspace. Category-specific guidance. Win likelihood scored. Arrive at the director briefing knowing exactly what needs to be on screen.", visual: <VideoViz /> },
@@ -429,7 +427,7 @@ const Privacy = ({ m }: { m: boolean }) => (
    Built
    ========================================================================= */
 
-const WHATS_BUILT = ['Entry directions with win likelihood scores per show and category', 'ROI Index: return on entry investment per show and direction', 'AI co-writing across all entry fields, in your agency voice', 'Show-specific jury intelligence for 30+ international shows', 'Jury mode: scored like a judge, catches weaknesses before submission', 'Coach mode: untapped potential score and prioritized fix list', 'Press kit generation: LinkedIn, X, Instagram, press release, PDF', 'Score comparison and delta tracking across draft iterations', 'Agency profile uploaded once, applied to every output', 'Budget planner: model entry spend across your target calendar', 'Quick Evaluate: upload a finished entry, get a scored jury read in minutes','Video script generation, review, and category-specific guidance', 'Multi-season historical context in all direction generation', 'Deadline calendar with urgency alerts across all shows']
+const WHATS_BUILT = ['Entry directions with win likelihood scores per show and category', 'AI co-writing across all entry fields, in your agency voice', 'Show-specific jury intelligence for 30+ international shows', 'Jury mode: scored like a judge, catches weaknesses before submission', 'Coach mode: untapped potential score and prioritized fix list', 'Press kit generation: LinkedIn, X, Instagram, press release, PDF', 'Score comparison and delta tracking across draft iterations', 'Agency profile uploaded once, applied to every output', 'Budget planner: model entry spend across your target calendar', 'Quick Evaluate: upload a finished entry, get a scored jury read in minutes','Video script generation, review, and category-specific guidance', 'Multi-season historical context in all direction generation', 'Deadline calendar with urgency alerts across all shows']
 
 const Built = ({ m }: { m: boolean }) => (
   <section id="built" style={{ background: 'var(--bone)', padding: m ? '72px 0' : '120px 0' }}>
@@ -462,7 +460,7 @@ const Built = ({ m }: { m: boolean }) => (
    Pricing
    ========================================================================= */
 
-const PLAN_FEATURES = ['Show-specific jury intelligence: judging philosophy, scoring emphasis, common entry mistakes', 'Entry directions with win likelihood scores', 'AI first drafts across every entry field', 'Jury mode + Coach mode evaluation', 'Video script generation and scoring', 'Press kit generation (LinkedIn, X, Instagram, PDF)', 'Agency profile applied to every output', 'ROI Index and budget planner', '30+ shows covered, including the major PR and comms programs', 'Up to 5 active projects, unlimited entries within each', 'One user seat']
+const PLAN_FEATURES = ['Show-specific jury intelligence: judging philosophy, scoring emphasis, common entry mistakes', 'Entry directions with win likelihood scores', 'AI first drafts across every entry field', 'Jury mode + Coach mode evaluation', 'Video script generation and scoring', 'Press kit generation (LinkedIn, X, Instagram, PDF)', 'Agency profile applied to every output', 'Budget planner', '30+ shows covered, including the major PR and comms programs', 'Up to 5 active projects, unlimited entries within each', 'One user seat']
 
 const Pricing = ({ onCTA, m }: { onCTA: () => void; m: boolean }) => (
   <section id="pricing" style={{ background: 'var(--ink)', color: 'var(--bone)', padding: m ? '72px 0' : '120px 0' }}>
