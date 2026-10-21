@@ -13,10 +13,18 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'About — Shortlist',
     description: 'Ben Condit has spent 25 years in Asia across agency, brand, and media.',
-    url: 'https://gotshortlisted.com/about',
+    url: '/about',
     siteName: 'Shortlist',
     type: 'profile',
+    images: [{ url: '/og-default.png', width: 1200, height: 630, alt: 'Shortlist: awards intelligence, built by someone who ran one' }],
   },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'About Ben Condit, founder of Shortlist',
+    description: 'Ben Condit has spent 25 years in Asia across agency, brand, and media.',
+    images: ['/og-default.png'],
+  },
+  alternates: { canonical: '/about' },
 }
 
 const TIMELINE = [
@@ -41,12 +49,10 @@ export default function AboutPage() {
             '@type': 'Person',
             name: 'Ben Condit',
             jobTitle: 'Founder, Shortlist',
-            url: 'https://gotshortlisted.com/about',
-            worksFor: {
-              '@type': 'Organization',
-              name: 'Shortlist',
-              url: 'https://gotshortlisted.com',
-            },
+            '@id': 'https://www.gotshortlisted.com/about#ben-condit',
+            url: 'https://www.gotshortlisted.com/about',
+            image: 'https://www.gotshortlisted.com/ben.jpg',
+            worksFor: { '@id': 'https://www.gotshortlisted.com/#organization' },
             description:
               'Ben Condit has spent 25 years in Asia building agencies, leading regional brands, and running large media operations. Shortlist is his return to the entrepreneurial side of the industry.',
           }),

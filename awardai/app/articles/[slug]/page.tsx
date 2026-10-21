@@ -41,6 +41,7 @@ type Article = {
   cover_image_url: string | null
   reading_time_minutes: number
   published_at: string
+  updated_at: string | null
 }
 
 async function getArticle(slug: string): Promise<Article | null> {
@@ -80,7 +81,7 @@ export async function generateMetadata(
   { params }: { params: { slug: string } }
 ): Promise<Metadata> {
   const article = await getArticle(params.slug)
-  if (!article) return { title: 'Article not found' }
+  if (!article) return { title: 'Article not found', robots: { index: false, follow: true } }
 
   const description = article.subtitle ||
     article.content.replace(/[#*\n]+/g, ' ').slice(0, 155).trim() + '…'
@@ -99,10 +100,11 @@ export async function generateMetadata(
     openGraph: {
       title: article.title,
       description,
-      url: `https://gotshortlisted.com/articles/${article.slug}`,
+      url: `/articles/${article.slug}`,
       siteName: 'Shortlist',
       type: 'article',
       publishedTime: article.published_at,
+      ...(article.updated_at && { modifiedTime: article.updated_at }),
       authors: ['Ben Condit'],
       ...(article.cover_image_url && {
         images: [{ url: article.cover_image_url, width: 1200, height: 630 }],
@@ -114,6 +116,9 @@ export async function generateMetadata(
       description,
       ...(article.cover_image_url && { images: [article.cover_image_url] }),
     },
+    // Self-canonical (SEO pass, 21 Oct 2026). Without it the page inherited the
+    // layout's homepage canonical and told Google it was a copy of /.
+    alternates: { canonical: `/articles/${article.slug}` },
   }
 }
 
@@ -146,17 +151,24 @@ export default async function ArticlePage({ params }: { params: { slug: string }
     description: article.subtitle || '',
     author: {
       '@type': 'Person',
+      '@id': 'https://www.gotshortlisted.com/about#ben-condit',
       name: 'Ben Condit',
-      url: 'https://gotshortlisted.com/about',
+      url: 'https://www.gotshortlisted.com/about',
     },
+    // Same @id as the site-wide Organization node in layout.tsx, so the two
+    // resolve to one entity. Its logo file (/icon.png) was a 404 until this pass.
     publisher: {
       '@type': 'Organization',
+      '@id': 'https://www.gotshortlisted.com/#organization',
       name: 'Shortlist',
-      url: 'https://gotshortlisted.com',
-      logo: { '@type': 'ImageObject', url: 'https://gotshortlisted.com/icon.png' },
+      url: 'https://www.gotshortlisted.com',
+      logo: { '@type': 'ImageObject', url: 'https://www.gotshortlisted.com/icon.png' },
     },
     datePublished: article.published_at,
-    url: `https://gotshortlisted.com/articles/${article.slug}`,
+    ...(article.updated_at && { dateModified: article.updated_at }),
+    inLanguage: 'en-US',
+    mainEntityOfPage: `https://www.gotshortlisted.com/articles/${article.slug}`,
+    url: `https://www.gotshortlisted.com/articles/${article.slug}`,
     ...(article.cover_image_url && { image: article.cover_image_url }),
   }
 
@@ -328,15 +340,15 @@ export default async function ArticlePage({ params }: { params: { slug: string }
               {[
                 {
                   label: 'Share on X',
-                  href: `https://twitter.com/intent/tweet?text=${encodeURIComponent(article.title)}&url=${encodeURIComponent(`https://gotshortlisted.com/articles/${article.slug}`)}`,
+                  href: `https://twitter.com/intent/tweet?text=${encodeURIComponent(article.title)}&url=${encodeURIComponent(`https://www.gotshortlisted.com/articles/${article.slug}`)}`,
                 },
                 {
                   label: 'Share on LinkedIn',
-                  href: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(`https://gotshortlisted.com/articles/${article.slug}`)}`,
+                  href: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(`https://www.gotshortlisted.com/articles/${article.slug}`)}`,
                 },
                 {
                   label: 'Copy link',
-                  href: `https://gotshortlisted.com/articles/${article.slug}`,
+                  href: `https://www.gotshortlisted.com/articles/${article.slug}`,
                   isCopy: true,
                 },
               ].map(btn => (
