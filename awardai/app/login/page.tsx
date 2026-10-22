@@ -4,6 +4,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getRedirectParam, withRedirect } from '@/lib/safeRedirect'
+import { useTurnstile, TurnstileSlot, captchaErrorMessage } from '@/lib/turnstile'
 
 /* ── Shared atoms (mirrors public-landing-page.tsx) ──────────────────────── */
 
@@ -41,6 +42,9 @@ export default function LoginPage() {
   // Carry ?redirect= onto the signup link: an invitee usually has no account yet,
   // and losing the param here strands them on /upgrade with the invite abandoned.
   const [signupHref, setSignupHref]   = useState('/signup')
+  // CAPTCHA: password sign-in, code request and reset request each need a
+  // fresh token. verifyOtp and updateUser do not.
+  const { slotRef, getToken } = useTurnstile()
 
   // On load: surface a friendly message for expired/invalid email links,
   // catch a password-recovery session arriving in the URL, and bounce
@@ -95,19 +99,21 @@ export default function LoginPage() {
 
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault(); setLoading(true); setError(''); setNotice('')
-    const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
-    if (err) { setError(err.message); setLoading(false); return }
+    const captchaToken = await getToken()
+    const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password, options: { captchaToken } })
+    if (err) { setError(captchaErrorMessage(err.message)); setLoading(false); return }
     window.location.href = getRedirectParam() ?? '/projects'
   }
 
   const requestSignInCode = async (e: React.FormEvent) => {
     e.preventDefault(); setLoading(true); setError(''); setNotice('')
+    const captchaToken = await getToken()
     const { error: err } = await supabase.auth.signInWithOtp({
       email: email.trim(),
-      options: { shouldCreateUser: false },
+      options: { shouldCreateUser: false, captchaToken },
     })
     setLoading(false)
-    if (err) { setError(err.message); return }
+    if (err) { setError(captchaErrorMessage(err.message)); return }
     setCode('')
     setMode('otp-code')
     setNotice('Code sent to ' + email.trim() + '. Look for a 6-digit number in the email, not a link.')
@@ -126,9 +132,10 @@ export default function LoginPage() {
 
   const requestResetCode = async (e: React.FormEvent) => {
     e.preventDefault(); setLoading(true); setError(''); setNotice('')
-    const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim())
+    const captchaToken = await getToken()
+    const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), { captchaToken })
     setLoading(false)
-    if (err) { setError(err.message); return }
+    if (err) { setError(captchaErrorMessage(err.message)); return }
     setCode(''); setNewPassword('')
     setMode('reset')
     setNotice('Reset code sent to ' + email.trim() + '. Look for a 6-digit number in the email, not a link.')
@@ -336,6 +343,7 @@ export default function LoginPage() {
         </div>
 
         {renderForm()}
+        <TurnstileSlot slotRef={slotRef} />
       </div>
 
       {/* Sign up link (password mode only) */}

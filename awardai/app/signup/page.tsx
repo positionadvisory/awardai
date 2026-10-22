@@ -26,6 +26,7 @@
 import { useState, Suspense } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getRedirectParam } from '@/lib/safeRedirect'
+import { useTurnstile, TurnstileSlot, captchaErrorMessage } from '@/lib/turnstile'
 
 /* ── Shared atoms (mirror login-page.tsx / public-landing-page.tsx) ────────── */
 
@@ -139,6 +140,8 @@ function SignupContent() {
   const [error,     setError]     = useState('')
   const [notice,    setNotice]    = useState('')
   const [inputFocus, setInputFocus] = useState<string | null>(null)
+  // CAPTCHA: signUp and resend need a fresh token; verifyOtp does not.
+  const { slotRef, getToken } = useTurnstile()
 
   // Step 1: create the auth user. handle_new_user creates the org + profile.
   const handleDetails = async (e: React.FormEvent) => {
@@ -147,14 +150,15 @@ function SignupContent() {
     setError('')
     setNotice('')
 
+    const captchaToken = await getToken()
     const { data, error: signUpError } = await supabase.auth.signUp({
       email: email.trim(),
       password,
-      options: { data: { full_name: fullName.trim() } },
+      options: { data: { full_name: fullName.trim() }, captchaToken },
     })
 
     if (signUpError) {
-      setError(signUpError.message)
+      setError(captchaErrorMessage(signUpError.message))
       setLoading(false)
       return
     }
@@ -201,12 +205,14 @@ function SignupContent() {
     setLoading(true)
     setError('')
     setNotice('')
+    const captchaToken = await getToken()
     const { error: resendError } = await supabase.auth.resend({
       type:  'signup',
       email: email.trim(),
+      options: { captchaToken },
     })
     setLoading(false)
-    if (resendError) { setError(resendError.message); return }
+    if (resendError) { setError(captchaErrorMessage(resendError.message)); return }
     setNotice('New code sent to ' + email.trim() + '. It replaces the previous one.')
   }
 
@@ -353,6 +359,7 @@ function SignupContent() {
             </form>
           </>
         )}
+        <TurnstileSlot slotRef={slotRef} />
       </div>
 
       {/* Sign in link */}

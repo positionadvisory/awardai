@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
 import { useEngagement } from '@/lib/useEngagement'
+import { useTurnstile, TurnstileSlot, captchaErrorMessage } from '@/lib/turnstile'
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 
@@ -100,6 +101,9 @@ export default function AccountPage() {
   const [portalLoading, setPortalLoading] = useState(false)
   const [upgradeLoading, setUpgradeLoading] = useState(false)
   const [resetSent, setResetSent] = useState(false)
+  const [resetError, setResetError] = useState('')
+  // CAPTCHA: resetPasswordForEmail is protected even for a signed-in user.
+  const { slotRef: captchaSlotRef, getToken: getCaptchaToken } = useTurnstile()
   const [error, setError] = useState('')
 
   const nameInputRef = useRef<HTMLInputElement>(null)
@@ -207,9 +211,14 @@ export default function AccountPage() {
 
   const handleResetPassword = async () => {
     if (!user?.email) return
-    await supabase.auth.resetPasswordForEmail(user.email, {
+    setResetError('')
+    const captchaToken = await getCaptchaToken()
+    const { error: resetErr } = await supabase.auth.resetPasswordForEmail(user.email, {
       redirectTo: `${window.location.origin}/login`,
+      captchaToken,
     })
+    // Never claim the email went out when the request failed (DM-16 class).
+    if (resetErr) { setResetError(captchaErrorMessage(resetErr.message)); return }
     setResetSent(true)
   }
 
@@ -561,6 +570,10 @@ export default function AccountPage() {
               {resetSent && (
                 <div style={{ fontSize: 13, color: '#166534', marginTop: 4 }}>Reset link sent — check your email.</div>
               )}
+              {resetError && (
+                <div style={{ fontSize: 13, color: '#dc2626', marginTop: 4 }}>{resetError}</div>
+              )}
+              <TurnstileSlot slotRef={captchaSlotRef} />
             </div>
             <button
               onClick={handleResetPassword}
