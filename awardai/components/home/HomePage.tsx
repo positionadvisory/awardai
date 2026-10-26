@@ -527,7 +527,7 @@ const Footer = ({ onCTA, m }: { onCTA: () => void; m: boolean }) => (
           {' · '}
           <a href="/shows" style={{ color: 'var(--muted-dark)', textDecoration: 'underline', textUnderlineOffset: 3 }}>Show dates</a>
           {' · '}
-          <a href="/tno-report" style={{ color: 'var(--muted-dark)', textDecoration: 'underline', textUnderlineOffset: 3 }}>Circuit report</a>
+          <a href="/tno-report" style={{ color: 'var(--muted-dark)', textDecoration: 'underline', textUnderlineOffset: 3 }}>Awards strategy report</a>
           {' · '}
           <a href="/terms" style={{ color: 'var(--muted-dark)', textDecoration: 'underline', textUnderlineOffset: 3 }}>Terms</a>
           {' · '}

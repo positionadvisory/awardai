@@ -195,7 +195,7 @@ export const SiteFooter = () => (
       <div className="sl-mono sl-foot-nav">
         <Link href="/articles">Articles</Link>
         <Link href="/shows">Show dates</Link>
-        <Link href="/tno-report">Circuit report</Link>
+        <Link href="/tno-report">Awards strategy report</Link>
         <Link href="/faq">FAQ</Link>
         <Link href="/about">About</Link>
         <Link href="/login">Sign in</Link>
